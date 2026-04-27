@@ -1,0 +1,81 @@
+<section class="grid-shell">
+  <header class="grid-hero">
+    <div>
+      <p class="eyebrow">Angular 21 lift and shift</p>
+      <h1>{{ options().title ?? 'UI Grid' }}</h1>
+      <p class="deck">
+        Legacy AngularJS grid concepts, rebuilt with standalone Angular, signals, strict TypeScript,
+        and browser-native export.
+      </p>
+    </div>
+
+    <div class="hero-actions">
+      <button type="button" class="action action-secondary" (click)="exportCsv()">
+        Export CSV
+      </button>
+      <div class="stats-card">
+        <span>{{ visibleRowCount() }}</span>
+        <small>visible rows</small>
+      </div>
+    </div>
+  </header>
+
+  <section class="grid-frame">
+    <div class="grid-toolbar">
+      <div>
+        <strong>{{ visibleRowCount() }}</strong>
+        <span>of {{ totalRows() }} rows</span>
+      </div>
+      <p>Sortable headers, inline filters, no legacy DOM or build dependencies.</p>
+    </div>
+
+    <div class="grid-table" [style.gridTemplateColumns]="visibleColumns().map(columnWidth).join(' ')">
+      @for (column of visibleColumns(); track column.name) {
+        <button
+          type="button"
+          class="header-cell"
+          [class.header-cell-sortable]="column.sortable !== false"
+          [class.is-active]="sortDirection(column) !== 'none'"
+          (click)="toggleSort(column)">
+          <span>{{ headerLabel(column) }}</span>
+          <small>
+            @if (sortDirection(column) === 'asc') {
+              Asc
+            } @else if (sortDirection(column) === 'desc') {
+              Desc
+            } @else {
+              Sort
+            }
+          </small>
+        </button>
+      }
+
+      @for (column of visibleColumns(); track column.name) {
+        <label class="filter-cell">
+          <span class="sr-only">Filter {{ headerLabel(column) }}</span>
+          <input
+            type="text"
+            [value]="activeFilters()[column.name] || ''"
+            [placeholder]="column.filterable === false ? 'Filter disabled' : 'Filter…'"
+            [disabled]="column.filterable === false"
+            (input)="updateFilter(column.name, $any($event.target).value)" />
+        </label>
+      }
+
+      @if (processedRows().length) {
+        @for (row of processedRows(); track row.uid) {
+          @for (column of visibleColumns(); track column.name) {
+            <div class="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
+              {{ displayValue(row.entity, column) }}
+            </div>
+          }
+        }
+      } @else {
+        <div class="empty-state" [style.gridColumn]="'1 / -1'">
+          <strong>{{ options().emptyMessage ?? 'No matching rows' }}</strong>
+          <p>Adjust the active filters or replace the demo dataset with your lifted grid data source.</p>
+        </div>
+      }
+    </div>
+  </section>
+</section>

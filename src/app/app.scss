@@ -1,0 +1,8 @@
+:host {
+	display: block;
+}
+
+.app-shell {
+	min-height: 100vh;
+	padding: clamp(1rem, 2vw, 2rem);
+}
