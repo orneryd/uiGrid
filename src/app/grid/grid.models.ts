@@ -36,6 +36,13 @@ export interface GridCellTemplateContext {
   rowIndex: number;
 }
 
+export interface GridExpandableTemplateContext {
+  $implicit: GridRecord;
+  row: GridRecord;
+  rowIndex: number;
+  expanded: boolean;
+}
+
 export interface GridSortDescriptor {
   direction?: SortDirection;
   priority?: number;
@@ -72,6 +79,19 @@ export interface GridBenchmarkOptions {
   iterations?: number;
 }
 
+export interface GridSavedState {
+  columnOrder?: string[];
+  filters?: Record<string, string>;
+  sort?: SortState;
+  grouping?: string[];
+  pagination?: {
+    paginationCurrentPage: number;
+    paginationPageSize: number;
+  };
+  expandable?: Record<string, boolean>;
+  treeView?: Record<string, boolean>;
+}
+
 export interface GridOptions {
   id: string;
   title?: string;
@@ -85,6 +105,27 @@ export interface GridOptions {
   enableGrouping?: boolean;
   enableColumnMoving?: boolean;
   enableVirtualization?: boolean;
+  enablePagination?: boolean;
+  enablePaginationControls?: boolean;
+  useExternalPagination?: boolean;
+  paginationPageSizes?: number[] | null;
+  paginationPageSize?: number;
+  paginationCurrentPage?: number;
+  totalItems?: number;
+  enableExpandable?: boolean;
+  expandableRowHeight?: number;
+  expandableRowHeaderWidth?: number;
+  expandableRowTemplate?: TemplateRef<GridExpandableTemplateContext>;
+  expandableRowScope?: Record<string, unknown>;
+  enableTreeView?: boolean;
+  treeChildrenField?: string;
+  treeIndent?: number;
+  showTreeExpandNoChildren?: boolean;
+  treeRowHeaderAlwaysVisible?: boolean;
+  enableAutoResize?: boolean;
+  infiniteScrollRowsFromEnd?: number;
+  infiniteScrollUp?: boolean;
+  infiniteScrollDown?: boolean;
   virtualizationThreshold?: number;
   viewportHeight?: number;
   grouping?: GridGroupingOptions;
@@ -111,6 +152,12 @@ export class GridRow {
   readonly invisibleReasons = new Set<string>();
   visible = true;
   isSelected = false;
+  treeLevel = 0;
+  parentId: string | null = null;
+  hasChildren = false;
+  childCount = 0;
+  expanded = false;
+  expandedRowHeight = 0;
 
   constructor(
     readonly id: string,

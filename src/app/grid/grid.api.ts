@@ -1,5 +1,5 @@
 import { SortDirection } from './grid.constants';
-import { GridBenchmarkResult, GridRecord, GridRow } from './grid.models';
+import { GridBenchmarkResult, GridRecord, GridRow, GridSavedState } from './grid.models';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
 
@@ -31,6 +31,34 @@ export interface GridApiBindings {
   clearGrouping: () => void;
   benchmark: (iterations?: number) => GridBenchmarkResult;
   exportCsv: () => void;
+  paginationGetPage?: () => number;
+  paginationGetTotalPages?: () => number;
+  paginationGetFirstRowIndex?: () => number;
+  paginationGetLastRowIndex?: () => number;
+  paginationNextPage?: () => void;
+  paginationPreviousPage?: () => void;
+  paginationSeek?: (page: number) => void;
+  paginationSetPageSize?: (pageSize: number) => void;
+  toggleRowExpansion?: (row: GridRow | GridRecord | string) => void;
+  expandAllRows?: () => void;
+  collapseAllRows?: () => void;
+  toggleAllRows?: () => void;
+  treeExpandAllRows?: () => void;
+  treeCollapseAllRows?: () => void;
+  treeToggleRow?: (row: GridRow | GridRecord | string) => void;
+  treeExpandRow?: (row: GridRow | GridRecord | string) => void;
+  treeCollapseRow?: (row: GridRow | GridRecord | string) => void;
+  treeGetRowChildren?: (row: GridRow | GridRecord | string) => GridRow[];
+  treeGetState?: () => Record<string, boolean>;
+  treeSetState?: (state: Record<string, boolean>) => void;
+  infiniteScrollDataLoaded?: (scrollUp?: boolean, scrollDown?: boolean) => void | Promise<void>;
+  infiniteScrollReset?: (scrollUp?: boolean, scrollDown?: boolean) => void;
+  infiniteScrollSaveScrollPercentage?: () => void;
+  infiniteScrollDataRemovedTop?: (scrollUp?: boolean, scrollDown?: boolean) => void;
+  infiniteScrollDataRemovedBottom?: (scrollUp?: boolean, scrollDown?: boolean) => void;
+  infiniteScrollSetDirections?: (scrollUp: boolean, scrollDown: boolean) => void;
+  saveState?: () => GridSavedState;
+  restoreState?: (state: GridSavedState) => void;
 }
 
 export interface UiGridApi {
@@ -79,6 +107,74 @@ export interface UiGridApi {
     benchmark: (iterations?: number) => GridBenchmarkResult;
     exportCsv: () => void;
   };
+  pagination: {
+    on: {
+      paginationChanged: (listener: Listener<[number, number]>) => () => void;
+    };
+    raise: {
+      paginationChanged: (currentPage: number, pageSize: number) => void;
+    };
+    getPage: () => number;
+    getTotalPages: () => number;
+    getFirstRowIndex: () => number;
+    getLastRowIndex: () => number;
+    nextPage: () => void;
+    previousPage: () => void;
+    seek: (page: number) => void;
+    setPageSize: (pageSize: number) => void;
+  };
+  expandable: {
+    on: {
+      rowExpandedStateChanged: (listener: Listener<[GridRow, boolean]>) => () => void;
+    };
+    raise: {
+      rowExpandedStateChanged: (row: GridRow, expanded: boolean) => void;
+    };
+    toggleRowExpansion: (row: GridRow | GridRecord | string) => void;
+    expandAllRows: () => void;
+    collapseAllRows: () => void;
+    toggleAllRows: () => void;
+  };
+  treeBase: {
+    on: {
+      rowExpanded: (listener: Listener<[GridRow]>) => () => void;
+      rowCollapsed: (listener: Listener<[GridRow]>) => () => void;
+    };
+    raise: {
+      rowExpanded: (row: GridRow) => void;
+      rowCollapsed: (row: GridRow) => void;
+    };
+    expandAllRows: () => void;
+    collapseAllRows: () => void;
+    toggleRowTreeState: (row: GridRow | GridRecord | string) => void;
+    expandRow: (row: GridRow | GridRecord | string) => void;
+    collapseRow: (row: GridRow | GridRecord | string) => void;
+    getRowChildren: (row: GridRow | GridRecord | string) => GridRow[];
+  };
+  treeView: {
+    getTreeView: () => Record<string, boolean>;
+    setTreeView: (state: Record<string, boolean>) => void;
+  };
+  infiniteScroll: {
+    on: {
+      needLoadMoreData: (listener: Listener<[]>) => () => void;
+      needLoadMoreDataTop: (listener: Listener<[]>) => () => void;
+    };
+    raise: {
+      needLoadMoreData: () => void;
+      needLoadMoreDataTop: () => void;
+    };
+    dataLoaded: (scrollUp?: boolean, scrollDown?: boolean) => void | Promise<void>;
+    resetScroll: (scrollUp?: boolean, scrollDown?: boolean) => void;
+    saveScrollPercentage: () => void;
+    dataRemovedTop: (scrollUp?: boolean, scrollDown?: boolean) => void;
+    dataRemovedBottom: (scrollUp?: boolean, scrollDown?: boolean) => void;
+    setScrollDirections: (scrollUp: boolean, scrollDown: boolean) => void;
+  };
+  saveState: {
+    save: () => GridSavedState;
+    restore: (state: GridSavedState) => void;
+  };
 }
 
 export function createGridApi(bindings: GridApiBindings): UiGridApi {
@@ -94,6 +190,45 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const groupingChanged = new GridEvent<[string[]]>();
   const columnOrderChanged = new GridEvent<[string[]]>();
   const benchmarkComplete = new GridEvent<[GridBenchmarkResult]>();
+  const paginationChanged = new GridEvent<[number, number]>();
+  const rowExpandedStateChanged = new GridEvent<[GridRow, boolean]>();
+  const treeRowExpanded = new GridEvent<[GridRow]>();
+  const treeRowCollapsed = new GridEvent<[GridRow]>();
+  const needLoadMoreData = new GridEvent<[]>();
+  const needLoadMoreDataTop = new GridEvent<[]>();
+
+  const noop = (): void => {};
+  const falseState = (): Record<string, boolean> => ({});
+  const emptyRows = (): GridRow[] => [];
+  const saveState = (): GridSavedState => ({});
+  const paginationGetPage = bindings.paginationGetPage ?? (() => 1);
+  const paginationGetTotalPages = bindings.paginationGetTotalPages ?? (() => 1);
+  const paginationGetFirstRowIndex = bindings.paginationGetFirstRowIndex ?? (() => 0);
+  const paginationGetLastRowIndex = bindings.paginationGetLastRowIndex ?? (() => 0);
+  const paginationNextPage = bindings.paginationNextPage ?? noop;
+  const paginationPreviousPage = bindings.paginationPreviousPage ?? noop;
+  const paginationSeek = bindings.paginationSeek ?? noop;
+  const paginationSetPageSize = bindings.paginationSetPageSize ?? noop;
+  const toggleRowExpansion = bindings.toggleRowExpansion ?? noop;
+  const expandAllRows = bindings.expandAllRows ?? noop;
+  const collapseAllRows = bindings.collapseAllRows ?? noop;
+  const toggleAllRows = bindings.toggleAllRows ?? noop;
+  const treeExpandAllRows = bindings.treeExpandAllRows ?? noop;
+  const treeCollapseAllRows = bindings.treeCollapseAllRows ?? noop;
+  const treeToggleRow = bindings.treeToggleRow ?? noop;
+  const treeExpandRow = bindings.treeExpandRow ?? noop;
+  const treeCollapseRow = bindings.treeCollapseRow ?? noop;
+  const treeGetRowChildren = bindings.treeGetRowChildren ?? emptyRows;
+  const treeGetState = bindings.treeGetState ?? falseState;
+  const treeSetState = bindings.treeSetState ?? noop;
+  const infiniteScrollDataLoaded = bindings.infiniteScrollDataLoaded ?? noop;
+  const infiniteScrollReset = bindings.infiniteScrollReset ?? noop;
+  const infiniteScrollSaveScrollPercentage = bindings.infiniteScrollSaveScrollPercentage ?? noop;
+  const infiniteScrollDataRemovedTop = bindings.infiniteScrollDataRemovedTop ?? noop;
+  const infiniteScrollDataRemovedBottom = bindings.infiniteScrollDataRemovedBottom ?? noop;
+  const infiniteScrollSetDirections = bindings.infiniteScrollSetDirections ?? noop;
+  const saveStateBinding = bindings.saveState ?? saveState;
+  const restoreState = bindings.restoreState ?? noop;
 
   const api: UiGridApi = {
     core: {
@@ -141,6 +276,74 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       clearGrouping: bindings.clearGrouping,
       benchmark: bindings.benchmark,
       exportCsv: bindings.exportCsv
+    },
+    pagination: {
+      on: {
+        paginationChanged: (listener) => paginationChanged.subscribe(listener)
+      },
+      raise: {
+        paginationChanged: (currentPage, pageSize) => paginationChanged.emit(currentPage, pageSize)
+      },
+      getPage: paginationGetPage,
+      getTotalPages: paginationGetTotalPages,
+      getFirstRowIndex: paginationGetFirstRowIndex,
+      getLastRowIndex: paginationGetLastRowIndex,
+      nextPage: paginationNextPage,
+      previousPage: paginationPreviousPage,
+      seek: paginationSeek,
+      setPageSize: paginationSetPageSize
+    },
+    expandable: {
+      on: {
+        rowExpandedStateChanged: (listener) => rowExpandedStateChanged.subscribe(listener)
+      },
+      raise: {
+        rowExpandedStateChanged: (row, expanded) => rowExpandedStateChanged.emit(row, expanded)
+      },
+      toggleRowExpansion,
+      expandAllRows,
+      collapseAllRows,
+      toggleAllRows
+    },
+    treeBase: {
+      on: {
+        rowExpanded: (listener) => treeRowExpanded.subscribe(listener),
+        rowCollapsed: (listener) => treeRowCollapsed.subscribe(listener)
+      },
+      raise: {
+        rowExpanded: (row) => treeRowExpanded.emit(row),
+        rowCollapsed: (row) => treeRowCollapsed.emit(row)
+      },
+      expandAllRows: treeExpandAllRows,
+      collapseAllRows: treeCollapseAllRows,
+      toggleRowTreeState: treeToggleRow,
+      expandRow: treeExpandRow,
+      collapseRow: treeCollapseRow,
+      getRowChildren: treeGetRowChildren
+    },
+    treeView: {
+      getTreeView: treeGetState,
+      setTreeView: treeSetState
+    },
+    infiniteScroll: {
+      on: {
+        needLoadMoreData: (listener) => needLoadMoreData.subscribe(listener),
+        needLoadMoreDataTop: (listener) => needLoadMoreDataTop.subscribe(listener)
+      },
+      raise: {
+        needLoadMoreData: () => needLoadMoreData.emit(),
+        needLoadMoreDataTop: () => needLoadMoreDataTop.emit()
+      },
+      dataLoaded: infiniteScrollDataLoaded,
+      resetScroll: infiniteScrollReset,
+      saveScrollPercentage: infiniteScrollSaveScrollPercentage,
+      dataRemovedTop: infiniteScrollDataRemovedTop,
+      dataRemovedBottom: infiniteScrollDataRemovedBottom,
+      setScrollDirections: infiniteScrollSetDirections
+    },
+    saveState: {
+      save: saveStateBinding,
+      restore: restoreState
     }
   };
 

@@ -95,4 +95,32 @@ describe('row-searcher', () => {
     expect(runColumnFilter({ revenue: 250 }, { name: 'revenue' }, lessThan)).toBe(false);
     expect(runColumnFilter({ status: null }, { name: 'status' }, unknown)).toBe(true);
   });
+
+  it('defaults to a contains matcher when no explicit condition is provided', () => {
+    const [filter] = setupFilters([{ term: 'Act' }]);
+
+    expect(filter.containsRE).toBeInstanceOf(RegExp);
+    expect(runColumnFilter({ status: 'Active' }, { name: 'status' }, filter)).toBe(true);
+    expect(runColumnFilter({ status: null }, { name: 'status' }, filter)).toBe(false);
+  });
+
+  it('supports inclusive comparisons and date-aware comparisons', () => {
+    const [greaterThanOrEqual] = setupFilters([{ term: '200', condition: FILTER_CONDITIONS.greaterThanOrEqual }]);
+    const [lessThanOrEqual] = setupFilters([{ term: '200', condition: FILTER_CONDITIONS.lessThanOrEqual }]);
+    const [dateFilter] = setupFilters([
+      {
+        term: '2026-01-01',
+        condition: FILTER_CONDITIONS.greaterThanOrEqual,
+        rawTerm: true,
+        flags: { date: true }
+      }
+    ]);
+
+    expect(runColumnFilter({ revenue: 200 }, { name: 'revenue' }, greaterThanOrEqual)).toBe(true);
+    expect(runColumnFilter({ revenue: 199 }, { name: 'revenue' }, greaterThanOrEqual)).toBe(false);
+    expect(runColumnFilter({ revenue: 200 }, { name: 'revenue' }, lessThanOrEqual)).toBe(true);
+    expect(runColumnFilter({ revenue: 201 }, { name: 'revenue' }, lessThanOrEqual)).toBe(false);
+    expect(runColumnFilter({ renewalDate: '2026-01-02' }, { name: 'renewalDate' }, dateFilter)).toBe(true);
+    expect(runColumnFilter({ renewalDate: '2025-12-31' }, { name: 'renewalDate' }, dateFilter)).toBe(false);
+  });
 });

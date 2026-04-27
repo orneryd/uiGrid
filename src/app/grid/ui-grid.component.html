@@ -65,20 +65,12 @@
               [class.header-action-disabled]="!isColumnSortable(column)"
               (click)="toggleSort(column)">
               <span>{{ headerLabel(column) }}</span>
-              <small>
-                @if (sortDirection(column) === 'asc') {
-                  Asc
-                } @else if (sortDirection(column) === 'desc') {
-                  Desc
-                } @else {
-                  Sort
-                }
-              </small>
+              <small>{{ sortButtonLabel(column) }}</small>
             </button>
 
             @if (isGroupingEnabled() && column.enableGrouping !== false) {
               <button type="button" class="chip-action" part="group-toggle" [class.chip-action-active]="isGrouped(column)" (click)="toggleGrouping(column, $event)">
-                {{ isGrouped(column) ? 'Grouped' : 'Group' }}
+                {{ groupingButtonLabel(column) }}
               </button>
             }
           </div>
@@ -93,60 +85,68 @@
               <input
                 class="ui-grid-filter-input"
                 type="text"
-                [value]="activeFilters()[column.name] || ''"
-                [placeholder]="isColumnFilterable(column) ? 'Filter…' : 'Filter disabled'"
-                [disabled]="!isColumnFilterable(column)"
+                [value]="filterValue(column.name)"
+                [placeholder]="filterPlaceholder(column)"
+                [disabled]="isFilterInputDisabled(column)"
                 (input)="updateFilter(column.name, $any($event.target).value)" />
             </label>
           }
         </div>
       }
 
+      <ng-template #displayItemTemplate let-item>
+        @if (isGroupItem(item)) {
+          <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
+            <strong>{{ item.field }}: {{ item.label }}</strong>
+            <span>{{ item.count }} rows</span>
+            <small>{{ groupDisclosureLabel(item) }}</small>
+          </button>
+        } @else if (isExpandableItem(item)) {
+          <div class="expandable-row ui-grid-row ui-grid-expandable-row" part="expandable-row" [style.gridColumn]="'1 / -1'" [style.minHeight.px]="item.row.expandedRowHeight">
+            @if (expandableTemplate(); as template) {
+              <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="expandedContext(item.row)" />
+            }
+          </div>
+        } @else {
+          @for (column of visibleColumns(); track column.name) {
+            <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
+              <div class="cell-shell" [style.paddingInlineStart]="cellIndent(item.row, column)">
+                @if (showTreeToggle(item.row, column)) {
+                  <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" (click)="toggleTreeRow(item.row, $event)">
+                    {{ treeToggleSymbol(item.row) }}
+                  </button>
+                }
+                @if (showExpandToggle(item.row, column)) {
+                  <button type="button" class="row-toggle row-toggle-expand" part="expand-toggle" [attr.aria-label]="expandToggleLabel(item.row)" (click)="toggleRowExpansion(item.row, $event)">
+                    {{ expandToggleSymbol(item.row) }}
+                  </button>
+                }
+                <span class="cell-value">
+                  @if (cellTemplate(column); as template) {
+                    <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
+                  } @else {
+                    {{ displayValue(item.row, column) }}
+                  }
+                </span>
+              </div>
+            </div>
+          }
+        }
+      </ng-template>
+
       @if (displayItems().length) {
         @if (virtualizationEnabled()) {
-          <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()" [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange()">
+          <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()" [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange($event)">
             <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
               <ng-container *cdkVirtualFor="let item of displayItems(); trackBy: trackDisplayItem">
-                @if (item.kind === 'group') {
-                  <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
-                    <strong>{{ item.field }}: {{ item.label }}</strong>
-                    <span>{{ item.count }} rows</span>
-                    <small>{{ item.collapsed ? 'Expand' : 'Collapse' }}</small>
-                  </button>
-                } @else {
-                  @for (column of visibleColumns(); track column.name) {
-                    <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
-                      @if (cellTemplate(column); as template) {
-                        <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
-                      } @else {
-                        {{ displayValue(item.row, column) }}
-                      }
-                    </div>
-                  }
-                }
+                <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
               </ng-container>
             </div>
           </cdk-virtual-scroll-viewport>
         } @else {
           <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
             @for (item of displayItems(); track item.id) {
-              @if (item.kind === 'group') {
-                <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
-                  <strong>{{ item.field }}: {{ item.label }}</strong>
-                  <span>{{ item.count }} rows</span>
-                  <small>{{ item.collapsed ? 'Expand' : 'Collapse' }}</small>
-                </button>
-              } @else {
-                @for (column of visibleColumns(); track column.name) {
-                  <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
-                    @if (cellTemplate(column); as template) {
-                      <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
-                    } @else {
-                      {{ displayValue(item.row, column) }}
-                    }
-                  </div>
-                }
-              }
+              <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
             }
           </div>
         }
@@ -155,6 +155,31 @@
           <strong>{{ options().emptyMessage ?? 'No matching rows' }}</strong>
           <p>Adjust the active filters, grouping, or sort order.</p>
         </div>
+      }
+
+      @if (showPaginationControls()) {
+        <footer class="pagination-bar ui-grid-pagination" part="pagination">
+          <p>{{ paginationSummary() }}</p>
+          <div class="pagination-controls">
+            <button type="button" class="action action-secondary pagination-button" [disabled]="paginationCurrentPage() <= 1" (click)="previousPage()">
+              Previous
+            </button>
+            <span>Page {{ paginationCurrentPage() }} of {{ paginationTotalPages() }}</span>
+            <button type="button" class="action action-secondary pagination-button" [disabled]="paginationCurrentPage() >= paginationTotalPages()" (click)="nextPage()">
+              Next
+            </button>
+            @if (pageSizeOptions().length > 0) {
+              <label class="pagination-size">
+                <span>Rows</span>
+                <select [value]="paginationSelectedPageSize()" (change)="onPageSizeChange($any($event.target).value)">
+                  @for (size of pageSizeOptions(); track size) {
+                    <option [value]="size">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            }
+          </div>
+        </footer>
       }
     </div>
   </section>

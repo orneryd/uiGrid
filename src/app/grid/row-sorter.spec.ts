@@ -78,4 +78,27 @@ describe('getSortFn', () => {
     expect(booleanSort(false, false)).toBe(0);
     expect(dateSort(new Date('2026-01-01T00:00:00.000Z'), '2026-01-01T00:00:00.000Z')).toBe(0);
   });
+
+  it('handles null and undefined consistently across inferred sorter types', () => {
+    const numberSort = getSortFn({ name: 'revenue' }, [{ revenue: 1 }]);
+    const alphaSort = getSortFn({ name: 'name' }, [{ name: 'Alpha' }]);
+    const dateSort = getSortFn({ name: 'renewalDate' }, [{ renewalDate: new Date('2026-01-01T00:00:00.000Z') }]);
+    const booleanSort = getSortFn({ name: 'active' }, [{ active: true }]);
+
+    expect(numberSort(null, undefined)).toBe(0);
+    expect(alphaSort(undefined, 'Alpha')).toBe(1);
+    expect(dateSort('2026-01-01', null)).toBe(-1);
+    expect(booleanSort(null, true)).toBe(1);
+  });
+
+  it('orders invalid numeric strings after valid numeric strings', () => {
+    const sortFn = getSortFn(
+      { name: 'revenueLabel' },
+      [{ revenueLabel: '$120.50' }, { revenueLabel: 'n/a' }]
+    );
+
+    expect(sortFn('n/a', '$120.50')).toBe(1);
+    expect(sortFn('$120.50', 'n/a')).toBe(-1);
+    expect(sortFn('n/a', 'still n/a')).toBe(0);
+  });
 });

@@ -3,6 +3,7 @@ import { UiGridComponent } from './grid/ui-grid.component';
 import { UiGridApi } from './grid/grid.api';
 import { FILTER_CONDITIONS } from './grid/grid.constants';
 import { GridCellTemplateContext, GridOptions } from './grid/grid.models';
+import { GridBrowserHarnessComponent } from './grid-browser-harness.component';
 
 function createDemoData() {
   const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'];
@@ -22,7 +23,7 @@ function createDemoData() {
 
 @Component({
   selector: 'app-root',
-  imports: [UiGridComponent],
+  imports: [UiGridComponent, GridBrowserHarnessComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
