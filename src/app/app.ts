@@ -1,7 +1,24 @@
-import { Component } from '@angular/core';
+import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
 import { UiGridComponent } from './grid/ui-grid.component';
-import { GridOptions } from './grid/grid.models';
+import { UiGridApi } from './grid/grid.api';
 import { FILTER_CONDITIONS } from './grid/grid.constants';
+import { GridCellTemplateContext, GridOptions } from './grid/grid.models';
+
+function createDemoData() {
+  const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'];
+  const companies = ['Northwind', 'Blue Harbor', 'Forge Group', 'Larkspur', 'Atlas'];
+  const owners = ['Casey Tran', 'Jordan Silva', 'Priya Rao', 'Evan Brooks', 'Mina Patel'];
+
+  return Array.from({ length: 240 }, (_value, index) => ({
+    id: `row-${index + 1}`,
+    name: `Customer ${index + 1}`,
+    company: companies[index % companies.length],
+    revenue: 40000 + index * 1350,
+    status: statuses[index % statuses.length],
+    renewalDate: `2026-${String((index % 12) + 1).padStart(2, '0')}-${String((index % 27) + 1).padStart(2, '0')}`,
+    account: { owner: owners[index % owners.length] }
+  }));
+}
 
 @Component({
   selector: 'app-root',
@@ -10,11 +27,28 @@ import { FILTER_CONDITIONS } from './grid/grid.constants';
   styleUrl: './app.scss'
 })
 export class App {
-  protected readonly options: GridOptions = {
+  private readonly statusTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('statusTemplate');
+  protected readonly gridApi = signal<UiGridApi | null>(null);
+  protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
     title: 'UI Grid Modernized',
     emptyMessage: 'No rows match the current filters.',
     rowHeight: 48,
+    viewportHeight: 620,
+    enableSorting: true,
+    enableFiltering: true,
+    enableGrouping: true,
+    enableColumnMoving: true,
+    enableVirtualization: true,
+    virtualizationThreshold: 25,
+    grouping: {
+      groupBy: ['status']
+    },
+    benchmark: {
+      iterations: 40
+    },
+    rowIdentity: (row) => String(row['id']),
+    onRegisterApi: (api) => this.gridApi.set(api as UiGridApi),
     columnDefs: [
       { name: 'name', displayName: 'Customer', width: 'minmax(14rem, 1.2fr)' },
       { name: 'company', width: 'minmax(12rem, 1fr)' },
@@ -33,7 +67,8 @@ export class App {
       {
         name: 'status',
         width: 'minmax(8rem, 0.7fr)',
-        filter: { condition: FILTER_CONDITIONS.exact }
+        filter: { condition: FILTER_CONDITIONS.exact },
+        cellTemplate: this.statusTemplate() ?? undefined
       },
       {
         name: 'renewalDate',
@@ -48,47 +83,6 @@ export class App {
         width: 'minmax(11rem, 0.8fr)'
       }
     ],
-    data: [
-      {
-        name: 'Northwind Studios',
-        company: 'Northwind',
-        revenue: 128000,
-        status: 'Active',
-        renewalDate: '2026-05-14',
-        account: { owner: 'Casey Tran' }
-      },
-      {
-        name: 'Blue Harbor Foods',
-        company: 'Blue Harbor',
-        revenue: 86000,
-        status: 'Expansion',
-        renewalDate: '2026-06-02',
-        account: { owner: 'Jordan Silva' }
-      },
-      {
-        name: 'Signal Forge',
-        company: 'Forge Group',
-        revenue: 245000,
-        status: 'Enterprise',
-        renewalDate: '2026-07-20',
-        account: { owner: 'Priya Rao' }
-      },
-      {
-        name: 'Larkspur Health',
-        company: 'Larkspur',
-        revenue: 54000,
-        status: 'Pilot',
-        renewalDate: '2026-04-30',
-        account: { owner: 'Evan Brooks' }
-      },
-      {
-        name: 'Atlas Retail',
-        company: 'Atlas',
-        revenue: 174000,
-        status: 'Active',
-        renewalDate: '2026-09-09',
-        account: { owner: 'Mina Patel' }
-      }
-    ]
-  };
+    data: createDemoData()
+  }));
 }

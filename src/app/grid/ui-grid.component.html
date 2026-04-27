@@ -1,79 +1,159 @@
-<section class="grid-shell">
-  <header class="grid-hero">
+<section class="grid-shell ui-grid-shell" part="shell">
+  <header class="grid-hero ui-grid-toolbar-shell" part="hero">
     <div>
       <p class="eyebrow">Angular 21 lift and shift</p>
       <h1>{{ options().title ?? 'UI Grid' }}</h1>
       <p class="deck">
-        Legacy AngularJS grid concepts, rebuilt with standalone Angular, signals, strict TypeScript,
-        and browser-native export.
+        Familiar `gridOptions` and `onRegisterApi`, rebuilt with Angular 21 signals, CDK virtualization,
+        native templates, grouping, sorting, filtering, and column ordering.
       </p>
     </div>
 
     <div class="hero-actions">
-      <button type="button" class="action action-secondary" (click)="exportCsv()">
+      <button type="button" class="action action-secondary" part="action benchmark-action" (click)="runBenchmark()">
+        Benchmark
+      </button>
+      <button type="button" class="action action-secondary" part="action export-action" (click)="exportCsv()">
         Export CSV
       </button>
-      <div class="stats-card">
+      <div class="stats-card" part="stats-card">
         <span>{{ visibleRowCount() }}</span>
         <small>visible rows</small>
       </div>
     </div>
   </header>
 
-  <section class="grid-frame">
-    <div class="grid-toolbar">
+  <section class="metrics-strip" part="metrics" aria-label="Grid performance metrics">
+    <article part="metric-card">
+      <strong>{{ pipelineMs().toFixed(2) }} ms</strong>
+      <span>pipeline</span>
+    </article>
+    <article part="metric-card">
+      <strong>{{ virtualizationEnabled() ? 'On' : 'Off' }}</strong>
+      <span>virtualization</span>
+    </article>
+    <article part="metric-card">
+      <strong>{{ groupByColumns().length }}</strong>
+      <span>group columns</span>
+    </article>
+    <article part="metric-card">
+      <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
+      <span>benchmark avg</span>
+    </article>
+  </section>
+
+  <section class="grid-frame ui-grid" part="grid-frame">
+    <div class="grid-toolbar" part="grid-toolbar">
       <div>
         <strong>{{ visibleRowCount() }}</strong>
         <span>of {{ totalRows() }} rows</span>
       </div>
-      <p>Sortable headers, inline filters, no legacy DOM or build dependencies.</p>
+      <p>
+        `gridOptions` compatibility layer: sorting, filtering, grouping, column moving, templating,
+        and virtualized rendering.
+      </p>
     </div>
 
-    <div class="grid-table" [style.gridTemplateColumns]="visibleColumns().map(columnWidth).join(' ')">
-      @for (column of visibleColumns(); track column.name) {
-        <button
-          type="button"
-          class="header-cell"
-          [class.header-cell-sortable]="column.sortable !== false"
-          [class.is-active]="sortDirection(column) !== 'none'"
-          (click)="toggleSort(column)">
-          <span>{{ headerLabel(column) }}</span>
-          <small>
-            @if (sortDirection(column) === 'asc') {
-              Asc
-            } @else if (sortDirection(column) === 'desc') {
-              Desc
-            } @else {
-              Sort
+    <div class="grid-table ui-grid-contents-wrapper" part="grid-table">
+      <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList (cdkDropListDropped)="onColumnDrop($event)">
+        @for (column of visibleColumns(); track column.name) {
+          <div class="header-cell ui-grid-header-cell" part="header-cell" cdkDrag [class.is-active]="sortDirection(column) !== 'none'">
+            <button
+              type="button"
+              class="header-action"
+              [disabled]="!isColumnSortable(column)"
+              [class.header-action-disabled]="!isColumnSortable(column)"
+              (click)="toggleSort(column)">
+              <span>{{ headerLabel(column) }}</span>
+              <small>
+                @if (sortDirection(column) === 'asc') {
+                  Asc
+                } @else if (sortDirection(column) === 'desc') {
+                  Desc
+                } @else {
+                  Sort
+                }
+              </small>
+            </button>
+
+            @if (isGroupingEnabled() && column.enableGrouping !== false) {
+              <button type="button" class="chip-action" part="group-toggle" [class.chip-action-active]="isGrouped(column)" (click)="toggleGrouping(column, $event)">
+                {{ isGrouped(column) ? 'Grouped' : 'Group' }}
+              </button>
             }
-          </small>
-        </button>
-      }
+          </div>
+        }
+      </div>
 
-      @for (column of visibleColumns(); track column.name) {
-        <label class="filter-cell">
-          <span class="sr-only">Filter {{ headerLabel(column) }}</span>
-          <input
-            type="text"
-            [value]="activeFilters()[column.name] || ''"
-            [placeholder]="column.filterable === false ? 'Filter disabled' : 'Filter…'"
-            [disabled]="column.filterable === false"
-            (input)="updateFilter(column.name, $any($event.target).value)" />
-        </label>
-      }
-
-      @if (processedRows().length) {
-        @for (row of processedRows(); track row.uid) {
+      @if (isFilteringEnabled()) {
+        <div class="filter-grid ui-grid-header" part="filters" [style.gridTemplateColumns]="gridTemplateColumns()">
           @for (column of visibleColumns(); track column.name) {
-            <div class="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
-              {{ displayValue(row.entity, column) }}
-            </div>
+            <label class="filter-cell ui-grid-filter-container" part="filter-cell">
+              <span class="sr-only ui-grid-sr-only">Filter {{ headerLabel(column) }}</span>
+              <input
+                class="ui-grid-filter-input"
+                type="text"
+                [value]="activeFilters()[column.name] || ''"
+                [placeholder]="isColumnFilterable(column) ? 'Filter…' : 'Filter disabled'"
+                [disabled]="!isColumnFilterable(column)"
+                (input)="updateFilter(column.name, $any($event.target).value)" />
+            </label>
           }
+        </div>
+      }
+
+      @if (displayItems().length) {
+        @if (virtualizationEnabled()) {
+          <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()" [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange()">
+            <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
+              <ng-container *cdkVirtualFor="let item of displayItems(); trackBy: trackDisplayItem">
+                @if (item.kind === 'group') {
+                  <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
+                    <strong>{{ item.field }}: {{ item.label }}</strong>
+                    <span>{{ item.count }} rows</span>
+                    <small>{{ item.collapsed ? 'Expand' : 'Collapse' }}</small>
+                  </button>
+                } @else {
+                  @for (column of visibleColumns(); track column.name) {
+                    <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
+                      @if (cellTemplate(column); as template) {
+                        <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
+                      } @else {
+                        {{ displayValue(item.row, column) }}
+                      }
+                    </div>
+                  }
+                }
+              </ng-container>
+            </div>
+          </cdk-virtual-scroll-viewport>
+        } @else {
+          <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
+            @for (item of displayItems(); track item.id) {
+              @if (item.kind === 'group') {
+                <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
+                  <strong>{{ item.field }}: {{ item.label }}</strong>
+                  <span>{{ item.count }} rows</span>
+                  <small>{{ item.collapsed ? 'Expand' : 'Collapse' }}</small>
+                </button>
+              } @else {
+                @for (column of visibleColumns(); track column.name) {
+                  <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
+                    @if (cellTemplate(column); as template) {
+                      <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
+                    } @else {
+                      {{ displayValue(item.row, column) }}
+                    }
+                  </div>
+                }
+              }
+            }
+          </div>
         }
       } @else {
-        <div class="empty-state" [style.gridColumn]="'1 / -1'">
+        <div class="empty-state ui-grid-no-row-overlay" part="empty-state">
           <strong>{{ options().emptyMessage ?? 'No matching rows' }}</strong>
-          <p>Adjust the active filters or replace the demo dataset with your lifted grid data source.</p>
+          <p>Adjust the active filters, grouping, or sort order.</p>
         </div>
       }
     </div>

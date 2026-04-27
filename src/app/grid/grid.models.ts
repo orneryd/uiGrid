@@ -1,3 +1,4 @@
+import { TemplateRef } from '@angular/core';
 import { FilterCondition, SortDirection } from './grid.constants';
 import { nextUid } from './grid.utils';
 
@@ -27,6 +28,20 @@ export interface GridFilterDescriptor {
   noTerm?: boolean;
 }
 
+export interface GridCellTemplateContext {
+  $implicit: unknown;
+  value: unknown;
+  row: GridRecord;
+  column: GridColumnDef;
+  rowIndex: number;
+}
+
+export interface GridSortDescriptor {
+  direction?: SortDirection;
+  priority?: number;
+  ignoreSort?: boolean;
+}
+
 export interface GridColumnDef {
   name: string;
   displayName?: string;
@@ -34,13 +49,27 @@ export interface GridColumnDef {
   visible?: boolean;
   sortable?: boolean;
   filterable?: boolean;
+  enableSorting?: boolean;
+  enableFiltering?: boolean;
+  enableGrouping?: boolean;
   width?: string;
   align?: 'start' | 'center' | 'end';
-  sort?: SortDirection;
+  sort?: GridSortDescriptor;
   filter?: GridFilterDescriptor;
   sortingAlgorithm?: GridSortFn;
   valueGetter?: (row: GridRecord) => unknown;
   formatter?: (value: unknown, row: GridRecord) => string;
+  cellTemplate?: TemplateRef<GridCellTemplateContext>;
+  cellRenderer?: (context: GridCellTemplateContext) => string;
+}
+
+export interface GridGroupingOptions {
+  groupBy?: string[];
+  startCollapsed?: boolean;
+}
+
+export interface GridBenchmarkOptions {
+  iterations?: number;
 }
 
 export interface GridOptions {
@@ -51,11 +80,30 @@ export interface GridOptions {
   rowHeight?: number;
   headerRowHeight?: number;
   emptyMessage?: string;
+  enableSorting?: boolean;
+  enableFiltering?: boolean;
+  enableGrouping?: boolean;
+  enableColumnMoving?: boolean;
+  enableVirtualization?: boolean;
+  virtualizationThreshold?: number;
+  viewportHeight?: number;
+  grouping?: GridGroupingOptions;
+  benchmark?: GridBenchmarkOptions;
+  onRegisterApi?: (gridApi: unknown) => void;
+  rowIdentity?: (row: GridRecord, index: number) => string;
 }
 
 export interface SortState {
   columnName: string | null;
   direction: SortDirection;
+}
+
+export interface GridBenchmarkResult {
+  iterations: number;
+  totalMs: number;
+  averageMs: number;
+  visibleRows: number;
+  renderedItems: number;
 }
 
 export class GridRow {
@@ -65,6 +113,7 @@ export class GridRow {
   isSelected = false;
 
   constructor(
+    readonly id: string,
     readonly entity: GridRecord,
     readonly index: number,
     readonly height = 44
