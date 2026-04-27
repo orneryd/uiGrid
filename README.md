@@ -409,3 +409,4 @@ What did not change is the general mental model: define `gridOptions`, define `c
 Next in line:
 
 - accessibility compatibility work, including a11y-focused polish and validation
+- i18n integration
