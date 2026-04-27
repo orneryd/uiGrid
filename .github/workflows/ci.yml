@@ -33,7 +33,7 @@ jobs:
         run: npm run build:element
 
       - name: Run the test suite
-        run: npm test -- --watch=false --coverage
+        run: npm test -- --watch=false --coverage --coverage-reporters lcovonly
 
       - name: Publish coverage to Coveralls
         uses: coverallsapp/github-action@v2
