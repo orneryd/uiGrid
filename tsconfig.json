@@ -14,7 +14,7 @@
     "importHelpers": true,
     "baseUrl": ".",
     "paths": {
-      "@orneryd/uiGrid": ["projects/ui-grid/src/public-api.ts"]
+      "@ornery/ui-grid": ["projects/ui-grid/src/public-api.ts"]
     },
     "lib": [
       "ES2022",

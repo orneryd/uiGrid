@@ -6,7 +6,7 @@ import {
   GridOptions,
   GridRecord,
   UiGridComponent
-} from '@orneryd/uiGrid';
+} from '@ornery/ui-grid';
 
 type HarnessMode = 'expandable' | 'tree' | 'templated';
 

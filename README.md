@@ -55,6 +55,14 @@ This repository targets the current toolchain as of April 2026.
 
 ## Install
 
+Install the public package:
+
+```bash
+npm install @ornery/ui-grid
+```
+
+For local development in this repo:
+
 ```bash
 npm install
 ```
@@ -105,7 +113,7 @@ The custom element registers `ui-grid-element`.
 
 ```ts
 import { Component } from '@angular/core';
-import { UiGridComponent } from './grid/ui-grid.component';
+import { UiGridComponent } from '@ornery/ui-grid';
 
 @Component({
   selector: 'app-root',
