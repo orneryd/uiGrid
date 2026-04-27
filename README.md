@@ -2,6 +2,14 @@
 
 A modern Angular data grid with a familiar ui-grid-style API, rebuilt on Angular 21, TypeScript, Angular CDK, and browser-native primitives.
 
+Start here:
+
+```bash
+npm install @ornery/ui-grid
+```
+
+If you just want to play with the live build first, open:
+
 Live demo: [https://orneryd.github.io/uiGrid/](https://orneryd.github.io/uiGrid/)
 
 This project keeps the classic ui-grid mental model:
@@ -55,7 +63,7 @@ This repository targets the current toolchain as of April 2026.
 
 ## Install
 
-Install the public package:
+Install the public package in your own app:
 
 ```bash
 npm install @ornery/ui-grid
@@ -69,7 +77,7 @@ npm install
 
 ## Run Locally
 
-Start the Angular app:
+Start the demo app:
 
 ```bash
 npm start
