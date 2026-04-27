@@ -102,6 +102,24 @@
           "builder": "@angular/build:unit-test"
         }
       }
+    },
+    "uiGridPackage": {
+      "projectType": "library",
+      "root": "projects/ui-grid",
+      "sourceRoot": "projects/ui-grid/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:ng-packagr",
+          "options": {
+            "project": "projects/ui-grid/ng-package.json"
+          },
+          "configurations": {
+            "production": {},
+            "development": {}
+          },
+          "defaultConfiguration": "production"
+        }
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-# UI Grid Modernized
+# UI Grid - Next-gen
 
 A modern Angular data grid with a familiar ui-grid-style API, rebuilt on Angular 21, TypeScript, Angular CDK, and browser-native primitives.
 

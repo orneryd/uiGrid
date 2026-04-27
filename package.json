@@ -1,11 +1,15 @@
 {
-  "name": "ui-grid",
-  "version": "0.0.0",
+  "name": "uiGrid",
+  "version": "0.1.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build:pages": "ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
+    "build:library": "ng build uiGridPackage",
     "build:element": "ng run uiGrid:build-element",
+    "build:package": "npm run build:library && npm run build:element && node scripts/prepare-release-package.mjs",
+    "publish:package": "npm publish ./dist/npm-package --access public",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -29,6 +33,7 @@
     "@angular/compiler-cli": "^21.2.0",
     "@vitest/coverage-v8": "^4.1.5",
     "jsdom": "^28.0.0",
+    "ng-packagr": "^21.2.3",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"

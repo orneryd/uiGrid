@@ -80,7 +80,7 @@ export function stringifyCellValue(value: unknown): string {
 
 export function toCsvValue(value: string): string {
   if (/[",\n]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
+    return `"${value.replace(/"/g, '""')}"`;
   }
 
   return value;

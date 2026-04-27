@@ -1,8 +1,5 @@
 import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
-import { UiGridComponent } from './grid/ui-grid.component';
-import { UiGridApi } from './grid/grid.api';
-import { FILTER_CONDITIONS } from './grid/grid.constants';
-import { GridCellTemplateContext, GridOptions } from './grid/grid.models';
+import { FILTER_CONDITIONS, GridCellTemplateContext, GridOptions, UiGridApi, UiGridComponent } from '@orneryd/uiGrid';
 import { GridBrowserHarnessComponent } from './grid-browser-harness.component';
 
 function createDemoData() {

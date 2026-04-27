@@ -1446,7 +1446,10 @@ export class UiGridComponent {
       return;
     }
 
-    const nextState = Object.fromEntries(this.buildRows(this.options().data).map((row) => [row.id, true]));
+    const nextState: Record<string, boolean> = {};
+    for (const row of this.buildRows(this.options().data)) {
+      nextState[row.id] = true;
+    }
     this.expandedRows.set(nextState);
   }
 
@@ -1505,11 +1508,12 @@ export class UiGridComponent {
   }
 
   private expandAllTreeRows(): void {
-    const nextState = Object.fromEntries(
-      this.buildRows(this.options().data)
-        .filter((row) => row.hasChildren)
-        .map((row) => [row.id, true])
-    );
+    const nextState: Record<string, boolean> = {};
+    for (const row of this.buildRows(this.options().data)) {
+      if (row.hasChildren) {
+        nextState[row.id] = true;
+      }
+    }
     this.expandedTreeRows.set(nextState);
   }
 

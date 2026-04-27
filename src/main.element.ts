@@ -1,6 +1,6 @@
 import { createCustomElement } from '@angular/elements';
 import { createApplication } from '@angular/platform-browser';
-import { UiGridComponent } from './app/grid/ui-grid.component';
+import { UiGridComponent } from '@orneryd/uiGrid';
 
 async function bootstrapElement(): Promise<void> {
   const application = await createApplication();

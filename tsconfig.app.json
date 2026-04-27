@@ -7,9 +7,11 @@
     "types": []
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "projects/ui-grid/src/**/*.ts"
   ],
   "exclude": [
-    "src/**/*.spec.ts"
+    "src/**/*.spec.ts",
+    "projects/ui-grid/src/**/*.spec.ts"
   ]
 }

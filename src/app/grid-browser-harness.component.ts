@@ -1,12 +1,12 @@
 import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
-import { FILTER_CONDITIONS } from './grid/grid.constants';
-import { UiGridComponent } from './grid/ui-grid.component';
 import {
+  FILTER_CONDITIONS,
   GridCellTemplateContext,
   GridExpandableTemplateContext,
   GridOptions,
-  GridRecord
-} from './grid/grid.models';
+  GridRecord,
+  UiGridComponent
+} from '@orneryd/uiGrid';
 
 type HarnessMode = 'expandable' | 'tree' | 'templated';
 

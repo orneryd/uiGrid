@@ -12,6 +12,15 @@
     "isolatedModules": true,
     "experimentalDecorators": true,
     "importHelpers": true,
+    "baseUrl": ".",
+    "paths": {
+      "@orneryd/uiGrid": ["projects/ui-grid/src/public-api.ts"]
+    },
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "target": "ES2022",
     "module": "preserve"
   },
