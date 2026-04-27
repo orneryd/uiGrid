@@ -134,7 +134,7 @@
           </div>
         } @else {
           @for (column of visibleColumns(); track column.name) {
-            <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
+            <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.body-cell-odd]="isOddStripedRow(item)" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
               <div class="cell-shell" [style.paddingInlineStart]="cellIndent(item.row, column)">
                 @if (showTreeToggle(item.row, column)) {
                   <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" (click)="toggleTreeRow(item.row, $event)">

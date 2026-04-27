@@ -10,6 +10,99 @@
 </ng-template>
 
 <main class="app-shell">
-  <app-ui-grid [options]="options()" />
-  <app-grid-browser-harness />
+  <header class="demo-header">
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <p class="eyebrow">Open-source Angular data grid</p>
+        <h3>UI Grid in a themeable demo shell</h3>
+        <p class="hero-summary">
+          Familiar <code>gridOptions</code>, modern Angular internals, and app-level theming that can push both the demo
+          chrome and the shadow-DOM grid through dark, light, and wireframe terminal directions.
+        </p>
+      </div>
+
+      <section class="theme-panel" aria-labelledby="theme-panel-title">
+        <div class="theme-panel__copy">
+          <p class="panel-kicker">Theme controls</p>
+          <h2 id="theme-panel-title">{{ activeThemeName() }}</h2>
+          <p class="theme-panel__summary">
+            Dark mode is the default. Wireframe mode swaps the visual language to a terminal-like system while still
+            using the same app-level tokens that flow into the grid.
+          </p>
+        </div>
+
+        <div class="theme-switches" aria-label="Theme toggles">
+          <button
+            type="button"
+            class="theme-switch"
+            role="switch"
+            [class.theme-switch-active]="isDarkMode()"
+            [attr.aria-checked]="isDarkMode()"
+            (click)="toggleColorMode()">
+            <span class="theme-switch__track" aria-hidden="true">
+              <span class="theme-switch__thumb"></span>
+            </span>
+            <span class="theme-switch__content">
+              <strong>{{ isDarkMode() ? 'Dark mode' : 'Light mode' }}</strong>
+              <small>{{ isDarkMode() ? 'Deep contrast palette' : 'Bright documentation palette' }}</small>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="theme-switch"
+            role="switch"
+            [class.theme-switch-active]="isWireframeMode()"
+            [attr.aria-checked]="isWireframeMode()"
+            (click)="toggleVisualMode()">
+            <span class="theme-switch__track" aria-hidden="true">
+              <span class="theme-switch__thumb"></span>
+            </span>
+            <span class="theme-switch__content">
+              <strong>{{ isWireframeMode() ? 'Wireframe terminal' : 'Studio theme' }}</strong>
+              <small>{{ isWireframeMode() ? 'Monospace, scanlines, neon edge' : 'Layered product showcase' }}</small>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <ul class="repo-badges" aria-label="Project badges">
+        @for (badge of repoBadges; track badge.label) {
+          <li class="repo-badge" [attr.data-tone]="badge.tone">
+            <span>{{ badge.label }}</span>
+            <strong>{{ badge.value }}</strong>
+          </li>
+        }
+      </ul>
+
+      <div class="hero-actions">
+        <a
+          class="repo-link"
+          [href]="repoUrl"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="View the UI Grid repository on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-1.03-.01-1.87-2.78.62-3.37-1.21-3.37-1.21-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.85.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.74-.1-.26-.45-1.31.1-2.73 0 0 .85-.28 2.78 1.04A9.45 9.45 0 0 1 12 6.84a9.3 9.3 0 0 1 2.53.35c1.93-1.32 2.77-1.04 2.77-1.04.55 1.42.21 2.47.1 2.73.64.71 1.03 1.62 1.03 2.74 0 3.94-2.35 4.81-4.59 5.06.36.32.68.95.68 1.92 0 1.39-.01 2.5-.01 2.84 0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
+          </svg>
+          <span>View repository</span>
+        </a>
+        <p class="repo-caption">Browse source, releases, CI coverage, and packaging from the public GitHub repo.</p>
+      </div>
+
+      <ul class="feature-highlights" aria-label="Project highlights">
+        @for (feature of featureHighlights; track feature) {
+          <li>{{ feature }}</li>
+        }
+      </ul>
+    </section>
+  </header>
+
+  <section class="grid-stage">
+    <app-ui-grid [options]="options()" />
+  </section>
+
+  <section class="harness-stage">
+    <app-grid-browser-harness />
+  </section>
 </main>

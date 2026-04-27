@@ -265,6 +265,11 @@ describe('UiGridComponent', () => {
     const activeGroup = [...initialGroups].find((node) => node.textContent?.includes('status: Active'));
     expect(activeGroup).toBeTruthy();
 
+    const firstGroupedOwnerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-2"][data-col-name="owner"]');
+    const secondGroupedOwnerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-3"][data-col-name="owner"]');
+    expect(firstGroupedOwnerCell?.classList.contains('body-cell-odd')).toBe(true);
+    expect(secondGroupedOwnerCell?.classList.contains('body-cell-odd')).toBe(false);
+
     (activeGroup as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(shadowRoot.querySelectorAll('.body-cell')).toHaveLength(5);

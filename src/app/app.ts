@@ -1,13 +1,22 @@
-import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
 import { FILTER_CONDITIONS, GridCellTemplateContext, GridOptions, UiGridApi, UiGridComponent } from '@ornery/ui-grid';
 import { GridBrowserHarnessComponent } from './grid-browser-harness.component';
+
+interface DemoBadge {
+  readonly label: string;
+  readonly value: string;
+  readonly tone: 'github' | 'framework' | 'package' | 'quality';
+}
+
+type ColorMode = 'dark' | 'light';
+type VisualMode = 'default' | 'wireframe';
 
 function createDemoData() {
   const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'];
   const companies = ['Northwind', 'Blue Harbor', 'Forge Group', 'Larkspur', 'Atlas'];
   const owners = ['Casey Tran', 'Jordan Silva', 'Priya Rao', 'Evan Brooks', 'Mina Patel'];
 
-  return Array.from({ length: 240 }, (_value, index) => ({
+  return Array.from({ length: 10000 }, (_value, index) => ({
     id: `row-${index + 1}`,
     name: `Customer ${index + 1}`,
     company: companies[index % companies.length],
@@ -22,10 +31,35 @@ function createDemoData() {
   selector: 'app-root',
   imports: [UiGridComponent, GridBrowserHarnessComponent],
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrl: './app.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '[attr.data-color-mode]': 'colorMode()',
+    '[attr.data-visual-mode]': 'visualMode()'
+  }
 })
 export class App {
   private readonly statusTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('statusTemplate');
+  protected readonly repoUrl = 'https://github.com/orneryd/uiGrid';
+  protected readonly colorMode = signal<ColorMode>('dark');
+  protected readonly visualMode = signal<VisualMode>('default');
+  protected readonly isDarkMode = computed(() => this.colorMode() === 'dark');
+  protected readonly isWireframeMode = computed(() => this.visualMode() === 'wireframe');
+  protected readonly activeThemeName = computed(() =>
+    `${this.isWireframeMode() ? 'Wireframe' : 'Studio'} ${this.isDarkMode() ? 'dark' : 'light'}`
+  );
+  protected readonly repoBadges: readonly DemoBadge[] = [
+    { label: 'GitHub', value: 'orneryd/uiGrid', tone: 'github' },
+    { label: 'Angular', value: '21.2', tone: 'framework' },
+    { label: 'Package', value: '@ornery/ui-grid', tone: 'package' },
+    { label: 'Coverage', value: '90%+', tone: 'quality' }
+  ];
+  protected readonly featureHighlights = [
+    'Signals-powered API surface',
+    'Shadow DOM rendering shell',
+    'Web component build target',
+    'Virtualized 10,000-row showcase'
+  ] as const;
   protected readonly gridApi = signal<UiGridApi | null>(null);
   protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
@@ -87,4 +121,12 @@ export class App {
     ],
     data: createDemoData()
   }));
+
+  protected toggleColorMode(): void {
+    this.colorMode.update((mode) => (mode === 'dark' ? 'light' : 'dark'));
+  }
+
+  protected toggleVisualMode(): void {
+    this.visualMode.update((mode) => (mode === 'default' ? 'wireframe' : 'default'));
+  }
 }

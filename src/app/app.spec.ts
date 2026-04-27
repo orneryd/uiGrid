@@ -10,12 +10,64 @@ describe('App', () => {
 
   it('should create the app', () => {
     const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
 
+  it('should render the demo header with repo badges and a repository link', async () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const heading = compiled.querySelector('.hero-copy h3');
+    const repoLink = compiled.querySelector('.repo-link') as HTMLAnchorElement | null;
+    const badgeValues = [...compiled.querySelectorAll('.repo-badge strong')].map((node) => node.textContent?.trim());
+    const themeHeading = compiled.querySelector('.theme-panel h2');
+    const switches = [...compiled.querySelectorAll('.theme-switch')];
+
+    expect(heading?.textContent).toContain('UI Grid');
+    expect(repoLink?.getAttribute('href')).toBe('https://github.com/orneryd/uiGrid');
+    expect(repoLink?.textContent).toContain('View repository');
+    expect(compiled.querySelector('.logo-panel')).toBeNull();
+    expect(themeHeading?.textContent).toContain('Studio dark');
+    expect(switches).toHaveLength(2);
+    expect(badgeValues).toEqual(expect.arrayContaining(['orneryd/uiGrid', '21.2', '@ornery/ui-grid', '90%+']));
+  });
+
+  it('should default to dark mode and allow toggling both the color and visual themes', async () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const [colorSwitch, visualSwitch] = [...host.querySelectorAll('.theme-switch')] as HTMLButtonElement[];
+
+    expect(host.getAttribute('data-color-mode')).toBe('dark');
+    expect(host.getAttribute('data-visual-mode')).toBe('default');
+    expect(colorSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(visualSwitch.getAttribute('aria-checked')).toBe('false');
+
+    colorSwitch.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(host.getAttribute('data-color-mode')).toBe('light');
+    expect(colorSwitch.getAttribute('aria-checked')).toBe('false');
+
+    visualSwitch.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(host.getAttribute('data-visual-mode')).toBe('wireframe');
+    expect(visualSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('.theme-panel h2')?.textContent).toContain('Wireframe light');
+  });
+
   it('should render the modernized grid heading', async () => {
     const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     const gridHost = compiled.querySelector('app-ui-grid') as HTMLElement | null;

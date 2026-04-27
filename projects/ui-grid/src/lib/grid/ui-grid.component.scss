@@ -1,25 +1,25 @@
 :host {
-  --ui-grid-border-color: #d4d4d8;
-  --ui-grid-header-background: #f3f4f6;
-  --ui-grid-row-odd: #fcfcfd;
-  --ui-grid-row-even: #f7f7f8;
-  --ui-grid-row-hover: #eef4ff;
-  --ui-grid-cell-color: #111827;
-  --ui-grid-muted-color: #6b7280;
-  --ui-grid-surface: #ffffff;
-  --ui-grid-radius: 4px;
-  --ui-grid-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  --ui-grid-header-weight: 700;
-  --ui-grid-accent: #2563eb;
-  --ui-grid-group-background: #eceff3;
-  --ui-grid-status-active-bg: rgba(22, 163, 74, 0.14);
-  --ui-grid-status-active-color: #166534;
-  --ui-grid-status-expansion-bg: rgba(37, 99, 235, 0.14);
-  --ui-grid-status-expansion-color: #1d4ed8;
-  --ui-grid-status-enterprise-bg: rgba(15, 118, 110, 0.14);
-  --ui-grid-status-enterprise-color: #115e59;
-  --ui-grid-status-pilot-bg: rgba(234, 88, 12, 0.14);
-  --ui-grid-status-pilot-color: #c2410c;
+  --ui-grid-border-color: var(--app-ui-grid-border-color, #d4d4d8);
+  --ui-grid-header-background: var(--app-ui-grid-header-background, #f3f4f6);
+  --ui-grid-row-odd: var(--app-ui-grid-row-odd, #fcfcfd);
+  --ui-grid-row-even: var(--app-ui-grid-row-even, #f7f7f8);
+  --ui-grid-row-hover: var(--app-ui-grid-row-hover, #eef4ff);
+  --ui-grid-cell-color: var(--app-ui-grid-cell-color, #111827);
+  --ui-grid-muted-color: var(--app-ui-grid-muted-color, #6b7280);
+  --ui-grid-surface: var(--app-ui-grid-surface, #ffffff);
+  --ui-grid-radius: var(--app-ui-grid-radius, 4px);
+  --ui-grid-shadow: var(--app-ui-grid-shadow, 0 10px 24px rgba(15, 23, 42, 0.08));
+  --ui-grid-header-weight: var(--app-ui-grid-header-weight, 700);
+  --ui-grid-accent: var(--app-ui-grid-accent, #2563eb);
+  --ui-grid-group-background: var(--app-ui-grid-group-background, #eceff3);
+  --ui-grid-status-active-bg: var(--app-ui-grid-status-active-bg, rgba(22, 163, 74, 0.14));
+  --ui-grid-status-active-color: var(--app-ui-grid-status-active-color, #166534);
+  --ui-grid-status-expansion-bg: var(--app-ui-grid-status-expansion-bg, rgba(37, 99, 235, 0.14));
+  --ui-grid-status-expansion-color: var(--app-ui-grid-status-expansion-color, #1d4ed8);
+  --ui-grid-status-enterprise-bg: var(--app-ui-grid-status-enterprise-bg, rgba(15, 118, 110, 0.14));
+  --ui-grid-status-enterprise-color: var(--app-ui-grid-status-enterprise-color, #115e59);
+  --ui-grid-status-pilot-bg: var(--app-ui-grid-status-pilot-bg, rgba(234, 88, 12, 0.14));
+  --ui-grid-status-pilot-color: var(--app-ui-grid-status-pilot-color, #c2410c);
   display: block;
   color: var(--ui-grid-cell-color);
 }
@@ -290,6 +290,10 @@ h1 {
   outline: 0;
 }
 
+.body-cell.body-cell-odd {
+  background: var(--ui-grid-row-odd);
+}
+
 .cell-shell {
   display: flex;
   align-items: center;
@@ -320,15 +324,6 @@ h1 {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--ui-grid-border-color);
   background: color-mix(in srgb, var(--ui-grid-accent) 4%, var(--ui-grid-surface));
-}
-
-.body-grid > .body-cell:nth-child(12n + 1),
-.body-grid > .body-cell:nth-child(12n + 2),
-.body-grid > .body-cell:nth-child(12n + 3),
-.body-grid > .body-cell:nth-child(12n + 4),
-.body-grid > .body-cell:nth-child(12n + 5),
-.body-grid > .body-cell:nth-child(12n + 6) {
-  background: var(--ui-grid-row-odd);
 }
 
 .body-grid > .body-cell:hover {

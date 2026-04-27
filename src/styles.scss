@@ -1,12 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap');
 
 :root {
-	color-scheme: light;
+	color-scheme: dark;
 	font-family: 'Plus Jakarta Sans', sans-serif;
 	background:
-		radial-gradient(circle at top, rgba(110, 231, 183, 0.16), transparent 30%),
-		linear-gradient(180deg, #f8fafc, #eef2ff 55%, #f8fafc);
-	color: #0f172a;
+		radial-gradient(circle at top, rgba(20, 184, 166, 0.18), transparent 30%),
+		linear-gradient(180deg, #051017, #0a1621 55%, #071118);
+	color: #eef7fb;
 }
 
 html,
@@ -17,6 +17,8 @@ body {
 
 body {
 	min-height: 100vh;
+	background: inherit;
+	color: inherit;
 }
 
 * {

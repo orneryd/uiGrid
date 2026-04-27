@@ -90,6 +90,16 @@ function createTreeRows(): GridRecord[] {
     :host {
       display: block;
       margin-top: 2rem;
+      --browser-harness-border: var(--app-browser-harness-border, color-mix(in srgb, currentColor 12%, transparent));
+      --browser-harness-panel: var(--app-browser-harness-panel, color-mix(in srgb, currentColor 4%, transparent));
+      --browser-harness-button-bg: var(--app-browser-harness-button-bg, var(--ui-grid-surface, white));
+      --browser-harness-button-text: var(--app-browser-harness-button-text, currentColor);
+      --browser-harness-button-active-bg: var(--app-browser-harness-button-active-bg, var(--ui-grid-accent, #14212d));
+      --browser-harness-button-active-text: var(--app-browser-harness-button-active-text, var(--ui-grid-surface, white));
+      --browser-harness-status-bg: var(--app-browser-harness-status-bg, var(--ui-grid-status-active-bg, #d7efe5));
+      --browser-harness-status-text: var(--app-browser-harness-status-text, var(--ui-grid-status-active-color, #0c4c32));
+      --browser-harness-detail-bg: var(--app-browser-harness-detail-bg, color-mix(in srgb, var(--ui-grid-accent, #14212d) 12%, var(--ui-grid-surface, white)));
+      --browser-harness-detail-text: var(--app-browser-harness-detail-text, var(--ui-grid-cell-color, currentColor));
     }
 
     .browser-harness {
@@ -101,9 +111,9 @@ function createTreeRows(): GridRecord[] {
       display: grid;
       gap: 1rem;
       padding: 1rem 1.25rem;
-      border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+      border: 1px solid var(--browser-harness-border);
       border-radius: 1rem;
-      background: linear-gradient(135deg, rgba(20, 31, 45, 0.06), rgba(20, 31, 45, 0.02));
+      background: linear-gradient(135deg, var(--browser-harness-panel), transparent);
     }
 
     .browser-harness__eyebrow {
@@ -125,17 +135,18 @@ function createTreeRows(): GridRecord[] {
     }
 
     .browser-harness__mode {
-      border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+      border: 1px solid var(--browser-harness-border);
       border-radius: 999px;
-      background: white;
+      background: var(--browser-harness-button-bg);
+      color: var(--browser-harness-button-text);
       padding: 0.55rem 0.9rem;
       cursor: pointer;
       font: inherit;
     }
 
     .browser-harness__mode-active {
-      background: #14212d;
-      color: white;
+      background: var(--browser-harness-button-active-bg);
+      color: var(--browser-harness-button-active-text);
     }
 
     .browser-harness__status {
@@ -143,8 +154,8 @@ function createTreeRows(): GridRecord[] {
       align-items: center;
       border-radius: 999px;
       padding: 0.2rem 0.55rem;
-      background: #d7efe5;
-      color: #0c4c32;
+      background: var(--browser-harness-status-bg);
+      color: var(--browser-harness-status-text);
       font-size: 0.85rem;
       font-weight: 600;
     }
@@ -152,8 +163,8 @@ function createTreeRows(): GridRecord[] {
     .browser-harness__detail {
       padding: 0.85rem 1rem;
       border-radius: 0.75rem;
-      background: #fff4db;
-      color: #5f3b00;
+      background: var(--browser-harness-detail-bg);
+      color: var(--browser-harness-detail-text);
       font-weight: 600;
     }
   `

@@ -50,6 +50,7 @@ interface RowItem {
   kind: 'row';
   id: string;
   row: GridRow;
+  visibleIndex: number;
 }
 
 interface ExpandableItem {
@@ -486,12 +487,12 @@ export class UiGridComponent {
 
   private buildRowDisplayItems(rows: readonly GridRow[]): DisplayItem[] {
     const items: DisplayItem[] = [];
-    for (const row of rows) {
-      items.push({ kind: 'row', id: row.id, row });
+    rows.forEach((row, visibleIndex) => {
+      items.push({ kind: 'row', id: row.id, row, visibleIndex });
       if (row.expanded && this.canExpandRows()) {
         items.push({ kind: 'expandable', id: `${row.id}:expandable`, row });
       }
-    }
+    });
 
     return items;
   }
@@ -550,6 +551,10 @@ export class UiGridComponent {
 
   protected isExpandableItem(item: DisplayItem): item is ExpandableItem {
     return item.kind === 'expandable';
+  }
+
+  protected isOddStripedRow(item: DisplayItem): boolean {
+    return item.kind === 'row' && item.visibleIndex % 2 === 0;
   }
 
   protected sortButtonLabel(column: GridColumnDef): string {
