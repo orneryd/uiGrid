@@ -33,4 +33,10 @@ jobs:
         run: npm run build:element
 
       - name: Run the test suite
-        run: npm test -- --watch=false
+        run: npm test -- --watch=false --coverage
+
+      - name: Publish coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: coverage/uiGrid/lcov.info
