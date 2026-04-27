@@ -2,6 +2,8 @@
 
 A modern Angular data grid with a familiar ui-grid-style API, rebuilt on Angular 21, TypeScript, Angular CDK, and browser-native primitives.
 
+Live demo: [https://orneryd.github.io/uiGrid/](https://orneryd.github.io/uiGrid/)
+
 This project keeps the classic ui-grid mental model:
 
 - a `gridOptions` object
