@@ -55,9 +55,9 @@
     </div>
 
     <div class="grid-table ui-grid-contents-wrapper" part="grid-table">
-      <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList (cdkDropListDropped)="onColumnDrop($event)">
+      <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal" [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
         @for (column of visibleColumns(); track column.name) {
-          <div class="header-cell ui-grid-header-cell" part="header-cell" cdkDrag [class.is-active]="sortDirection(column) !== 'none'">
+          <div class="header-cell ui-grid-header-cell" part="header-cell" cdkDrag [cdkDragData]="column" [class.is-active]="sortDirection(column) !== 'none'">
             <span class="header-label">{{ headerLabel(column) }}</span>
 
             <div class="header-actions">

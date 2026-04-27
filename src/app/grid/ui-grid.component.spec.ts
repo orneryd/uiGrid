@@ -289,8 +289,51 @@ describe('UiGridComponent', () => {
     expect(columnOrderChanged).toHaveBeenLastCalledWith(['status', 'revenue', 'name', 'owner', 'badge']);
     expect(headers).toEqual(['Status', 'Revenue', 'Customer', 'Owner', 'Badge']);
 
-    (fixture.componentInstance as any).onColumnDrop({ previousIndex: 1, currentIndex: 1 });
+    (fixture.componentInstance as any).onColumnDrop({
+      previousIndex: 1,
+      currentIndex: 1,
+      item: { data: (fixture.componentInstance as any).visibleColumns()[1] },
+      container: { data: (fixture.componentInstance as any).visibleColumns() }
+    });
     expect(columnOrderChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('reorders visible columns without shifting hidden columns ahead of the drop target', () => {
+    let gridApi!: UiGridApi;
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          columnDefs: [
+            { name: 'id', visible: false },
+            { name: 'name', displayName: 'Customer' },
+            { name: 'status' },
+            { name: 'revenue' },
+            { name: 'owner', field: 'account.owner' },
+            { name: 'badge' }
+          ]
+        },
+        (api) => {
+          gridApi = api;
+        }
+      )
+    );
+    fixture.detectChanges();
+
+    (fixture.componentInstance as any).onColumnDrop({
+      previousIndex: 3,
+      currentIndex: 1,
+      item: { data: { name: 'badge' } },
+      container: { data: (fixture.componentInstance as any).visibleColumns() }
+    });
+    fixture.detectChanges();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
+
+    expect(headers).toEqual(['Customer', 'Badge', 'Status', 'Revenue', 'Owner']);
+    expect((fixture.componentInstance as any).columnOrder()).toEqual(['id', 'name', 'badge', 'status', 'revenue', 'owner']);
   });
 
   it('hides and restores rows using string, row object, and GridRow references', () => {
@@ -800,9 +843,40 @@ describe('UiGridComponent', () => {
     );
 
     expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
+    const statusCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    expect(statusCell).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(statusCell);
+
+    statusCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
     const ownerEditor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
     expect(ownerEditor).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(ownerEditor);
     expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]')).toBeNull();
+
+    ownerEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const statusCellAgain = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    expect(statusCellAgain).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(statusCellAgain);
+    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]')).toBeNull();
+
+    statusCellAgain.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const nameEditorAgain = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]') as HTMLInputElement;
+    expect(nameEditorAgain).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(nameEditorAgain);
+
+    nameEditorAgain.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cancelCellEdit.mockClear();
 
     const ownerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="owner"]') as HTMLElement;
     ownerCell.focus();
@@ -823,6 +897,33 @@ describe('UiGridComponent', () => {
       expect.objectContaining({ id: 'row-1' }),
       expect.objectContaining({ name: 'owner' })
     );
+  });
+
+  it('tabs from a non-editable cell to the next editable cell', async () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enableGrouping: false,
+      enableCellEditOnFocus: true,
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', enableCellEdit: true },
+        { name: 'status' },
+        { name: 'owner', field: 'account.owner', enableCellEdit: true }
+      ]
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const statusCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    statusCell.focus();
+    statusCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    expect(ownerEditor).toBeTruthy();
+    expect(ownerEditor.value).toBe('Mina Patel');
+    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
   });
 
   it('supports expandable rows while using the virtualized rendering path', async () => {

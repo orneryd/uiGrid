@@ -95,8 +95,9 @@ describe('App', () => {
     await fixture.whenStable();
 
     expect(shadowRoot.querySelector('.cell-editor[data-col-name="company"]')).toBeNull();
-    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-col-name="owner"]') as HTMLInputElement;
-    expect(ownerEditor).toBeTruthy();
-    expect(ownerEditor.value).toBe('Casey Tran');
+    const revenueCell = shadowRoot.querySelector('.body-cell[data-col-name="revenue"]') as HTMLElement;
+    expect(revenueCell).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(revenueCell);
+    expect(shadowRoot.querySelector('.cell-editor[data-col-name="revenue"]')).toBeNull();
   });
 });

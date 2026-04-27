@@ -122,6 +122,8 @@ export class UiGridComponent {
   private lastGridWidth = 0;
   private scrollEndHandle?: number;
   private scrolling = false;
+  private editorFocusToken = 0;
+  private renderedCellFocusToken = 0;
 
   constructor() {
     this.gridApi = createGridApi({
@@ -857,12 +859,20 @@ export class UiGridComponent {
     this.seekPage(this.getCurrentPageValue() - 1);
   }
 
-  protected onColumnDrop(event: CdkDragDrop<readonly GridColumnDef[]>): void {
-    if (event.previousIndex === event.currentIndex) {
+  protected onColumnDrop(event: CdkDragDrop<GridColumnDef[], GridColumnDef[], GridColumnDef>): void {
+    if (!this.canMoveColumns()) {
       return;
     }
 
-    this.moveColumn(event.previousIndex, event.currentIndex);
+    const draggedColumn = event.item.data as GridColumnDef | undefined;
+    const dropListColumns = event.container.data as readonly GridColumnDef[] | undefined;
+    const targetColumn = dropListColumns?.[event.currentIndex];
+
+    if (!draggedColumn || !targetColumn || draggedColumn.name === targetColumn.name) {
+      return;
+    }
+
+    this.moveVisibleColumn(draggedColumn.name, targetColumn.name);
   }
 
   private moveColumn(fromIndex: number, toIndex: number): void {
@@ -876,6 +886,38 @@ export class UiGridComponent {
       this.gridApi.core.raise.columnOrderChanged(next);
       return next;
     });
+  }
+
+  private moveVisibleColumn(columnName: string, targetColumnName: string): void {
+    if (!this.canMoveColumns()) {
+      return;
+    }
+
+    const currentOrder = this.columnOrder();
+    const visibleNames = new Set(this.visibleColumns().map((column) => column.name));
+    const visibleOrder = currentOrder.filter((name) => visibleNames.has(name));
+    const fromIndex = visibleOrder.indexOf(columnName);
+    const toIndex = visibleOrder.indexOf(targetColumnName);
+
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+      return;
+    }
+
+    moveItemInArray(visibleOrder, fromIndex, toIndex);
+
+    const nextOrder: string[] = [];
+    let visibleCursor = 0;
+
+    for (const name of currentOrder) {
+      if (visibleNames.has(name)) {
+        nextOrder.push(visibleOrder[visibleCursor++] ?? name);
+      } else {
+        nextOrder.push(name);
+      }
+    }
+
+    this.columnOrder.set(nextOrder);
+    this.gridApi.core.raise.columnOrderChanged(nextOrder);
   }
 
   protected trackDisplayItem = (_index: number, item: DisplayItem): string => item.id;
@@ -987,7 +1029,7 @@ export class UiGridComponent {
       return;
     }
 
-    this.commitCellEdit();
+    this.commitCellEdit(undefined, false);
   }
 
   protected onViewportIndexChange(startIndex = 0): void {
@@ -1068,14 +1110,15 @@ export class UiGridComponent {
 
   private startCellEdit(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null, initialValue?: string): void {
     const currentValue = getCellValue(row.entity, column);
+    const focusToken = ++this.editorFocusToken;
     this.focusedCell.set({ rowId: row.id, columnName: column.name });
     this.editingCell.set({ rowId: row.id, columnName: column.name });
     this.editingValue.set(initialValue ?? this.stringifyEditorValue(currentValue));
     this.gridApi.edit.raise.beginCellEdit(row.entity, column, triggerEvent);
-    queueMicrotask(() => this.focusEditorInput());
+    queueMicrotask(() => this.focusEditorInput(focusToken));
   }
 
-  private commitCellEdit(direction?: 'left' | 'right' | 'up' | 'down'): void {
+  private commitCellEdit(direction?: 'left' | 'right' | 'up' | 'down', restoreFocus = true): void {
     const editingCell = this.editingCell();
     if (!editingCell) {
       return;
@@ -1092,16 +1135,17 @@ export class UiGridComponent {
     const newValue = this.parseEditedValue(column, this.editingValue(), oldValue);
     this.setCellValue(row.entity, column, newValue);
     this.editingCell.set(null);
+    this.editorFocusToken += 1;
     this.gridApi.edit.raise.afterCellEdit(row.entity, column, newValue, oldValue);
 
     this.editingValue.set('');
 
     if (direction) {
-      const moved = this.moveFocus(row, column, direction, undefined, true);
+      const moved = this.moveFocus(row, column, direction);
       if (!moved) {
         this.focusRenderedCell({ rowId: row.id, columnName: column.name });
       }
-    } else {
+    } else if (restoreFocus) {
       this.focusRenderedCell({ rowId: row.id, columnName: column.name });
     }
   }
@@ -1116,6 +1160,7 @@ export class UiGridComponent {
     const column = this.visibleColumns().find((candidate) => candidate.name === editingCell.columnName);
     this.editingCell.set(null);
     this.editingValue.set('');
+    this.editorFocusToken += 1;
     if (row && column) {
       this.gridApi.edit.raise.cancelCellEdit(row.entity, column);
       this.focusRenderedCell(editingCell);
@@ -1224,14 +1269,36 @@ export class UiGridComponent {
   }
 
   private focusRenderedCell(position: GridCellPosition): void {
-    queueMicrotask(() => {
+    const focusToken = ++this.renderedCellFocusToken;
+    const focusCell = (retry = true): void => {
+      if (focusToken !== this.renderedCellFocusToken) {
+        return;
+      }
+
       const shadowRoot = this.hostElement.nativeElement.shadowRoot;
       const selector = `.body-cell[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
-      (shadowRoot?.querySelector(selector) as HTMLElement | null)?.focus();
-    });
+      const target = shadowRoot?.querySelector(selector) as HTMLElement | null;
+      if (!target) {
+        if (retry) {
+          requestAnimationFrame(() => focusCell(false));
+        }
+        return;
+      }
+
+      target.focus();
+      if (retry && shadowRoot?.activeElement !== target) {
+        requestAnimationFrame(() => focusCell(false));
+      }
+    };
+
+    queueMicrotask(() => focusCell(true));
   }
 
-  private focusEditorInput(): void {
+  private focusEditorInput(focusToken: number, retry = true): void {
+    if (focusToken !== this.editorFocusToken) {
+      return;
+    }
+
     const editingCell = this.editingCell();
     if (!editingCell) {
       return;
@@ -1240,6 +1307,11 @@ export class UiGridComponent {
     const shadowRoot = this.hostElement.nativeElement.shadowRoot;
     const selector = `.cell-editor[data-row-id="${editingCell.rowId}"][data-col-name="${editingCell.columnName}"]`;
     const input = shadowRoot?.querySelector(selector) as HTMLInputElement | null;
+    if (!input && retry) {
+      requestAnimationFrame(() => this.focusEditorInput(focusToken, false));
+      return;
+    }
+
     input?.focus();
     input?.select();
   }

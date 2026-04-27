@@ -24,6 +24,13 @@
   color: var(--ui-grid-cell-color);
 }
 
+:host,
+:host * ,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
+}
+
 .grid-shell {
   display: grid;
   gap: 1.5rem;
@@ -242,6 +249,17 @@ h1 {
   background: color-mix(in srgb, var(--ui-grid-accent) 12%, var(--ui-grid-surface));
   border-color: color-mix(in srgb, var(--ui-grid-accent) 35%, var(--ui-grid-border-color));
   color: var(--ui-grid-accent);
+}
+
+.header-cell.cdk-drag-placeholder {
+  background: color-mix(in srgb, var(--ui-grid-accent) 9%, var(--ui-grid-header-background));
+  border: 1px dashed color-mix(in srgb, var(--ui-grid-accent) 45%, var(--ui-grid-border-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-grid-accent) 18%, transparent);
+  opacity: 0.9;
+}
+
+.header-grid.cdk-drop-list-dragging .header-cell:not(.cdk-drag-placeholder) {
+  transition: transform 120ms ease, background-color 120ms ease;
 }
 
 .filter-cell {
