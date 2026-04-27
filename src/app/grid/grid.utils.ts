@@ -21,6 +21,26 @@ export function getPathValue(record: GridRecord, path: string): unknown {
   }, record);
 }
 
+export function setPathValue(record: GridRecord, path: string, value: unknown): void {
+  const parts = path.split('.');
+  const lastPart = parts.pop();
+  if (!lastPart) {
+    return;
+  }
+
+  let current: Record<string, unknown> = record;
+  for (const part of parts) {
+    const next = current[part];
+    if (typeof next !== 'object' || next === null || Array.isArray(next)) {
+      current[part] = {};
+    }
+
+    current = current[part] as Record<string, unknown>;
+  }
+
+  current[lastPart] = value;
+}
+
 export function titleize(value: string): string {
   return value
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')

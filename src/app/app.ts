@@ -41,6 +41,7 @@ export class App {
     enableGrouping: true,
     enableColumnMoving: true,
     enableVirtualization: true,
+    enableCellEditOnFocus: true,
     virtualizationThreshold: 25,
     grouping: {
       groupBy: ['status']
@@ -51,10 +52,11 @@ export class App {
     rowIdentity: (row) => String(row['id']),
     onRegisterApi: (api) => this.gridApi.set(api as UiGridApi),
     columnDefs: [
-      { name: 'name', displayName: 'Customer', width: 'minmax(14rem, 1.2fr)' },
-      { name: 'company', width: 'minmax(12rem, 1fr)' },
+      { name: 'name', displayName: 'Customer', width: 'minmax(14rem, 1.2fr)', enableCellEdit: true },
+      { name: 'company', width: 'minmax(12rem, 1fr)', enableCellEdit: true },
       {
         name: 'revenue',
+        type: 'number',
         align: 'end',
         width: 'minmax(10rem, 0.7fr)',
         filter: { condition: FILTER_CONDITIONS.greaterThan },
@@ -73,6 +75,7 @@ export class App {
       },
       {
         name: 'renewalDate',
+        type: 'date',
         displayName: 'Renewal',
         width: 'minmax(11rem, 0.8fr)',
         formatter: (value) => new Date(String(value)).toLocaleDateString('en-US')
@@ -81,7 +84,8 @@ export class App {
         name: 'owner',
         field: 'account.owner',
         displayName: 'Account Owner',
-        width: 'minmax(11rem, 0.8fr)'
+        width: 'minmax(11rem, 0.8fr)',
+        enableCellEdit: true
       }
     ],
     data: createDemoData()

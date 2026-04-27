@@ -51,4 +51,52 @@ describe('App', () => {
     expect(renewalColumn?.formatter?.('2026-04-02')).toBe(new Date('2026-04-02').toLocaleDateString('en-US'));
     expect(ownerColumn?.field).toBe('account.owner');
   });
+
+  it('should support spreadsheet-style editing through the demo app grid', async () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const app = fixture.componentInstance as unknown as {
+      gridApi: () => {
+        core: { clearGrouping: () => void; getVisibleRows: () => Array<{ entity: Record<string, unknown> }> };
+      } | null;
+    };
+    const gridApi = app.gridApi()!;
+    gridApi.core.clearGrouping();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const gridHost = compiled.querySelector('app-ui-grid') as HTMLElement;
+    const shadowRoot = gridHost.shadowRoot!;
+    const firstNameCell = shadowRoot.querySelector('.body-cell[data-col-name="name"]') as HTMLElement;
+
+    firstNameCell.focus();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const firstEditor = shadowRoot.querySelector('.cell-editor[data-col-name="name"]') as HTMLInputElement;
+    expect(firstEditor.value).toBe('Customer 1');
+
+    firstEditor.value = 'Customer Prime';
+    firstEditor.dispatchEvent(new Event('input'));
+    firstEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(gridApi.core.getVisibleRows()[0]?.entity['name']).toBe('Customer Prime');
+    const companyEditor = shadowRoot.querySelector('.cell-editor[data-col-name="company"]') as HTMLInputElement;
+    expect(companyEditor).toBeTruthy();
+    expect(companyEditor.value).toBe('Northwind');
+
+    companyEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(shadowRoot.querySelector('.cell-editor[data-col-name="company"]')).toBeNull();
+    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-col-name="owner"]') as HTMLInputElement;
+    expect(ownerEditor).toBeTruthy();
+    expect(ownerEditor.value).toBe('Casey Tran');
+  });
 });

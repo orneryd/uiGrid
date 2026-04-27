@@ -182,7 +182,7 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headers = [...shadowRoot.querySelectorAll('.header-action span')].map((node) => node.textContent?.trim());
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
     const bodyCells = [...shadowRoot.querySelectorAll('.body-cell')].map((node) => node.textContent?.trim());
 
     expect(gridApi).toBeTruthy();
@@ -285,7 +285,7 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headers = [...shadowRoot.querySelectorAll('.header-action span')].map((node) => node.textContent?.trim());
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
     expect(columnOrderChanged).toHaveBeenLastCalledWith(['status', 'revenue', 'name', 'owner', 'badge']);
     expect(headers).toEqual(['Status', 'Revenue', 'Customer', 'Owner', 'Badge']);
 
@@ -467,7 +467,7 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headersBefore = [...shadowRoot.querySelectorAll('.header-action span')].map((node) => node.textContent?.trim());
+    const headersBefore = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
     expect(headersBefore).toEqual(['Status', 'Owner']);
     expect(shadowRoot.querySelector('.filter-grid')).toBeNull();
     expect(shadowRoot.querySelector('.chip-action')).toBeNull();
@@ -482,7 +482,7 @@ describe('UiGridComponent', () => {
     gridApi.expandable.expandAllRows();
     fixture.detectChanges();
 
-    const headersAfter = [...shadowRoot.querySelectorAll('.header-action span')].map((node) => node.textContent?.trim());
+    const headersAfter = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
     expect(headersAfter).toEqual(['Status', 'Owner']);
     expect(gridApi.core.getVisibleRows()).toHaveLength(3);
     expect(shadowRoot.querySelector('.detail-row')).toBeNull();
@@ -750,6 +750,79 @@ describe('UiGridComponent', () => {
     expect(component.expandToggleSymbol(statusRow)).toBe('▾');
     statusRow.expanded = false;
     expect(component.expandToggleSymbol(statusRow)).toBe('▸');
+  });
+
+  it('supports keyboard-driven cell editing with commit, navigation, and cancel events', async () => {
+    let gridApi!: UiGridApi;
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enableGrouping: false,
+      enableCellEditOnFocus: true,
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', enableCellEdit: true },
+        { name: 'status' },
+        { name: 'owner', field: 'account.owner', enableCellEdit: true }
+      ]
+    }, (api) => {
+      gridApi = api;
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const beginCellEdit = vi.fn();
+    const afterCellEdit = vi.fn();
+    const cancelCellEdit = vi.fn();
+    gridApi.edit.on.beginCellEdit(beginCellEdit);
+    gridApi.edit.on.afterCellEdit(afterCellEdit);
+    gridApi.edit.on.cancelCellEdit(cancelCellEdit);
+
+    const shadowRoot = getShadowRoot(fixture);
+    const firstNameCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="name"]') as HTMLElement;
+    firstNameCell.focus();
+    firstNameCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Z' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    let editor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]') as HTMLInputElement;
+    expect(editor.value).toBe('Z');
+    expect(beginCellEdit).toHaveBeenCalled();
+
+    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(gridApi.core.getVisibleRows()[0]?.entity['name']).toBe('Z');
+    expect(afterCellEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'row-1', name: 'Z' }),
+      expect.objectContaining({ name: 'name' }),
+      'Z',
+      'Gamma'
+    );
+
+    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
+    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    expect(ownerEditor).toBeTruthy();
+    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]')).toBeNull();
+
+    const ownerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="owner"]') as HTMLElement;
+    ownerCell.focus();
+    ownerCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    editor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    expect(editor.value).toBe('Mina Patel');
+    editor.value = 'Taylor Morgan';
+    editor.dispatchEvent(new Event('input'));
+    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(gridApi.core.getVisibleRows()[0]?.entity['account']).toEqual({ owner: 'Mina Patel' });
+    expect(cancelCellEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'row-1' }),
+      expect.objectContaining({ name: 'owner' })
+    );
   });
 
   it('supports expandable rows while using the virtualized rendering path', async () => {

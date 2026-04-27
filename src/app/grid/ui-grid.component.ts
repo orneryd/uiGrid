@@ -21,6 +21,8 @@ import { createGridApi, UiGridApi } from './grid.api';
 import { FILTER_CONDITIONS, SORT_DIRECTIONS, SortDirection } from './grid.constants';
 import {
   GridBenchmarkResult,
+  GridCellEditableContext,
+  GridCellPosition,
   GridCellTemplateContext,
   GridColumnDef,
   GridExpandableTemplateContext,
@@ -32,7 +34,7 @@ import {
 } from './grid.models';
 import { runColumnFilter, setupFilters } from './row-searcher';
 import { getSortFn } from './row-sorter';
-import { getCellValue, getPathValue, stringifyCellValue, titleize, toCsvValue } from './grid.utils';
+import { getCellValue, getPathValue, setPathValue, stringifyCellValue, titleize, toCsvValue } from './grid.utils';
 
 interface GroupItem {
   kind: 'group';
@@ -94,6 +96,9 @@ export class UiGridComponent {
   protected readonly columnOrder = signal<string[]>([]);
   protected readonly hiddenRowReasons = signal<Record<string, string[]>>({});
   protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
+  protected readonly focusedCell = signal<GridCellPosition | null>(null);
+  protected readonly editingCell = signal<GridCellPosition | null>(null);
+  protected readonly editingValue = signal('');
   protected readonly expandedRows = signal<Record<string, boolean>>({});
   protected readonly expandedTreeRows = signal<Record<string, boolean>>({});
   protected readonly currentPage = signal(1);
@@ -159,7 +164,11 @@ export class UiGridComponent {
       infiniteScrollDataRemovedBottom: (scrollUp, scrollDown) => this.handleInfiniteDataRemovedBottom(scrollUp, scrollDown),
       infiniteScrollSetDirections: (scrollUp, scrollDown) => this.setInfiniteScrollDirections(scrollUp, scrollDown),
       saveState: () => this.saveState(),
-      restoreState: (state) => this.restoreState(state)
+      restoreState: (state) => this.restoreState(state),
+      beginCellEdit: (row, columnName, triggerEvent) => this.beginCellEditByRef(row, columnName, triggerEvent),
+      endCellEdit: () => this.commitCellEdit(),
+      cancelCellEdit: () => this.cancelCellEdit(),
+      getEditingCell: () => this.editingCell()
     });
 
     effect(() => {
@@ -172,6 +181,9 @@ export class UiGridComponent {
       this.activeFilters.set({});
       this.hiddenRowReasons.set({});
       this.collapsedGroups.set({});
+      this.focusedCell.set(null);
+      this.editingCell.set(null);
+      this.editingValue.set('');
       this.expandedRows.set({});
       this.expandedTreeRows.set({});
       this.columnOrder.set(options.columnDefs.map((column) => column.name));
@@ -580,6 +592,27 @@ export class UiGridComponent {
       : stringifyCellValue(context.value);
   }
 
+  protected isFocusedCell(row: GridRow, column: GridColumnDef): boolean {
+    const focusedCell = this.focusedCell();
+    return focusedCell?.rowId === row.id && focusedCell.columnName === column.name;
+  }
+
+  protected isEditingCell(row: GridRow, column: GridColumnDef): boolean {
+    const editingCell = this.editingCell();
+    return editingCell?.rowId === row.id && editingCell.columnName === column.name;
+  }
+
+  protected editorInputType(column: GridColumnDef): string {
+    switch (column.type) {
+      case 'number':
+        return 'number';
+      case 'date':
+        return 'date';
+      default:
+        return 'text';
+    }
+  }
+
   protected cellTemplate(column: GridColumnDef): TemplateRef<GridCellTemplateContext> | null {
     return column.cellTemplate ?? null;
   }
@@ -660,6 +693,30 @@ export class UiGridComponent {
 
   protected isColumnFilterable(column: GridColumnDef): boolean {
     return this.isFilteringEnabled() && column.filterable !== false && column.enableFiltering !== false;
+  }
+
+  protected isCellEditable(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean {
+    const editable = column.enableCellEdit ?? this.options().enableCellEdit ?? false;
+    if (!editable) {
+      return false;
+    }
+
+    const condition = column.cellEditableCondition ?? this.options().cellEditableCondition ?? true;
+    if (typeof condition === 'boolean') {
+      return condition;
+    }
+
+    const context: GridCellEditableContext = {
+      row: row.entity,
+      column,
+      rowIndex: row.index,
+      triggerEvent
+    };
+    return condition(context);
+  }
+
+  protected shouldEditOnFocus(column: GridColumnDef): boolean {
+    return column.enableCellEditOnFocus ?? this.options().enableCellEditOnFocus ?? false;
   }
 
   protected isGroupingEnabled(): boolean {
@@ -823,6 +880,116 @@ export class UiGridComponent {
 
   protected trackDisplayItem = (_index: number, item: DisplayItem): string => item.id;
 
+  protected focusCell(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): void {
+    const nextFocusedCell = { rowId: row.id, columnName: column.name };
+    const currentFocusedCell = this.focusedCell();
+    this.focusedCell.set(nextFocusedCell);
+
+    if (
+      this.shouldEditOnFocus(column)
+      && this.isCellEditable(row, column, triggerEvent)
+      && (currentFocusedCell?.rowId !== row.id || currentFocusedCell.columnName !== column.name)
+      && !this.isEditingCell(row, column)
+    ) {
+      this.startCellEdit(row, column, triggerEvent);
+    }
+  }
+
+  protected handleCellKeyDown(row: GridRow, column: GridColumnDef, event: KeyboardEvent): void {
+    this.focusCell(row, column, event);
+
+    switch (event.key) {
+      case 'ArrowLeft':
+        event.preventDefault();
+        this.moveFocus(row, column, 'left', event);
+        return;
+      case 'ArrowRight':
+        event.preventDefault();
+        this.moveFocus(row, column, 'right', event);
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.moveFocus(row, column, 'up', event);
+        return;
+      case 'ArrowDown':
+        event.preventDefault();
+        this.moveFocus(row, column, 'down', event);
+        return;
+      case 'Tab':
+        event.preventDefault();
+        this.moveFocus(row, column, event.shiftKey ? 'left' : 'right', event);
+        return;
+      case 'Enter':
+        event.preventDefault();
+        this.moveFocus(row, column, event.shiftKey ? 'up' : 'down', event);
+        return;
+      case 'F2':
+        event.preventDefault();
+        if (this.isCellEditable(row, column, event)) {
+          this.startCellEdit(row, column, event);
+        }
+        return;
+      case 'Backspace':
+      case 'Delete':
+        if (this.isCellEditable(row, column, event)) {
+          event.preventDefault();
+          this.startCellEdit(row, column, event, '');
+        }
+        return;
+      default:
+        break;
+    }
+
+    if (this.isPrintableKey(event) && this.isCellEditable(row, column, event)) {
+      event.preventDefault();
+      this.startCellEdit(row, column, event, event.key);
+    }
+  }
+
+  protected handleCellDoubleClick(row: GridRow, column: GridColumnDef, event: MouseEvent): void {
+    this.focusCell(row, column, event);
+    if (this.isCellEditable(row, column, event)) {
+      this.startCellEdit(row, column, event);
+    }
+  }
+
+  protected updateEditingValue(value: string): void {
+    this.editingValue.set(value);
+  }
+
+  protected handleEditorKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelCellEdit();
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.commitCellEdit(event.shiftKey ? 'up' : 'down');
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      this.commitCellEdit(event.shiftKey ? 'left' : 'right');
+    }
+  }
+
+  protected handleEditorBlur(event: FocusEvent): void {
+    const editingCell = this.editingCell();
+    const target = event.target as HTMLElement | null;
+    if (!editingCell || !target) {
+      return;
+    }
+
+    if (target.dataset['rowId'] !== editingCell.rowId || target.dataset['colName'] !== editingCell.columnName) {
+      return;
+    }
+
+    this.commitCellEdit();
+  }
+
   protected onViewportIndexChange(startIndex = 0): void {
     if (!this.scrolling) {
       this.scrolling = true;
@@ -882,6 +1049,199 @@ export class UiGridComponent {
 
   private refresh(): void {
     this.activeFilters.update((current) => ({ ...current }));
+  }
+
+  private isPrintableKey(event: KeyboardEvent): boolean {
+    return event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+  }
+
+  private beginCellEditByRef(row: GridRow | GridRecord | string, columnName: string, triggerEvent?: Event | KeyboardEvent | null): void {
+    const rowId = this.resolveRowId(row);
+    const gridRow = this.findRowById(rowId);
+    const column = this.visibleColumns().find((candidate) => candidate.name === columnName);
+    if (!gridRow || !column || !this.isCellEditable(gridRow, column, triggerEvent)) {
+      return;
+    }
+
+    this.startCellEdit(gridRow, column, triggerEvent);
+  }
+
+  private startCellEdit(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null, initialValue?: string): void {
+    const currentValue = getCellValue(row.entity, column);
+    this.focusedCell.set({ rowId: row.id, columnName: column.name });
+    this.editingCell.set({ rowId: row.id, columnName: column.name });
+    this.editingValue.set(initialValue ?? this.stringifyEditorValue(currentValue));
+    this.gridApi.edit.raise.beginCellEdit(row.entity, column, triggerEvent);
+    queueMicrotask(() => this.focusEditorInput());
+  }
+
+  private commitCellEdit(direction?: 'left' | 'right' | 'up' | 'down'): void {
+    const editingCell = this.editingCell();
+    if (!editingCell) {
+      return;
+    }
+
+    const row = this.findRowById(editingCell.rowId);
+    const column = this.visibleColumns().find((candidate) => candidate.name === editingCell.columnName);
+    if (!row || !column) {
+      this.editingCell.set(null);
+      return;
+    }
+
+    const oldValue = getCellValue(row.entity, column);
+    const newValue = this.parseEditedValue(column, this.editingValue(), oldValue);
+    this.setCellValue(row.entity, column, newValue);
+    this.editingCell.set(null);
+    this.gridApi.edit.raise.afterCellEdit(row.entity, column, newValue, oldValue);
+
+    this.editingValue.set('');
+
+    if (direction) {
+      const moved = this.moveFocus(row, column, direction, undefined, true);
+      if (!moved) {
+        this.focusRenderedCell({ rowId: row.id, columnName: column.name });
+      }
+    } else {
+      this.focusRenderedCell({ rowId: row.id, columnName: column.name });
+    }
+  }
+
+  private cancelCellEdit(): void {
+    const editingCell = this.editingCell();
+    if (!editingCell) {
+      return;
+    }
+
+    const row = this.findRowById(editingCell.rowId);
+    const column = this.visibleColumns().find((candidate) => candidate.name === editingCell.columnName);
+    this.editingCell.set(null);
+    this.editingValue.set('');
+    if (row && column) {
+      this.gridApi.edit.raise.cancelCellEdit(row.entity, column);
+      this.focusRenderedCell(editingCell);
+    }
+  }
+
+  private stringifyEditorValue(value: unknown): string {
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+
+    return value === null || value === undefined ? '' : String(value);
+  }
+
+  private parseEditedValue(column: GridColumnDef, value: string, oldValue: unknown): unknown {
+    switch (column.type) {
+      case 'number': {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? oldValue : parsed;
+      }
+      case 'boolean':
+        return value === 'true';
+      case 'date':
+        return value;
+      default:
+        return value;
+    }
+  }
+
+  private editFieldPath(column: GridColumnDef): string {
+    return column.editModelField ?? column.field ?? column.name;
+  }
+
+  private setCellValue(rowEntity: GridRecord, column: GridColumnDef, value: unknown): void {
+    setPathValue(rowEntity, this.editFieldPath(column), value);
+  }
+
+  private moveFocus(
+    row: GridRow,
+    column: GridColumnDef,
+    direction: 'left' | 'right' | 'up' | 'down',
+    triggerEvent?: Event | KeyboardEvent | null,
+    editableOnly = false
+  ): boolean {
+    const rows = this.pipeline().visibleRows;
+    const columns = this.visibleColumns();
+    const rowIndex = rows.findIndex((candidate) => candidate.id === row.id);
+    const columnIndex = columns.findIndex((candidate) => candidate.name === column.name);
+    if (rowIndex === -1 || columnIndex === -1) {
+      return false;
+    }
+
+    let nextRowIndex = rowIndex;
+    let nextColumnIndex = columnIndex;
+
+    while (true) {
+      switch (direction) {
+        case 'left':
+          nextColumnIndex -= 1;
+          if (nextColumnIndex < 0) {
+            nextRowIndex -= 1;
+            nextColumnIndex = columns.length - 1;
+          }
+          break;
+        case 'right':
+          nextColumnIndex += 1;
+          if (nextColumnIndex >= columns.length) {
+            nextRowIndex += 1;
+            nextColumnIndex = 0;
+          }
+          break;
+        case 'up':
+          nextRowIndex -= 1;
+          break;
+        case 'down':
+          nextRowIndex += 1;
+          break;
+      }
+
+      if (
+        nextRowIndex < 0
+        || nextRowIndex >= rows.length
+        || nextColumnIndex < 0
+        || nextColumnIndex >= columns.length
+      ) {
+        return false;
+      }
+
+      const nextRow = rows[nextRowIndex];
+      const nextColumn = columns[nextColumnIndex];
+      if (!nextRow || !nextColumn) {
+        return false;
+      }
+
+      if (!editableOnly || this.isCellEditable(nextRow, nextColumn, triggerEvent)) {
+        this.focusedCell.set({ rowId: nextRow.id, columnName: nextColumn.name });
+        this.focusRenderedCell({ rowId: nextRow.id, columnName: nextColumn.name });
+
+        if (this.shouldEditOnFocus(nextColumn) && this.isCellEditable(nextRow, nextColumn, triggerEvent)) {
+          this.startCellEdit(nextRow, nextColumn, triggerEvent);
+        }
+
+        return true;
+      }
+    }
+  }
+
+  private focusRenderedCell(position: GridCellPosition): void {
+    queueMicrotask(() => {
+      const shadowRoot = this.hostElement.nativeElement.shadowRoot;
+      const selector = `.body-cell[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
+      (shadowRoot?.querySelector(selector) as HTMLElement | null)?.focus();
+    });
+  }
+
+  private focusEditorInput(): void {
+    const editingCell = this.editingCell();
+    if (!editingCell) {
+      return;
+    }
+
+    const shadowRoot = this.hostElement.nativeElement.shadowRoot;
+    const selector = `.cell-editor[data-row-id="${editingCell.rowId}"][data-col-name="${editingCell.columnName}"]`;
+    const input = shadowRoot?.querySelector(selector) as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
   }
 
   private initialPageSize(options: GridOptions): number {

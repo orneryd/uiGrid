@@ -58,21 +58,46 @@
       <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList (cdkDropListDropped)="onColumnDrop($event)">
         @for (column of visibleColumns(); track column.name) {
           <div class="header-cell ui-grid-header-cell" part="header-cell" cdkDrag [class.is-active]="sortDirection(column) !== 'none'">
-            <button
-              type="button"
-              class="header-action"
-              [disabled]="!isColumnSortable(column)"
-              [class.header-action-disabled]="!isColumnSortable(column)"
-              (click)="toggleSort(column)">
-              <span>{{ headerLabel(column) }}</span>
-              <small>{{ sortButtonLabel(column) }}</small>
-            </button>
+            <span class="header-label">{{ headerLabel(column) }}</span>
 
-            @if (isGroupingEnabled() && column.enableGrouping !== false) {
-              <button type="button" class="chip-action" part="group-toggle" [class.chip-action-active]="isGrouped(column)" (click)="toggleGrouping(column, $event)">
-                {{ groupingButtonLabel(column) }}
+            <div class="header-actions">
+              <button
+                type="button"
+                class="header-action"
+                [disabled]="!isColumnSortable(column)"
+                [class.header-action-disabled]="!isColumnSortable(column)"
+                [attr.aria-label]="sortButtonLabel(column)"
+                [attr.title]="sortButtonLabel(column)"
+                (click)="toggleSort(column)">
+                @switch (sortDirection(column)) {
+                  @case ('asc') {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M12 5l-6 6h4v8h4v-8h4z"></path>
+                    </svg>
+                  }
+                  @case ('desc') {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M12 19l6-6h-4V5h-4v8H6z"></path>
+                    </svg>
+                  }
+                  @default {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M7 6h10v2H7V6Zm0 5h7v2H7v-2Zm0 5h4v2H7v-2Z"></path>
+                    </svg>
+                  }
+                }
+                <span class="sr-only ui-grid-sr-only">{{ sortButtonLabel(column) }}</span>
               </button>
-            }
+
+              @if (isGroupingEnabled() && column.enableGrouping !== false) {
+                <button type="button" class="chip-action" part="group-toggle" [class.chip-action-active]="isGrouped(column)" [attr.aria-label]="groupingButtonLabel(column)" [attr.title]="groupingButtonLabel(column)" (click)="toggleGrouping(column, $event)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z"></path>
+                  </svg>
+                  <span class="sr-only ui-grid-sr-only">{{ groupingButtonLabel(column) }}</span>
+                </button>
+              }
+            </div>
           </div>
         }
       </div>
@@ -109,7 +134,7 @@
           </div>
         } @else {
           @for (column of visibleColumns(); track column.name) {
-            <div class="body-cell ui-grid-cell" part="body-cell" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'">
+            <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
               <div class="cell-shell" [style.paddingInlineStart]="cellIndent(item.row, column)">
                 @if (showTreeToggle(item.row, column)) {
                   <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" (click)="toggleTreeRow(item.row, $event)">
@@ -122,7 +147,9 @@
                   </button>
                 }
                 <span class="cell-value">
-                  @if (cellTemplate(column); as template) {
+                  @if (isEditingCell(item.row, column)) {
+                    <input class="cell-editor" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [type]="editorInputType(column)" [value]="editingValue()" (input)="updateEditingValue($any($event.target).value)" (keydown)="handleEditorKeyDown($event)" (blur)="handleEditorBlur($event)" />
+                  } @else if (cellTemplate(column); as template) {
                     <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
                   } @else {
                     {{ displayValue(item.row, column) }}

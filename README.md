@@ -24,6 +24,8 @@ The current implementation includes:
 - cell templates
 - expandable rows
 - tree view / tree base behaviors
+- inline cell editing with spreadsheet-style keyboard navigation
+- icon-based sort and grouping controls in the grid header
 - pagination controls and API
 - infinite scroll hooks
 - auto-resize hooks
@@ -287,6 +289,13 @@ The runtime API is registered through `onRegisterApi`.
 - `save()`
 - `restore(state)`
 
+### `gridApi.edit`
+
+- `beginCellEdit(row, columnName, triggerEvent?)`
+- `endCellEdit()`
+- `cancelCellEdit()`
+- `getEditingCell()`
+
 ## Browser Harness
 
 The demo app now includes a browser harness dedicated to virtual-scroll rendering paths that are difficult to assert in jsdom.
@@ -392,3 +401,9 @@ This modernization intentionally replaces the legacy infrastructure:
 - native browser download APIs are used for CSV export
 
 What did not change is the general mental model: define `gridOptions`, define `columnDefs`, pass `data`, and interact with the grid through a registered API.
+
+## Roadmap
+
+Next in line:
+
+- accessibility compatibility work, including a11y-focused polish and validation

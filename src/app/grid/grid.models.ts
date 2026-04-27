@@ -36,6 +36,21 @@ export interface GridCellTemplateContext {
   rowIndex: number;
 }
 
+export interface GridCellEditableContext {
+  row: GridRecord;
+  column: GridColumnDef;
+  rowIndex: number;
+  triggerEvent?: Event | KeyboardEvent | null;
+}
+
+export interface GridCellPosition {
+  rowId: string;
+  columnName: string;
+}
+
+export type GridCellEditableCondition = boolean | ((context: GridCellEditableContext) => boolean);
+export type GridColumnType = 'string' | 'number' | 'boolean' | 'date' | 'object';
+
 export interface GridExpandableTemplateContext {
   $implicit: GridRecord;
   row: GridRecord;
@@ -53,12 +68,17 @@ export interface GridColumnDef {
   name: string;
   displayName?: string;
   field?: string;
+  type?: GridColumnType;
   visible?: boolean;
   sortable?: boolean;
   filterable?: boolean;
   enableSorting?: boolean;
   enableFiltering?: boolean;
   enableGrouping?: boolean;
+  enableCellEdit?: boolean;
+  enableCellEditOnFocus?: boolean;
+  cellEditableCondition?: GridCellEditableCondition;
+  editModelField?: string;
   width?: string;
   align?: 'start' | 'center' | 'end';
   sort?: GridSortDescriptor;
@@ -105,6 +125,9 @@ export interface GridOptions {
   enableGrouping?: boolean;
   enableColumnMoving?: boolean;
   enableVirtualization?: boolean;
+  enableCellEdit?: boolean;
+  enableCellEditOnFocus?: boolean;
+  cellEditableCondition?: GridCellEditableCondition;
   enablePagination?: boolean;
   enablePaginationControls?: boolean;
   useExternalPagination?: boolean;

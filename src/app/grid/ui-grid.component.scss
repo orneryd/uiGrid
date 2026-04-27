@@ -151,6 +151,10 @@ h1 {
 .grid-table {
   display: grid;
   min-height: 0;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .header-grid,
@@ -168,29 +172,43 @@ h1 {
 
 .header-cell {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--ui-grid-border-color);
   background: var(--ui-grid-header-background);
   font-weight: var(--ui-grid-header-weight);
+  align-items: center;
 }
 
 .header-cell.is-active {
   background: color-mix(in srgb, var(--ui-grid-accent) 8%, var(--ui-grid-header-background));
 }
 
-.header-action {
-  display: flex;
-  justify-content: space-between;
+.header-label {
+  min-width: 0;
+}
+
+.header-actions {
+  display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
-  width: 100%;
+  gap: 0.4rem;
+  justify-self: end;
+}
+
+.header-action,
+.chip-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
   border: 0;
-  background: transparent;
+  background: var(--ui-grid-surface);
   padding: 0;
   font: inherit;
-  text-align: left;
+  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -198,17 +216,26 @@ h1 {
   cursor: default;
 }
 
-.header-action small {
+.header-action svg,
+.chip-action svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.header-action {
   color: var(--ui-grid-muted-color);
+  border: 1px solid var(--ui-grid-border-color);
+}
+
+.header-cell.is-active .header-action {
+  color: var(--ui-grid-accent);
+  border-color: color-mix(in srgb, var(--ui-grid-accent) 35%, var(--ui-grid-border-color));
 }
 
 .chip-action {
   border: 1px solid var(--ui-grid-border-color);
-  background: var(--ui-grid-surface);
   color: var(--ui-grid-muted-color);
-  border-radius: 999px;
-  padding: 0.28rem 0.7rem;
-  cursor: pointer;
 }
 
 .chip-action-active {
@@ -242,6 +269,7 @@ h1 {
   border-bottom: 1px solid var(--ui-grid-border-color);
   color: var(--ui-grid-cell-color);
   background: var(--ui-grid-row-even);
+  outline: 0;
 }
 
 .cell-shell {
@@ -285,8 +313,36 @@ h1 {
   background: var(--ui-grid-row-odd);
 }
 
-.body-cell:hover {
+.body-grid > .body-cell:hover {
   background: var(--ui-grid-row-hover);
+}
+
+.body-cell.cell-focused,
+.body-grid > .body-cell.cell-focused {
+  background: color-mix(in srgb, var(--ui-grid-accent) 10%, var(--ui-grid-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-grid-accent) 28%, transparent);
+}
+
+.body-cell.cell-editing,
+.body-grid > .body-cell.cell-editing {
+  background: color-mix(in srgb, var(--ui-grid-accent) 7%, var(--ui-grid-surface));
+}
+
+.cell-editor {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--ui-grid-accent) 45%, var(--ui-grid-border-color));
+  border-radius: calc(var(--ui-grid-radius) - 1px);
+  background: var(--ui-grid-surface);
+  color: var(--ui-grid-cell-color);
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+}
+
+.cell-editor:focus {
+  outline: 2px solid color-mix(in srgb, var(--ui-grid-accent) 18%, transparent);
 }
 
 .group-row {

@@ -1,5 +1,5 @@
 import { SortDirection } from './grid.constants';
-import { GridBenchmarkResult, GridRecord, GridRow, GridSavedState } from './grid.models';
+import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridSavedState } from './grid.models';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
 
@@ -59,6 +59,10 @@ export interface GridApiBindings {
   infiniteScrollSetDirections?: (scrollUp: boolean, scrollDown: boolean) => void;
   saveState?: () => GridSavedState;
   restoreState?: (state: GridSavedState) => void;
+  beginCellEdit?: (row: GridRow | GridRecord | string, columnName: string, triggerEvent?: Event | KeyboardEvent | null) => void;
+  endCellEdit?: () => void;
+  cancelCellEdit?: () => void;
+  getEditingCell?: () => GridCellPosition | null;
 }
 
 export interface UiGridApi {
@@ -175,6 +179,22 @@ export interface UiGridApi {
     save: () => GridSavedState;
     restore: (state: GridSavedState) => void;
   };
+  edit: {
+    on: {
+      beginCellEdit: (listener: Listener<[GridRecord, GridColumnDef, Event | KeyboardEvent | null | undefined]>) => () => void;
+      afterCellEdit: (listener: Listener<[GridRecord, GridColumnDef, unknown, unknown]>) => () => void;
+      cancelCellEdit: (listener: Listener<[GridRecord, GridColumnDef]>) => () => void;
+    };
+    raise: {
+      beginCellEdit: (rowEntity: GridRecord, colDef: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null) => void;
+      afterCellEdit: (rowEntity: GridRecord, colDef: GridColumnDef, newValue: unknown, oldValue: unknown) => void;
+      cancelCellEdit: (rowEntity: GridRecord, colDef: GridColumnDef) => void;
+    };
+    beginCellEdit: (row: GridRow | GridRecord | string, columnName: string, triggerEvent?: Event | KeyboardEvent | null) => void;
+    endCellEdit: () => void;
+    cancelCellEdit: () => void;
+    getEditingCell: () => GridCellPosition | null;
+  };
 }
 
 export function createGridApi(bindings: GridApiBindings): UiGridApi {
@@ -196,6 +216,9 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const treeRowCollapsed = new GridEvent<[GridRow]>();
   const needLoadMoreData = new GridEvent<[]>();
   const needLoadMoreDataTop = new GridEvent<[]>();
+  const beginCellEditEvent = new GridEvent<[GridRecord, GridColumnDef, Event | KeyboardEvent | null | undefined]>();
+  const afterCellEditEvent = new GridEvent<[GridRecord, GridColumnDef, unknown, unknown]>();
+  const cancelCellEditEvent = new GridEvent<[GridRecord, GridColumnDef]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -229,6 +252,10 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const infiniteScrollSetDirections = bindings.infiniteScrollSetDirections ?? noop;
   const saveStateBinding = bindings.saveState ?? saveState;
   const restoreState = bindings.restoreState ?? noop;
+  const beginCellEdit = bindings.beginCellEdit ?? noop;
+  const endCellEdit = bindings.endCellEdit ?? noop;
+  const cancelCellEdit = bindings.cancelCellEdit ?? noop;
+  const getEditingCell = bindings.getEditingCell ?? (() => null);
 
   const api: UiGridApi = {
     core: {
@@ -344,6 +371,22 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
     saveState: {
       save: saveStateBinding,
       restore: restoreState
+    },
+    edit: {
+      on: {
+        beginCellEdit: (listener) => beginCellEditEvent.subscribe(listener),
+        afterCellEdit: (listener) => afterCellEditEvent.subscribe(listener),
+        cancelCellEdit: (listener) => cancelCellEditEvent.subscribe(listener)
+      },
+      raise: {
+        beginCellEdit: (rowEntity, colDef, triggerEvent) => beginCellEditEvent.emit(rowEntity, colDef, triggerEvent),
+        afterCellEdit: (rowEntity, colDef, newValue, oldValue) => afterCellEditEvent.emit(rowEntity, colDef, newValue, oldValue),
+        cancelCellEdit: (rowEntity, colDef) => cancelCellEditEvent.emit(rowEntity, colDef)
+      },
+      beginCellEdit,
+      endCellEdit,
+      cancelCellEdit,
+      getEditingCell
     }
   };
 
