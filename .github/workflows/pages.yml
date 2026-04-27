@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '.github/workflows/pages.yml'
+      - 'src/**'
+      - 'projects/ui-grid/**'
+      - 'public/**'
+      - 'angular.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'tsconfig.app.json'
   workflow_dispatch:
 
 permissions:
