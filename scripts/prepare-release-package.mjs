@@ -20,7 +20,7 @@ const sourcePackage = JSON.parse(await readFile(path.join(rootDir, 'projects/ui-
 const requestedVersion = args.get('--version') || rootPackage.version || sourcePackage.version || '0.1.0';
 const distDir = path.join(rootDir, 'dist');
 
-const requestedPresets = (args.get('--presets') || 'full,minimal')
+const requestedPresets = (args.get('--presets') || 'full')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);

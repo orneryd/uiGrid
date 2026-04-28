@@ -35,8 +35,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build the Angular library
-        run: npm run build:library
+      - name: Build the full preset library
+        run: npm run build:library:preset -- --preset=full
 
       - name: Build the web component bundle
         run: npm run build:element
@@ -49,7 +49,7 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           fi
 
-          node scripts/prepare-release-package.mjs --version "$VERSION"
+          node scripts/prepare-release-package.mjs --version "$VERSION" --presets full
 
       - name: Publish to npm
         run: npm publish ./dist/npm-package --access public

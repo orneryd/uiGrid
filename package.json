@@ -9,7 +9,7 @@
     "build:library": "ng build uiGridPackage",
     "build:library:preset": "node scripts/build-library-preset.mjs",
     "build:element": "ng run uiGrid:build-element",
-    "build:package": "npm run build:library:preset -- --preset=full && npm run build:library:preset -- --preset=minimal && npm run build:element && node scripts/prepare-release-package.mjs --presets full,minimal",
+    "build:package": "npm run build:library:preset -- --preset=full && npm run build:element && node scripts/prepare-release-package.mjs --presets full",
     "publish:package": "npm publish ./dist/npm-package --access public",
     "watch": "ng build --watch --configuration development",
     "start:react": "npm run start --prefix projects/ui-grid-react",
