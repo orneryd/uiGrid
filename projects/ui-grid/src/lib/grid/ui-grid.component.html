@@ -13,9 +13,11 @@
       <button type="button" class="action action-secondary" part="action benchmark-action" (click)="runBenchmark()">
         Benchmark
       </button>
-      <button type="button" class="action action-secondary" part="action export-action" (click)="exportCsv()">
-        Export CSV
-      </button>
+      @if (csvExportFeature) {
+        <button type="button" class="action action-secondary" part="action export-action" (click)="exportCsv()">
+          Export CSV
+        </button>
+      }
       <div class="stats-card" part="stats-card">
         <span>{{ visibleRowCount() }}</span>
         <small>{{ labels().statsVisibleRows }}</small>
@@ -57,39 +59,41 @@
     <div class="grid-table ui-grid-contents-wrapper" part="grid-table">
       <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" role="row" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal" [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
         @for (column of visibleColumns(); track column.name) {
-          <div class="header-cell ui-grid-header-cell" part="header-cell" role="columnheader" [attr.aria-sort]="sortAriaSort(column)" cdkDrag [cdkDragData]="column" [class.is-active]="sortDirection(column) !== 'none'">
+          <div class="header-cell ui-grid-header-cell" part="header-cell" role="columnheader" [attr.aria-sort]="sortingFeature ? sortAriaSort(column) : null" cdkDrag [cdkDragData]="column" [cdkDragDisabled]="!columnMovingFeature" [class.is-active]="sortingFeature && sortDirection(column) !== 'none'">
             <span class="header-label">{{ headerLabel(column) }}</span>
 
             <div class="header-actions">
-              <button
-                type="button"
-                class="header-action"
-                [disabled]="!isColumnSortable(column)"
-                [class.header-action-disabled]="!isColumnSortable(column)"
-                [attr.aria-label]="sortButtonLabel(column)"
-                [attr.title]="sortButtonLabel(column)"
-                (click)="toggleSort(column)">
-                @switch (sortDirection(column)) {
-                  @case ('asc') {
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M12 5l-6 6h4v8h4v-8h4z"></path>
-                    </svg>
+              @if (sortingFeature) {
+                <button
+                  type="button"
+                  class="header-action"
+                  [disabled]="!isColumnSortable(column)"
+                  [class.header-action-disabled]="!isColumnSortable(column)"
+                  [attr.aria-label]="sortButtonLabel(column)"
+                  [attr.title]="sortButtonLabel(column)"
+                  (click)="toggleSort(column)">
+                  @switch (sortDirection(column)) {
+                    @case ('asc') {
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M12 5l-6 6h4v8h4v-8h4z"></path>
+                      </svg>
+                    }
+                    @case ('desc') {
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M12 19l6-6h-4V5h-4v8H6z"></path>
+                      </svg>
+                    }
+                    @default {
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 6h10v2H7V6Zm0 5h7v2H7v-2Zm0 5h4v2H7v-2Z"></path>
+                      </svg>
+                    }
                   }
-                  @case ('desc') {
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M12 19l6-6h-4V5h-4v8H6z"></path>
-                    </svg>
-                  }
-                  @default {
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M7 6h10v2H7V6Zm0 5h7v2H7v-2Zm0 5h4v2H7v-2Z"></path>
-                    </svg>
-                  }
-                }
-                <span class="sr-only ui-grid-sr-only">{{ sortButtonLabel(column) }}</span>
-              </button>
+                  <span class="sr-only ui-grid-sr-only">{{ sortButtonLabel(column) }}</span>
+                </button>
+              }
 
-              @if (isGroupingEnabled() && column.enableGrouping !== false) {
+              @if (groupingFeature && isGroupingEnabled() && column.enableGrouping !== false) {
                 <button type="button" class="chip-action" part="group-toggle" [class.chip-action-active]="isGrouped(column)" [attr.aria-label]="groupingButtonLabel(column)" [attr.title]="groupingButtonLabel(column)" (click)="toggleGrouping(column, $event)">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z"></path>
@@ -102,7 +106,7 @@
         }
       </div>
 
-      @if (isFilteringEnabled()) {
+      @if (filteringFeature && isFilteringEnabled()) {
         <div class="filter-grid ui-grid-header" part="filters" [style.gridTemplateColumns]="gridTemplateColumns()">
           @for (column of visibleColumns(); track column.name) {
             <label class="filter-cell ui-grid-filter-container" part="filter-cell">
@@ -120,7 +124,7 @@
       }
 
       <ng-template #displayItemTemplate let-item>
-        @if (isGroupItem(item)) {
+        @if (groupingFeature && isGroupItem(item)) {
           <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" role="row" [attr.aria-expanded]="!item.collapsed" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
             <strong>{{ item.field }}: {{ item.label }}</strong>
             <span>{{ item.count }} {{ labels().groupRowsSuffix }}</span>
@@ -129,7 +133,7 @@
             </svg>
             <span class="sr-only">{{ groupDisclosureLabel(item) }}</span>
           </button>
-        } @else if (isExpandableItem(item)) {
+        } @else if (expandableFeature && isExpandableItem(item)) {
           <div class="expandable-row ui-grid-row ui-grid-expandable-row" part="expandable-row" [style.gridColumn]="'1 / -1'" [style.minHeight.px]="item.row.expandedRowHeight">
             @if (expandableTemplate(); as template) {
               <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="expandedContext(item.row)" />
@@ -137,16 +141,16 @@
           </div>
         } @else {
           @for (column of visibleColumns(); track column.name) {
-            <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.body-cell-odd]="isOddStripedRow(item)" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
+            <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.body-cell-odd]="isOddStripedRow(item)" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="cellEditFeature && isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
               <div class="cell-shell" [style.paddingInlineStart]="cellIndent(item.row, column)">
-                @if (showTreeToggle(item.row, column)) {
+                @if (treeViewFeature && showTreeToggle(item.row, column)) {
                   <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" [attr.aria-expanded]="isTreeRowExpanded(item.row)" (click)="toggleTreeRow(item.row, $event)">
                     <svg class="toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                       <path [attr.d]="isTreeRowExpanded(item.row) ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'" />
                     </svg>
                   </button>
                 }
-                @if (showExpandToggle(item.row, column)) {
+                @if (expandableFeature && showExpandToggle(item.row, column)) {
                   <button type="button" class="row-toggle row-toggle-expand" part="expand-toggle" [attr.aria-label]="expandToggleLabel(item.row)" [attr.aria-expanded]="item.row.expanded" (click)="toggleRowExpansion(item.row, $event)">
                     <svg class="toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                       <path [attr.d]="item.row.expanded ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'" />
@@ -154,7 +158,7 @@
                   </button>
                 }
                 <span class="cell-value">
-                  @if (isEditingCell(item.row, column)) {
+                  @if (cellEditFeature && isEditingCell(item.row, column)) {
                     <input class="cell-editor" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [attr.aria-label]="headerLabel(column)" [type]="editorInputType(column)" [value]="editingValue()" (input)="updateEditingValue($any($event.target).value)" (keydown)="handleEditorKeyDown($event)" (blur)="handleEditorBlur($event)" />
                   } @else if (cellTemplate(column); as template) {
                     <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
@@ -191,7 +195,7 @@
         </div>
       }
 
-      @if (showPaginationControls()) {
+      @if (paginationFeature && showPaginationControls()) {
         <footer class="pagination-bar ui-grid-pagination" part="pagination" role="navigation" [attr.aria-label]="labels().paginationPage">
           <p>{{ paginationSummary() }}</p>
           <div class="pagination-controls">

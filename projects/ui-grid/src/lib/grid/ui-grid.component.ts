@@ -19,6 +19,20 @@ import {
   signal
 } from '@angular/core';
 import { createGridApi, UiGridApi } from './grid.api';
+import {
+  FEATURE_AUTO_RESIZE,
+  FEATURE_CELL_EDIT,
+  FEATURE_COLUMN_MOVING,
+  FEATURE_CSV_EXPORT,
+  FEATURE_EXPANDABLE,
+  FEATURE_FILTERING,
+  FEATURE_GROUPING,
+  FEATURE_INFINITE_SCROLL,
+  FEATURE_PAGINATION,
+  FEATURE_SAVE_STATE,
+  FEATURE_SORTING,
+  FEATURE_TREE_VIEW
+} from './grid.features';
 import { FILTER_CONDITIONS, SORT_DIRECTIONS, SortDirection } from './grid.constants';
 import {
   GridBenchmarkResult,
@@ -292,7 +306,7 @@ export class UiGridComponent {
     });
 
     effect((onCleanup) => {
-      if (!this.options().enableAutoResize) {
+      if (!FEATURE_AUTO_RESIZE || !this.options().enableAutoResize) {
         return;
       }
 
@@ -454,7 +468,7 @@ export class UiGridComponent {
   }
 
   protected toggleSort(column: GridColumnDef): void {
-    if (!this.isColumnSortable(column)) {
+    if (!FEATURE_SORTING || !this.isColumnSortable(column)) {
       return;
     }
 
@@ -509,6 +523,7 @@ export class UiGridComponent {
   }
 
   protected isCellEditable(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean {
+    if (!FEATURE_CELL_EDIT) return false;
     const editable = column.enableCellEdit ?? this.options().enableCellEdit ?? false;
     if (!editable) {
       return false;
@@ -532,40 +547,54 @@ export class UiGridComponent {
     return column.enableCellEditOnFocus ?? this.options().enableCellEditOnFocus ?? false;
   }
 
+  // Build-time feature flag accessors for the template.
+  // When a flag is false the bundler eliminates the guarded template block.
+  protected readonly sortingFeature = FEATURE_SORTING;
+  protected readonly filteringFeature = FEATURE_FILTERING;
+  protected readonly groupingFeature = FEATURE_GROUPING;
+  protected readonly paginationFeature = FEATURE_PAGINATION;
+  protected readonly cellEditFeature = FEATURE_CELL_EDIT;
+  protected readonly expandableFeature = FEATURE_EXPANDABLE;
+  protected readonly treeViewFeature = FEATURE_TREE_VIEW;
+  protected readonly infiniteScrollFeature = FEATURE_INFINITE_SCROLL;
+  protected readonly columnMovingFeature = FEATURE_COLUMN_MOVING;
+  protected readonly csvExportFeature = FEATURE_CSV_EXPORT;
+  protected readonly autoResizeFeature = FEATURE_AUTO_RESIZE;
+
   protected isGroupingEnabled(): boolean {
-    return isGridGroupingEnabled(this.options());
+    return FEATURE_GROUPING && isGridGroupingEnabled(this.options());
   }
 
   protected isTreeEnabled(): boolean {
-    return isGridTreeEnabled(this.options());
+    return FEATURE_TREE_VIEW && isGridTreeEnabled(this.options());
   }
 
   protected canExpandRows(): boolean {
-    return canGridExpandRows(this.options());
+    return FEATURE_EXPANDABLE && canGridExpandRows(this.options());
   }
 
   protected isPaginationEnabled(): boolean {
-    return isGridPaginationEnabled(this.options());
+    return FEATURE_PAGINATION && isGridPaginationEnabled(this.options());
   }
 
   protected showPaginationControls(): boolean {
-    return shouldShowGridPaginationControls(this.options());
+    return FEATURE_PAGINATION && shouldShowGridPaginationControls(this.options());
   }
 
   protected isInfiniteScrollEnabled(): boolean {
-    return isGridInfiniteScrollEnabled(this.options());
+    return FEATURE_INFINITE_SCROLL && isGridInfiniteScrollEnabled(this.options());
   }
 
   protected isSortingEnabled(): boolean {
-    return isGridSortingEnabled(this.options());
+    return FEATURE_SORTING && isGridSortingEnabled(this.options());
   }
 
   protected isFilteringEnabled(): boolean {
-    return isGridFilteringEnabled(this.options());
+    return FEATURE_FILTERING && isGridFilteringEnabled(this.options());
   }
 
   protected canMoveColumns(): boolean {
-    return canGridMoveColumns(this.options());
+    return FEATURE_COLUMN_MOVING && canGridMoveColumns(this.options());
   }
 
   protected isPrimaryColumn(column: GridColumnDef): boolean {
@@ -857,6 +886,7 @@ export class UiGridComponent {
   }
 
   protected exportCsv(): void {
+    if (!FEATURE_CSV_EXPORT) return;
     const columns = this.visibleColumns();
     const csv = exportCsvRows(columns, this.pipeline().visibleRows);
     this.downloadCsv(csv, `${sanitizeDownloadFilename(this.options().id)}.csv`);
