@@ -19,6 +19,7 @@
     "@ornery/ui-grid": "^0.1.3"
   },
   "devDependencies": {
+    "@ornery/ui-grid": "file:../ui-grid",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "@testing-library/react": "^16.0.0",
