@@ -161,24 +161,18 @@ describe('UiGridComponent', () => {
   }
 
   /**
-   * Create a KeyboardEvent that belongs to the same jsdom realm as the target element.
-   * In jsdom, `dispatchEvent` validates that the event is an instance of the element's
-   * own realm's Event class. We use `document.defaultView!.KeyboardEvent` to get the
-   * correct realm constructor, falling back to `createEvent` + property overrides.
+   * Create a KeyboardEvent guaranteed to belong to the element's own jsdom realm.
    *
-   * Note: `bubbles` defaults to false (matching the original `new KeyboardEvent(...)`)
-   * to avoid double-handling when the editor input is nested inside a cell div that
-   * also listens for keydown.
+   * `document.createEvent` always produces an event that passes jsdom's internal
+   * realm check in `dispatchEvent`, unlike constructor-based events which may
+   * originate from a different global (test-runner vs jsdom window).
+   *
+   * `bubbles` defaults to false (matching `new KeyboardEvent(...)` defaults) to
+   * avoid double-handling when the editor `<input>` is nested inside a cell `<div>`
+   * that also binds `(keydown)`.
    */
   function keyDown(el: HTMLElement, init: KeyboardEventInit): KeyboardEvent {
-    const doc = el.ownerDocument;
-    const win = doc.defaultView;
-    if (win) {
-      try {
-        return new win.KeyboardEvent('keydown', init);
-      } catch { /* fall through to createEvent */ }
-    }
-    const evt = doc.createEvent('KeyboardEvent');
+    const evt = el.ownerDocument.createEvent('KeyboardEvent');
     evt.initEvent('keydown', init.bubbles ?? false, init.cancelable ?? false);
     Object.defineProperties(evt, {
       key:      { get: () => init.key ?? '' },
@@ -190,16 +184,9 @@ describe('UiGridComponent', () => {
     return evt as KeyboardEvent;
   }
 
-  /** Create a plain Event that belongs to the same jsdom realm as the target element. */
+  /** Create a plain Event guaranteed to belong to the element's own jsdom realm. */
   function domEvent(el: HTMLElement, type: string): Event {
-    const doc = el.ownerDocument;
-    const win = doc.defaultView;
-    if (win) {
-      try {
-        return new win.Event(type);
-      } catch { /* fall through */ }
-    }
-    const evt = doc.createEvent('Event');
+    const evt = el.ownerDocument.createEvent('Event');
     evt.initEvent(type, false, false);
     return evt;
   }
