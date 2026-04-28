@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.1.1 - 2026-04-27
+
+### Added
+
+- Demo theming for default and wireframe modes with light and dark variants.
+- A 10,000-row demo dataset to showcase virtualization and performance.
+- GitHub Pages deployment and packaging automation for the demo and library builds.
+- CI coverage upload to Coveralls and expanded library coverage around the grid, filters, and API wrappers.
+
+### Changed
+
+- Updated the demo shell styling, removed the shark logo study, and improved header contrast.
+- Raised the production style budget to accommodate the expanded demo UI.
+- Narrowed CI and Pages triggers to project-relevant paths.
+- Improved the demo harness and styles so theme variables pass cleanly through the shadow DOM layers.
+
+### Security
+
+- Hardened CSV export against spreadsheet formula injection.
+- Blocked prototype-polluting dotted paths in nested property access and writes.
+- Escaped filter text before regex construction, capped wildcard expansion, and sanitized restored state keys and filenames.
+
 ## v0.1.0 - 2026-04-27
 
 Initial public release of `@ornery/ui-grid`.
