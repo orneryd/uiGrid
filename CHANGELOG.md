@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.1.3 - 2026-04-28
+
+### Added
+
+- React wrapper package (`@ornery/ui-grid-react`) with `useGridState` hook, `useVirtualScroll` hook, render-prop templating, and full CSS theming parity. Ships ESM + CJS + `.d.ts` via tsup. Peer-depends on `@ornery/ui-grid` for 100% core reuse.
+- Build-time feature flags (`grid.features.ts`): 12 const boolean flags enabling bundler dead-code elimination. Custom build script (`scripts/build-grid.mjs`) with `--features` and `--locale` flags.
+- Internationalization: `GridLabels` interface (26 keys) backed by `i18n/en-US.json`, overridable at runtime via `GridOptions.labels` and at build time via `--locale`.
+- Accessibility: ARIA grid pattern roles, SVG icons replacing text symbols, `aria-label` and `sr-only` screen reader text on all interactive controls. Remediation plan at `docs/plans/a11y-remediation.md`.
+- Pure-TS core extraction: `grid.core.pipeline.ts`, `grid.core.viewmodel.ts`, `grid.core.edit.ts`, `grid.core.display.ts`, `grid.core.sorting.ts`, `grid.core.filtering.ts`, `grid.core.grouping.ts`, `grid.core.pagination.ts`, `grid.core.tree.ts`, `grid.core.state.ts`, `grid.core.export.ts`, `grid.core.identity.ts`, `grid.core.row-state.ts`, `grid.core.infinite-scroll.ts`, and `grid.core.types.ts` with zero Angular dependencies.
+- Command and event layer: `ui-grid.commands.ts`, `ui-grid.events.ts`, `ui-grid.host.ts`, and `ui-grid.state.ts` separating Angular orchestration from pure logic.
+- SSR harness component (`grid-ssr-harness.component.ts`) and server-side rendering guards.
+- Documentation site with routed pages for Getting Started, Features, API Reference, Cell Editing, Expandable Rows, Tree View, Theming, i18n, Custom Builds, Web Component, Accessibility, and React.
+- React CI workflow (`.github/workflows/ci-react.yml`).
+- Library presets via `scripts/build-library-preset.mjs` with separate public API entry points (`public-api.core.ts`, `public-api.full.ts`, `public-api.minimal.ts`, `public-api.react.ts`).
+- Combined `npm test` script that runs both Angular and React test suites.
+
+### Changed
+
+- Slimmed `ui-grid.component.ts` from monolithic class to thin rendering layer delegating to core modules and command functions.
+- Moved grid styles from `ui-grid.component.scss` into shared `grid.core.styles.scss` with new `.toggle-icon`, `.pagination-icon`, and `.group-disclosure-icon` styles.
+- Refactored demo app with routed layout, cleaner theme controls, and browser harness integration.
+- Updated `README.md` for new project structure and feature set.
+
+### Fixed
+
+- jsdom cross-realm `dispatchEvent` error in CI: replaced `new KeyboardEvent()` with `document.createEvent()` + `initEvent()` + property descriptors to work around realm-checking validation.
+- Keyboard event handling for cell editing in test environment (`bubbles: false` to prevent double-handling).
+
 ## v0.1.1 - 2026-04-27
 
 ### Added
