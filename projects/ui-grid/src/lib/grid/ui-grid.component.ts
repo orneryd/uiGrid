@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet, isPlatformServer } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import {
   CdkFixedSizeVirtualScroll,
@@ -9,6 +9,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  PLATFORM_ID,
   TemplateRef,
   ViewEncapsulation,
   computed,
@@ -91,6 +92,7 @@ export class UiGridComponent {
   readonly options = input.required<GridOptions>();
 
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly platformId = inject(PLATFORM_ID);
   protected readonly activeFilters = signal<Record<string, string>>({});
   protected readonly groupByColumns = signal<string[]>([]);
   protected readonly collapsedGroups = signal<Record<string, boolean>>({});
@@ -273,6 +275,15 @@ export class UiGridComponent {
   protected readonly totalRows = computed(() => this.pipeline().totalItems);
   protected readonly visibleRowCount = computed(() => this.pipeline().visibleRows.length);
   protected readonly displayItems = computed(() => this.pipeline().displayItems);
+  protected readonly renderVirtualViewport = computed(() => this.virtualizationEnabled() && !isPlatformServer(this.platformId));
+  protected readonly renderedDisplayItems = computed(() => {
+    const items = this.displayItems();
+    if (!this.virtualizationEnabled() || !isPlatformServer(this.platformId)) {
+      return items;
+    }
+
+    return items.slice(0, this.ssrVisibleItemCount());
+  });
   protected readonly pipelineMs = computed(() => this.pipeline().pipelineMs);
   protected readonly virtualizationEnabled = computed(() => this.pipeline().virtualizationEnabled);
   protected readonly paginationCurrentPage = computed(() => this.getCurrentPageValue());
@@ -833,6 +844,11 @@ export class UiGridComponent {
 
   protected rowSize(): number {
     return this.options().rowHeight ?? 44;
+  }
+
+  protected ssrVisibleItemCount(): number {
+    const viewportHeight = this.options().viewportHeight ?? this.autoViewportHeight() ?? 560;
+    return Math.max(1, Math.ceil(viewportHeight / this.rowSize()));
   }
 
   protected viewportHeight(): string {

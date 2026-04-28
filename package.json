@@ -23,6 +23,7 @@
     "@angular/elements": "^21.2.10",
     "@angular/forms": "^21.2.0",
     "@angular/platform-browser": "^21.2.0",
+    "@angular/platform-server": "^21.2.10",
     "@angular/router": "^21.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"

@@ -162,7 +162,7 @@
       </ng-template>
 
       @if (displayItems().length) {
-        @if (virtualizationEnabled()) {
+        @if (renderVirtualViewport()) {
           <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()" [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange($event)">
             <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
               <ng-container *cdkVirtualFor="let item of displayItems(); trackBy: trackDisplayItem">
@@ -172,7 +172,7 @@
           </cdk-virtual-scroll-viewport>
         } @else {
           <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
-            @for (item of displayItems(); track item.id) {
+            @for (item of renderedDisplayItems(); track item.id) {
               <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
             }
           </div>
