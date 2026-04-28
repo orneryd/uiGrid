@@ -626,6 +626,52 @@ describe('UiGridComponent', () => {
     (fixture.componentInstance as any).onPageSizeChange('not-a-number');
     fixture.detectChanges();
     expect(gridApi.pagination.getPage()).toBe(1);
+    expect(gridApi.pagination.getLastRowIndex()).toBe(0);
+  });
+
+  it('clamps external pagination through the api wrappers and keeps external row indices stable', () => {
+    let gridApi!: UiGridApi;
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enablePagination: true,
+      useExternalPagination: true,
+      totalItems: 7,
+      paginationPageSizes: [2, 5],
+      paginationCurrentPage: 3
+    }, (api) => {
+      gridApi = api;
+    }));
+    fixture.detectChanges();
+
+    const paginationChanged = vi.fn();
+    gridApi.pagination.on.paginationChanged(paginationChanged);
+
+    expect(gridApi.pagination.getPage()).toBe(3);
+    expect(gridApi.pagination.getTotalPages()).toBe(4);
+    expect(gridApi.pagination.getFirstRowIndex()).toBe(0);
+    expect(gridApi.pagination.getLastRowIndex()).toBe(6);
+
+    gridApi.pagination.previousPage();
+    fixture.detectChanges();
+    expect(gridApi.pagination.getPage()).toBe(2);
+
+    gridApi.pagination.seek(99);
+    fixture.detectChanges();
+    expect(gridApi.pagination.getPage()).toBe(4);
+
+    gridApi.pagination.seek(-2);
+    fixture.detectChanges();
+    expect(gridApi.pagination.getPage()).toBe(1);
+
+    gridApi.pagination.setPageSize(-1);
+    fixture.detectChanges();
+    expect(gridApi.pagination.getTotalPages()).toBe(4);
+
+    gridApi.pagination.setPageSize(5);
+    fixture.detectChanges();
+    expect(gridApi.pagination.getPage()).toBe(1);
+    expect(gridApi.pagination.getTotalPages()).toBe(2);
+    expect(paginationChanged).toHaveBeenLastCalledWith(1, 5);
   });
 
   it('renders expandable rows and exposes the expandable api', async () => {
@@ -931,6 +977,84 @@ describe('UiGridComponent', () => {
     expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
   });
 
+  it('exercises edit api wrappers, parser fallbacks, and refresh cloning deterministically', async () => {
+    let gridApi!: UiGridApi;
+    const editData = [
+      {
+        id: 'row-1',
+        revenue: 100,
+        enabled: false,
+        renewal: '2026-01-01',
+        account: { owner: 'Mina Patel' },
+        locked: 'read-only'
+      }
+    ];
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      data: editData,
+      enableGrouping: false,
+      enableCellEdit: true,
+      columnDefs: [
+        { name: 'revenue', type: 'number', enableCellEdit: true },
+        { name: 'enabled', type: 'boolean', enableCellEdit: true },
+        { name: 'renewal', type: 'date', enableCellEdit: true },
+        { name: 'owner', field: 'account.owner', enableCellEdit: true },
+        { name: 'locked', enableCellEdit: false }
+      ]
+    }, (api) => {
+      gridApi = api;
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const component = fixture.componentInstance as any;
+    component.activeFilters.set({ enabled: 'true' });
+    const previousFilters = component.activeFilters();
+
+    gridApi.core.refresh();
+    expect(component.activeFilters()).toEqual(previousFilters);
+    expect(component.activeFilters()).not.toBe(previousFilters);
+
+    expect(gridApi.edit.getEditingCell()).toBeNull();
+    gridApi.edit.endCellEdit();
+    gridApi.edit.cancelCellEdit();
+
+    gridApi.edit.beginCellEdit('missing', 'owner');
+    gridApi.edit.beginCellEdit('row-1', 'missing');
+    gridApi.edit.beginCellEdit('row-1', 'locked');
+    expect(gridApi.edit.getEditingCell()).toBeNull();
+
+    gridApi.edit.beginCellEdit('row-1', 'revenue');
+    expect(gridApi.edit.getEditingCell()).toEqual({ rowId: 'row-1', columnName: 'revenue' });
+    component.editingValue.set('oops');
+    gridApi.edit.endCellEdit();
+    expect(editData[0]?.revenue).toBe(100);
+
+    gridApi.edit.beginCellEdit('row-1', 'enabled');
+    component.editingValue.set('true');
+    gridApi.edit.endCellEdit();
+    expect(editData[0]?.enabled).toBe(true);
+
+    gridApi.edit.beginCellEdit('row-1', 'renewal');
+    component.editingValue.set('2026-02-02');
+    gridApi.edit.endCellEdit();
+    expect(editData[0]?.renewal).toBe('2026-02-02');
+
+    gridApi.edit.beginCellEdit('row-1', 'owner');
+    component.editingValue.set('Taylor Morgan');
+    gridApi.edit.endCellEdit();
+    expect(editData[0]?.account.owner).toBe('Taylor Morgan');
+    expect(gridApi.edit.getEditingCell()).toBeNull();
+
+    const visibleColumns = component.visibleColumns();
+    expect(component.moveFocus({ id: 'missing-row' }, visibleColumns[0], 'right')).toBe(false);
+    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'left')).toBe(false);
+    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'up')).toBe(false);
+
+    expect(component.stringifyEditorValue(new Date('2026-02-03T00:00:00.000Z'))).toBe('2026-02-03');
+    expect(component.stringifyEditorValue(undefined)).toBe('');
+  });
+
   it('supports expandable rows while using the virtualized rendering path', async () => {
     const fixture = TestBed.createComponent(VirtualExpandableHostComponent);
     fixture.detectChanges();
@@ -1019,6 +1143,9 @@ describe('UiGridComponent', () => {
 
     gridApi.infiniteScroll.dataRemovedBottom(false, true);
     expect(component.infiniteScrollState()).toMatchObject({ scrollUp: false, scrollDown: true, previousVisibleRows: 0 });
+
+    gridApi.infiniteScroll.resetScroll(true, true);
+    expect(component.infiniteScrollState()).toMatchObject({ scrollUp: true, scrollDown: true, previousVisibleRows: 0 });
   });
 
   it('raises grid dimension changes through auto resize and updates the fallback viewport height', () => {
@@ -1048,6 +1175,10 @@ describe('UiGridComponent', () => {
     const gridDimensionChanged = vi.fn();
     gridApi.core.on.gridDimensionChanged(gridDimensionChanged);
 
+    resizeCallback?.([], {} as ResizeObserver);
+    fixture.detectChanges();
+    expect(gridDimensionChanged).not.toHaveBeenCalled();
+
     resizeCallback?.([
       {
         contentRect: { width: 640, height: 720 } as DOMRectReadOnly
@@ -1057,6 +1188,15 @@ describe('UiGridComponent', () => {
 
     expect(gridDimensionChanged).toHaveBeenCalledWith(0, 0, 720, 640);
     expect((fixture.componentInstance as any).viewportHeight()).toBe('720px');
+
+    resizeCallback?.([
+      {
+        contentRect: { width: 640, height: 720 } as DOMRectReadOnly
+      } as ResizeObserverEntry
+    ], {} as ResizeObserver);
+    fixture.detectChanges();
+    expect(gridDimensionChanged).toHaveBeenCalledTimes(1);
+
     fixture.destroy();
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
