@@ -160,16 +160,48 @@ describe('UiGridComponent', () => {
     return host.shadowRoot;
   }
 
-  /** Create a KeyboardEvent from the element's own window so jsdom accepts it in dispatchEvent. */
+  /**
+   * Create a KeyboardEvent that belongs to the same jsdom realm as the target element.
+   * In jsdom, `dispatchEvent` validates that the event is an instance of the element's
+   * own realm's Event class. We use `document.defaultView!.KeyboardEvent` to get the
+   * correct realm constructor, falling back to `createEvent` + property overrides.
+   *
+   * Note: `bubbles` defaults to false (matching the original `new KeyboardEvent(...)`)
+   * to avoid double-handling when the editor input is nested inside a cell div that
+   * also listens for keydown.
+   */
   function keyDown(el: HTMLElement, init: KeyboardEventInit): KeyboardEvent {
-    const win = el.ownerDocument.defaultView ?? window;
-    return new win.KeyboardEvent('keydown', init);
+    const doc = el.ownerDocument;
+    const win = doc.defaultView;
+    if (win) {
+      try {
+        return new win.KeyboardEvent('keydown', init);
+      } catch { /* fall through to createEvent */ }
+    }
+    const evt = doc.createEvent('KeyboardEvent');
+    evt.initEvent('keydown', init.bubbles ?? false, init.cancelable ?? false);
+    Object.defineProperties(evt, {
+      key:      { get: () => init.key ?? '' },
+      shiftKey: { get: () => init.shiftKey ?? false },
+      ctrlKey:  { get: () => init.ctrlKey ?? false },
+      altKey:   { get: () => init.altKey ?? false },
+      metaKey:  { get: () => init.metaKey ?? false },
+    });
+    return evt as KeyboardEvent;
   }
 
-  /** Create a plain Event from the element's own window so jsdom accepts it in dispatchEvent. */
+  /** Create a plain Event that belongs to the same jsdom realm as the target element. */
   function domEvent(el: HTMLElement, type: string): Event {
-    const win = el.ownerDocument.defaultView ?? window;
-    return new win.Event(type);
+    const doc = el.ownerDocument;
+    const win = doc.defaultView;
+    if (win) {
+      try {
+        return new win.Event(type);
+      } catch { /* fall through */ }
+    }
+    const evt = doc.createEvent('Event');
+    evt.initEvent(type, false, false);
+    return evt;
   }
 
   beforeEach(async () => {
