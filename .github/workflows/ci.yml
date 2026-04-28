@@ -43,8 +43,11 @@ jobs:
       - name: Build the web component bundle
         run: npm run build:element
 
-      - name: Run the test suite
-        run: npm test -- --watch=false --coverage --coverage-reporters lcovonly
+      - name: Run the Angular test suite
+        run: npm run test:angular -- --watch=false --coverage --coverage-reporters lcovonly
+
+      - name: Run the React test suite
+        run: npm run test:react
 
       - name: Publish coverage to Coveralls
         uses: coverallsapp/github-action@v2
