@@ -24,6 +24,12 @@ This project keeps the classic ui-grid mental model:
 
 The implementation is not a direct AngularJS port. It is a modern Angular rewrite that preserves the usage model while replacing legacy directives, watchers, and build tooling.
 
+## Plans
+
+- [Seam split refactor plan](docs/seam-split-refactor-plan.md)
+- [Recommended Rust approach](docs/rust-approach-plan.md)
+- [Build flavors and feature flags plan](docs/build-flavors-plan.md)
+
 ## What Ships
 
 The current implementation includes:
@@ -48,6 +54,7 @@ The current implementation includes:
 - standalone Angular component usage
 - custom-element build output
 - an in-app browser harness for virtual-scroll branches that jsdom does not reliably materialize
+- SSR support
 
 ## Compatibility
 
