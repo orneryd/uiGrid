@@ -1,6 +1,6 @@
 # Accessibility Remediation Plan
 
-**Status:** Draft  
+**Status:** Draft (reviewed against WAI-ARIA 1.2 + APG grid/tabs patterns)  
 **Scope:** `@ornery/ui-grid` library component + browser harness demo  
 **Source:** Lighthouse accessibility audit (axe-core 4.11)
 
@@ -183,7 +183,7 @@ This is recommended but not strictly required — axe allows `role="row"` as a d
 
 **Problem:** The filter row contains `<input>` elements that sit inside the `role="grid"` without a `role="row"` parent. axe flags these as invalid children.
 
-**Fix:** Wrap the filter row in `role="row"` and each filter cell in `role="columnheader"` (or `role="gridcell"`):
+**Fix:** Wrap the filter row in `role="row"` and each filter cell in `role="gridcell"` (not `columnheader` — filter inputs are interactive controls, not headers):
 
 ```html
 <!-- BEFORE -->
@@ -200,7 +200,7 @@ This is recommended but not strictly required — axe allows `role="row"` as a d
      [style.gridTemplateColumns]="gridTemplateColumns()">
   @for (column of visibleColumns(); track column.name) {
     <label class="filter-cell ui-grid-filter-container" part="filter-cell"
-           role="columnheader">
+           role="gridcell">
       <span class="sr-only ui-grid-sr-only">{{ labels().filterColumn }} {{ headerLabel(column) }}</span>
       <input ... />
     </label>
@@ -208,7 +208,7 @@ This is recommended but not strictly required — axe allows `role="row"` as a d
 </div>
 ```
 
-This places each filter inside a valid `row → columnheader` path within the grid.
+This places each filter inside a valid `row → gridcell` path within the grid. Using `gridcell` rather than `columnheader` because the actual column headers are in the header row above — these are filter controls, not labels.
 
 ---
 
@@ -283,6 +283,105 @@ protected readonly gridRole = computed(() => {
 ```
 
 **Additional:** Add `tabindex` management — the active tab gets `tabindex="0"`, inactive tabs get `tabindex="-1"`. This follows the WAI-ARIA tabs pattern roving tabindex convention.
+
+---
+
+## Fix 9 — Add `aria-rowcount` and `aria-colcount` for virtualized grids
+
+**File:** `projects/ui-grid/src/lib/grid/ui-grid.component.html:47`  
+**File:** `projects/ui-grid/src/lib/grid/ui-grid.component.ts`
+
+**Problem:** When virtual scrolling is enabled, only a subset of rows exists in the DOM. Screen readers need `aria-rowcount` on the grid to announce the total size, and `aria-rowindex` on each row to indicate position. Without this, a screen reader user has no way to know the grid's full extent.
+
+**Fix:**
+
+```typescript
+// ui-grid.component.ts
+protected readonly ariaRowCount = computed(() => {
+  // +1 for header row, +1 for filter row if visible
+  const headerRows = 1 + (this.isFilteringEnabled() ? 1 : 0);
+  return this.pipeline().totalItems + headerRows;
+});
+```
+
+```html
+<div class="grid-frame ui-grid" part="grid-frame"
+     [attr.role]="gridRole()"
+     [attr.aria-label]="options().title ?? 'Data grid'"
+     [attr.aria-rowcount]="ariaRowCount()"
+     [attr.aria-colcount]="visibleColumns().length">
+```
+
+Also add `aria-colindex` (1-based) to each `gridcell` and `columnheader`:
+
+```html
+<div ... role="gridcell" [attr.aria-colindex]="colIdx + 1" ...>
+```
+
+**Rationale:** WAI-ARIA 1.2 §5.2.8.8 — when not all rows are present in the DOM (virtualization), authors MUST set `aria-rowcount` on the grid/treegrid and `aria-rowindex` on each row.
+
+---
+
+## Fix 10 — Keyboard arrow navigation for browser harness tabs
+
+**File:** `src/app/grid-browser-harness.component.ts`
+
+**Problem:** The WAI-ARIA tabs pattern requires Left/Right arrow key navigation between tabs. Fix 8 adds `role="tab"` and roving tabindex, but without arrow key handlers, keyboard-only users can't move between tabs using the expected interaction model.
+
+**Fix:** Add a `(keydown)` handler on each tab button:
+
+```typescript
+protected handleTabKeyDown(event: KeyboardEvent, index: number): void {
+  let nextIndex: number | null = null;
+  if (event.key === 'ArrowRight') {
+    nextIndex = (index + 1) % this.scenarios.length;
+  } else if (event.key === 'ArrowLeft') {
+    nextIndex = (index - 1 + this.scenarios.length) % this.scenarios.length;
+  } else if (event.key === 'Home') {
+    nextIndex = 0;
+  } else if (event.key === 'End') {
+    nextIndex = this.scenarios.length - 1;
+  }
+
+  if (nextIndex !== null) {
+    event.preventDefault();
+    this.setMode(this.scenarios[nextIndex].value);
+    // Focus the newly active tab button
+    const tablist = (event.target as HTMLElement).closest('[role="tablist"]');
+    const tabs = tablist?.querySelectorAll<HTMLElement>('[role="tab"]');
+    tabs?.[nextIndex]?.focus();
+  }
+}
+```
+
+```html
+<button ... role="tab"
+    (keydown)="handleTabKeyDown($event, $index)"
+    ...>
+```
+
+**Rationale:** WAI-ARIA APG Tabs Pattern — "When focus is on a tab element: Left Arrow moves focus to the previous tab. Right Arrow moves focus to the next tab. Home moves focus to the first tab. End moves focus to the last tab."
+
+---
+
+## Fix 11 — `aria-expanded` placement in treegrid vs grouped rows
+
+**Clarification for implementers:**
+
+- **Tree rows** (Fix 7 — `role="treegrid"`): `aria-expanded` belongs on the `role="row"` element itself. This is correct per WAI-ARIA 1.2 — treegrid rows that can be expanded/collapsed MUST have `aria-expanded`. The current template already places `aria-expanded` on tree row toggles' buttons, but with `role="treegrid"` the canonical location is on the `<div role="row">` wrapping the tree row.
+
+- **Group rows** (Fix 4): `aria-expanded` belongs on the `<button>` inside the gridcell, NOT on the `role="row"`. Group disclosure buttons are interactive controls — `aria-expanded` on a button is always valid regardless of grid vs treegrid.
+
+**Fix for tree rows:** When a data row has tree children, the wrapping `<div role="row">` from Fix 2 should carry `aria-expanded`:
+
+```html
+<div class="data-row ui-grid-row" role="row"
+     [style.display]="'contents'"
+     [attr.aria-rowindex]="item.visibleIndex + 2"
+     [attr.aria-expanded]="treeViewFeature && hasTreeChildren(item.row) ? isTreeRowExpanded(item.row) : null">
+```
+
+The tree toggle button inside the cell keeps its `aria-label` but no longer needs its own `aria-expanded` since the row carries it.
 
 ---
 

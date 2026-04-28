@@ -191,6 +191,7 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Custom Builds](./docs/custom-builds.md) | Feature flags, build presets, locale baking |
 | [Web Component](./docs/web-component.md) | Build, usage, styling the custom element |
 | [Internationalization](./docs/i18n.md) | Runtime overrides, build-time locales |
+| [Accessibility](./docs/accessibility.md) | ARIA roles, keyboard navigation, screen reader support |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 

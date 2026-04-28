@@ -12,6 +12,7 @@ import { DocsExpandableRowsComponent } from './topics/expandable-rows.component'
 import { DocsCustomBuildsComponent } from './topics/custom-builds.component';
 import { DocsWebComponentComponent } from './topics/web-component.component';
 import { DocsI18nComponent } from './topics/i18n.component';
+import { DocsAccessibilityComponent } from './topics/accessibility.component';
 import { DocsReactComponent } from './topics/react.component';
 
 @Component({
@@ -28,6 +29,7 @@ import { DocsReactComponent } from './topics/react.component';
     DocsCustomBuildsComponent,
     DocsWebComponentComponent,
     DocsI18nComponent,
+    DocsAccessibilityComponent,
     DocsReactComponent
   ],
   templateUrl: './docs-layout.component.html',
@@ -46,6 +48,7 @@ export class DocsLayoutComponent {
     { id: 'custom-builds', label: 'Custom Builds' },
     { id: 'web-component', label: 'Web Component' },
     { id: 'i18n', label: 'Internationalization' },
+    { id: 'accessibility', label: 'Accessibility' },
     { id: 'react', label: 'React' }
   ] as const;
 

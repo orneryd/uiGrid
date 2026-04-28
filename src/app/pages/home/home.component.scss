@@ -118,9 +118,9 @@
 }
 
 .cta-link:not(.cta-link-secondary) {
-	background: linear-gradient(135deg, color-mix(in srgb, var(--ink-strong) 90%, black), color-mix(in srgb, var(--teal-strong) 78%, var(--ink-strong)));
-	color: #f8fafc;
-	border: 1px solid color-mix(in srgb, white 18%, transparent);
+	background: linear-gradient(135deg, color-mix(in srgb, var(--teal-strong) 85%, black), color-mix(in srgb, var(--teal-strong) 65%, black));
+	color: #051017;
+	border: 1px solid color-mix(in srgb, var(--teal-strong) 40%, transparent);
 	box-shadow: 0 12px 24px rgba(8, 39, 61, 0.18);
 }
 
