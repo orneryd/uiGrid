@@ -5,7 +5,7 @@
 
 # UI Grid — Remastered
 
-**The modern Angular data grid. Every feature free and open source.**
+**The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, and React**
 
 A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` mental model, modern Angular signals internals, and zero legacy baggage.
 
@@ -26,31 +26,31 @@ A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/an
 
 Everything below ships free and MIT-licensed. No enterprise tier, no license keys, no per-developer fees.
 
-| Feature | UI Grid | ag-Grid Community | ag-Grid Enterprise | Vaadin Grid | Kendo UI | Syncfusion |
-|---------|:-------:|:-----------------:|:------------------:|:-----------:|:--------:|:----------:|
-| Sorting | **Free** | Free | — | Free | Paid | Community* |
-| Filtering | **Free** | Free | — | Free | Paid | Community* |
-| **Row Grouping** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
-| **Tree Data** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
-| **Master/Detail Rows** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
-| **Inline Cell Editing** | **Free** | Free | — | Pro ~$99/dev/mo | Paid | Community* |
-| CSV Export | **Free** | Free | — | — | Paid | Community* |
-| Virtual Scrolling | **Free** | Free | — | Free | Paid | Community* |
-| Pagination | **Free** | Free | — | Free | Paid | Community* |
-| Column Reordering | **Free** | Free | — | Free | Paid | Community* |
-| **Save/Restore State** | **Free** | — | ~$999/dev/yr | — | Paid | — |
-| **Infinite Scroll** | **Free** | Free | — | — | Paid | Community* |
-| **Shadow DOM** | **Free** | — | — | — | — | — |
-| **Web Component Build** | **Free** | — | — | Native | — | — |
-| **Feature Tree-Shaking** | **Free** | — | — | — | — | — |
-| **SSR Support** | **Free** | — | ~$999/dev/yr | — | — | — |
-| i18n | **Free** | — | ~$999/dev/yr | Free | Paid | Community* |
-| Angular Native | **Yes** | Wrapper | Wrapper | No | Wrapper | Wrapper |
-| **License** | **MIT** | MIT | Commercial | Apache/Comm. | Commercial | Comm./Community |
+| Feature                  | UI Grid  | ag-Grid Community | ag-Grid Enterprise |   Vaadin Grid   |  Kendo UI  |   Syncfusion    |
+| ------------------------ | :------: | :---------------: | :----------------: | :-------------: | :--------: | :-------------: |
+| Sorting                  | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| Filtering                | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| **Row Grouping**         | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
+| **Tree Data**            | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
+| **Master/Detail Rows**   | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
+| **Inline Cell Editing**  | **Free** |       Free        |         —          | Pro ~$99/dev/mo |    Paid    |   Community\*   |
+| CSV Export               | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
+| Virtual Scrolling        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| Pagination               | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| Column Reordering        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| **Save/Restore State**   | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |        —        |
+| **Infinite Scroll**      | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
+| **Shadow DOM**           | **Free** |         —         |         —          |        —        |     —      |        —        |
+| **Web Component Build**  | **Free** |         —         |         —          |     Native      |     —      |        —        |
+| **Feature Tree-Shaking** | **Free** |         —         |         —          |        —        |     —      |        —        |
+| **SSR Support**          | **Free** |         —         |    ~$999/dev/yr    |        —        |     —      |        —        |
+| i18n                     | **Free** |         —         |    ~$999/dev/yr    |      Free       |    Paid    |   Community\*   |
+| Angular Native           | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
+| **License**              | **MIT**  |        MIT        |     Commercial     |  Apache/Comm.   | Commercial | Comm./Community |
 
 > **Bold** = features where UI Grid gives you for free what competitors charge for.
 >
-> *Syncfusion Community license is free for companies with <$1M annual revenue. Prices are approximate and subject to change.*
+> _Syncfusion Community license is free for companies with <$1M annual revenue. Prices are approximate and subject to change._
 
 ---
 
@@ -69,7 +69,7 @@ import { GridOptions, UiGridComponent } from '@ornery/ui-grid';
 @Component({
   selector: 'app-my-grid',
   imports: [UiGridComponent],
-  template: `<app-ui-grid [options]="gridOptions" />`
+  template: `<app-ui-grid [options]="gridOptions" />`,
 })
 export class MyGridComponent {
   gridOptions: GridOptions = {
@@ -83,7 +83,9 @@ export class MyGridComponent {
       { name: 'role' },
       { name: 'salary', type: 'number', align: 'end' },
     ],
-    onRegisterApi: (api) => { this.gridApi = api; },
+    onRegisterApi: (api) => {
+      this.gridApi = api;
+    },
   };
 }
 ```
@@ -179,19 +181,19 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [Getting Started](./docs/getting-started.md) | Install, minimal setup, run the demo |
-| [Features](./docs/features.md) | Overview of all features with code examples |
-| [Theming](./docs/theming.md) | CSS custom properties, `::part()` hooks, sample themes |
-| [API Reference](./docs/api-reference.md) | GridOptions, GridColumnDef, UiGridApi |
-| [Cell Editing](./docs/cell-editing.md) | Keyboard navigation, conditional editing, API |
-| [Tree View](./docs/tree-view.md) | Hierarchical data, options, API |
-| [Expandable Rows](./docs/expandable-rows.md) | Master/detail, template context, API |
-| [Custom Builds](./docs/custom-builds.md) | Feature flags, build presets, locale baking |
-| [Web Component](./docs/web-component.md) | Build, usage, styling the custom element |
-| [Internationalization](./docs/i18n.md) | Runtime overrides, build-time locales |
-| [Accessibility](./docs/accessibility.md) | ARIA roles, keyboard navigation, screen reader support |
+| Guide                                        | Description                                            |
+| -------------------------------------------- | ------------------------------------------------------ |
+| [Getting Started](./docs/getting-started.md) | Install, minimal setup, run the demo                   |
+| [Features](./docs/features.md)               | Overview of all features with code examples            |
+| [Theming](./docs/theming.md)                 | CSS custom properties, `::part()` hooks, sample themes |
+| [API Reference](./docs/api-reference.md)     | GridOptions, GridColumnDef, UiGridApi                  |
+| [Cell Editing](./docs/cell-editing.md)       | Keyboard navigation, conditional editing, API          |
+| [Tree View](./docs/tree-view.md)             | Hierarchical data, options, API                        |
+| [Expandable Rows](./docs/expandable-rows.md) | Master/detail, template context, API                   |
+| [Custom Builds](./docs/custom-builds.md)     | Feature flags, build presets, locale baking            |
+| [Web Component](./docs/web-component.md)     | Build, usage, styling the custom element               |
+| [Internationalization](./docs/i18n.md)       | Runtime overrides, build-time locales                  |
+| [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 
@@ -211,14 +213,14 @@ npm run build:element   # Build the web component
 
 ## Compatibility
 
-| Dependency | Version |
-|------------|---------|
-| Angular | 21.2 |
-| Angular CDK | 21.2 |
-| TypeScript | 5.9 |
-| RxJS | 7.8 |
-| Node | 22.20 |
-| npm | 11.11 |
+| Dependency  | Version |
+| ----------- | ------- |
+| Angular     | 21.2    |
+| Angular CDK | 21.2    |
+| TypeScript  | 5.9     |
+| RxJS        | 7.8     |
+| Node        | 22.20   |
+| npm         | 11.11   |
 
 ---
 
