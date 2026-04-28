@@ -103,6 +103,8 @@ const finalPackageJson = {
   version: requestedVersion,
   private: false,
   sideEffects: false,
+  module: entryDefault,
+  typings: entryTypes,
   publishConfig: {
     ...(sourcePackage.publishConfig || {}),
     access: 'public'
@@ -121,12 +123,16 @@ const finalPackageJson = {
 await writeFile(packageJsonPath, `${JSON.stringify(finalPackageJson, null, 2)}\n`);
 await writeFile(path.join(outputDir, 'build-flavors.json'), `${JSON.stringify(packagedPresetManifest, null, 2)}\n`);
 
+function ensureDotSlash(p) {
+  return p.startsWith('./') ? p : `./${p}`;
+}
+
 function entryTypesFromPackage(packageJson) {
-  return packageJson.types || packageJson.typings || './index.d.ts';
+  return ensureDotSlash(packageJson.types || packageJson.typings || './index.d.ts');
 }
 
 function entryDefaultFromPackage(packageJson) {
-  return packageJson.module || packageJson.main || './fesm2022/ui-grid.mjs';
+  return ensureDotSlash(packageJson.module || packageJson.main || './fesm2022/ui-grid.mjs');
 }
 
 function normalizeSubpath(entryPath, preset) {
