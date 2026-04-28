@@ -160,6 +160,18 @@ describe('UiGridComponent', () => {
     return host.shadowRoot;
   }
 
+  /** Create a KeyboardEvent from the element's own window so jsdom accepts it in dispatchEvent. */
+  function keyDown(el: HTMLElement, init: KeyboardEventInit): KeyboardEvent {
+    const win = el.ownerDocument.defaultView ?? window;
+    return new win.KeyboardEvent('keydown', init);
+  }
+
+  /** Create a plain Event from the element's own window so jsdom accepts it in dispatchEvent. */
+  function domEvent(el: HTMLElement, type: string): Event {
+    const win = el.ownerDocument.defaultView ?? window;
+    return new win.Event(type);
+  }
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [UiGridComponent, ExpandableHostComponent, CellTemplateHostComponent, VirtualExpandableHostComponent]
@@ -912,7 +924,7 @@ describe('UiGridComponent', () => {
     const shadowRoot = getShadowRoot(fixture);
     const firstNameCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="name"]') as HTMLElement;
     firstNameCell.focus();
-    firstNameCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Z' }));
+    firstNameCell.dispatchEvent(keyDown(firstNameCell, { key: 'Z' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -920,7 +932,7 @@ describe('UiGridComponent', () => {
     expect(editor.value).toBe('Z');
     expect(beginCellEdit).toHaveBeenCalled();
 
-    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    editor.dispatchEvent(keyDown(editor, { key: 'Tab' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -937,7 +949,7 @@ describe('UiGridComponent', () => {
     expect(statusCell).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(statusCell);
 
-    statusCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    statusCell.dispatchEvent(keyDown(statusCell, { key: 'Tab' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -946,7 +958,7 @@ describe('UiGridComponent', () => {
     expect(shadowRoot.activeElement).toBe(ownerEditor);
     expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]')).toBeNull();
 
-    ownerEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+    ownerEditor.dispatchEvent(keyDown(ownerEditor, { key: 'Tab', shiftKey: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -955,7 +967,7 @@ describe('UiGridComponent', () => {
     expect(shadowRoot.activeElement).toBe(statusCellAgain);
     expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]')).toBeNull();
 
-    statusCellAgain.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }));
+    statusCellAgain.dispatchEvent(keyDown(statusCellAgain, { key: 'Tab', shiftKey: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -963,22 +975,22 @@ describe('UiGridComponent', () => {
     expect(nameEditorAgain).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(nameEditorAgain);
 
-    nameEditorAgain.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    nameEditorAgain.dispatchEvent(keyDown(nameEditorAgain, { key: 'Escape' }));
     fixture.detectChanges();
     await fixture.whenStable();
     cancelCellEdit.mockClear();
 
     const ownerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="owner"]') as HTMLElement;
     ownerCell.focus();
-    ownerCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }));
+    ownerCell.dispatchEvent(keyDown(ownerCell, { key: 'F2' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
     editor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
     expect(editor.value).toBe('Mina Patel');
     editor.value = 'Taylor Morgan';
-    editor.dispatchEvent(new Event('input'));
-    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    editor.dispatchEvent(domEvent(editor, 'input'));
+    editor.dispatchEvent(keyDown(editor, { key: 'Escape' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -1006,7 +1018,7 @@ describe('UiGridComponent', () => {
     const shadowRoot = getShadowRoot(fixture);
     const statusCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
     statusCell.focus();
-    statusCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    statusCell.dispatchEvent(keyDown(statusCell, { key: 'Tab' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
