@@ -2,6 +2,8 @@ import { GridColumnDef, GridRecord } from './grid.models';
 
 let uid = 0;
 
+const PROTECTED_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function nextUid(prefix = 'grid'): string {
   uid += 1;
   return `${prefix}-${uid}`;
@@ -17,6 +19,14 @@ export function getPathValue(record: GridRecord, path: string): unknown {
       return undefined;
     }
 
+    if (PROTECTED_PATH_SEGMENTS.has(part)) {
+      return undefined;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(current, part)) {
+      return undefined;
+    }
+
     return (current as Record<string, unknown>)[part];
   }, record);
 }
@@ -28,11 +38,19 @@ export function setPathValue(record: GridRecord, path: string, value: unknown): 
     return;
   }
 
+  if (PROTECTED_PATH_SEGMENTS.has(lastPart)) {
+    return;
+  }
+
   let current: Record<string, unknown> = record;
   for (const part of parts) {
+    if (PROTECTED_PATH_SEGMENTS.has(part)) {
+      return;
+    }
+
     const next = current[part];
     if (typeof next !== 'object' || next === null || Array.isArray(next)) {
-      current[part] = {};
+      current[part] = Object.create(null) as Record<string, unknown>;
     }
 
     current = current[part] as Record<string, unknown>;
@@ -79,6 +97,10 @@ export function stringifyCellValue(value: unknown): string {
 }
 
 export function toCsvValue(value: string): string {
+  if (/^[=+\-@\t\r]/.test(value)) {
+    value = `'${value}`;
+  }
+
   if (/[",\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
   }

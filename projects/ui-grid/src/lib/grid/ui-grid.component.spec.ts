@@ -421,6 +421,45 @@ describe('UiGridComponent', () => {
     expect(csv).toContain('Gamma,Pilot,$300,Mina Patel,Gamma-badge');
   });
 
+  it('sanitizes csv export values that could be interpreted as spreadsheet formulas', async () => {
+    let gridApi!: UiGridApi;
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      id: 'invoice=2026/04',
+      data: [
+        {
+          id: 'row-1',
+          name: '=SUM(1,1)',
+          status: '+Danger',
+          revenue: 100,
+          active: true,
+          account: { owner: '@mention' }
+        }
+      ]
+    }, (api) => {
+      gridApi = api;
+    }));
+    fixture.detectChanges();
+
+    const anchor = document.createElement('a');
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(anchor, 'click').mockImplementation(() => {});
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) =>
+      tagName === 'a' ? anchor : originalCreateElement(tagName)) as typeof document.createElement);
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:safe-csv');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    gridApi.core.exportCsv();
+
+    expect(anchor.download).toBe('invoice_2026_04.csv');
+
+    const blob = createObjectUrlSpy.mock.calls[0][0] as Blob;
+    const csv = await blob.text();
+    expect(csv).toContain('"\'=SUM(1,1)"');
+    expect(csv).toContain("'+Danger");
+    expect(csv).toContain("'@mention");
+  });
+
   it('runs a deterministic benchmark and raises scroll events', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
@@ -1224,6 +1263,30 @@ describe('UiGridComponent', () => {
     expect(saved.grouping).toEqual(['status']);
     expect(saved.expandable).toBeTruthy();
     expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual(['Beta', 'alpha']);
+  });
+
+  it('ignores malformed values when restoring saved state', async () => {
+    const fixture = TestBed.createComponent(ExpandableHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const gridApi = fixture.componentInstance.gridApi()!;
+    gridApi.saveState.restore({
+      columnOrder: ['status', '__proto__' as never, 1 as never],
+      filters: { status: 'Active', count: 1 as never } as never,
+      sort: { columnName: 'name', direction: SORT_DIRECTIONS.asc, extra: 'ignored' } as never,
+      grouping: ['status', 123 as never],
+      pagination: { paginationCurrentPage: -3, paginationPageSize: 25 } as never,
+      expandable: { row1: true, row2: 'yes' as never },
+      treeView: { row3: false, row4: 1 as never }
+    });
+
+    const saved = gridApi.saveState.save();
+    expect(saved.columnOrder).toEqual(['status']);
+    expect(saved.filters).toEqual({ status: 'Active' });
+    expect(saved.grouping).toEqual(['status']);
+    expect(saved.expandable).toEqual({ row1: true });
+    expect(saved.treeView).toEqual({ row3: false });
   });
 
   it('fires toolbar actions from the template and updates benchmark metrics', () => {

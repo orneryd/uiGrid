@@ -4,6 +4,7 @@ import {
   getPathValue,
   isNullOrUndefined,
   nextUid,
+  setPathValue,
   stringifyCellValue,
   titleize,
   toCsvValue
@@ -39,6 +40,23 @@ describe('grid.utils', () => {
     expect(getPathValue(row, 'account.owner.name')).toBe('Jordan Silva');
     expect(getPathValue(row, 'account.owner.email')).toBeUndefined();
     expect(getPathValue(row, 'account.owner.name.first')).toBeUndefined();
+    expect(getPathValue(row, '__proto__.polluted')).toBeUndefined();
+  });
+
+  it('writes nested property paths without allowing prototype pollution', () => {
+    const row: GridRecord = {};
+
+    setPathValue(row, 'account.owner.name', 'Jordan Silva');
+    setPathValue(row, '__proto__.polluted', 'yes');
+
+    expect(row).toEqual({
+      account: {
+        owner: {
+          name: 'Jordan Silva'
+        }
+      }
+    });
+    expect(({} as GridRecord)['polluted']).toBeUndefined();
   });
 
   it('titleizes camelCase, snake_case, kebab-case, and dotted values', () => {
@@ -80,5 +98,6 @@ describe('grid.utils', () => {
     expect(toCsvValue('with,comma')).toBe('"with,comma"');
     expect(toCsvValue('with"quote')).toBe('"with""quote"');
     expect(toCsvValue('line\nbreak')).toBe('"line\nbreak"');
+    expect(toCsvValue('=HYPERLINK("https://example.com")')).toBe('"\'=HYPERLINK(""https://example.com"")"');
   });
 });

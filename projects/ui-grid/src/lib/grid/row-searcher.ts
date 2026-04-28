@@ -22,6 +22,22 @@ function escapeRegExp(value: string): string {
   return value.replace(/[|\\{}()[\]^$+?*.]/g, '\\$&').replace(/-/g, '\\x2d');
 }
 
+const MAX_FILTER_PATTERN_LENGTH = 128;
+const MAX_FILTER_WILDCARDS = 8;
+
+function buildLiteralPattern(term: unknown): string {
+  return escapeRegExp(String(term ?? ''));
+}
+
+function buildWildcardPattern(term: string): string | null {
+  const wildcardCount = (term.match(/\*/g) ?? []).length;
+  if (term.length > MAX_FILTER_PATTERN_LENGTH || wildcardCount > MAX_FILTER_WILDCARDS) {
+    return null;
+  }
+
+  return escapeRegExp(term).replace(/\\\*/g, '.*?');
+}
+
 export function getTerm(filter: GridFilterDescriptor): unknown {
   if (typeof filter.term === 'undefined') {
     return filter.term;
@@ -33,7 +49,7 @@ export function getTerm(filter: GridFilterDescriptor): unknown {
 function stripTerm(filter: GridFilterDescriptor): unknown {
   const term = getTerm(filter);
   if (typeof term === 'string') {
-    return escapeRegExp(term.replace(/(^\*|\*$)/g, ''));
+    return term.replace(/(^\*|\*$)/g, '');
   }
 
   return term;
@@ -47,7 +63,11 @@ function guessCondition(filter: GridFilterDescriptor): GridFilterDescriptor['con
   const term = getTerm(filter);
   if (typeof term === 'string' && /\*/.test(term)) {
     const regexpFlags = !filter.flags?.caseSensitive ? 'i' : '';
-    const escaped = escapeRegExp(term).replace(/\\\*/g, '.*?');
+    const escaped = buildWildcardPattern(term);
+    if (!escaped) {
+      return FILTER_CONDITIONS.contains;
+    }
+
     return new RegExp(`^${escaped}$`, regexpFlags);
   }
 
@@ -77,16 +97,16 @@ export function setupFilters(filters: readonly GridFilterDescriptor[]): ParsedFi
 
     switch (parsedFilter.condition) {
       case FILTER_CONDITIONS.startsWith:
-        parsedFilter.startswithRE = new RegExp(`^${String(parsedFilter.term ?? '')}`, regexpFlags);
+        parsedFilter.startswithRE = new RegExp(`^${buildLiteralPattern(parsedFilter.term)}`, regexpFlags);
         break;
       case FILTER_CONDITIONS.endsWith:
-        parsedFilter.endswithRE = new RegExp(`${String(parsedFilter.term ?? '')}$`, regexpFlags);
+        parsedFilter.endswithRE = new RegExp(`${buildLiteralPattern(parsedFilter.term)}$`, regexpFlags);
         break;
       case FILTER_CONDITIONS.exact:
-        parsedFilter.exactRE = new RegExp(`^${String(parsedFilter.term ?? '')}$`, regexpFlags);
+        parsedFilter.exactRE = new RegExp(`^${buildLiteralPattern(parsedFilter.term)}$`, regexpFlags);
         break;
       case FILTER_CONDITIONS.contains:
-        parsedFilter.containsRE = new RegExp(String(parsedFilter.term ?? ''), regexpFlags);
+        parsedFilter.containsRE = new RegExp(buildLiteralPattern(parsedFilter.term), regexpFlags);
         break;
       default:
         break;

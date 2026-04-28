@@ -22,6 +22,20 @@ describe('row-searcher', () => {
     expect(runColumnFilter({ status: 'Archive' }, { name: 'status' }, filters[0])).toBe(false);
   });
 
+  it('escapes regex metacharacters in text filters', () => {
+    const [filter] = setupFilters([{ term: 'a.b', condition: FILTER_CONDITIONS.contains }]);
+
+    expect(runColumnFilter({ status: 'a.b' }, { name: 'status' }, filter)).toBe(true);
+    expect(runColumnFilter({ status: 'axb' }, { name: 'status' }, filter)).toBe(false);
+  });
+
+  it('falls back to a literal filter when wildcard input is too large', () => {
+    const [filter] = setupFilters([{ term: 'a*a*a*a*a*a*a*a*a*a*' }]);
+
+    expect(filter.condition).toBe(FILTER_CONDITIONS.contains);
+    expect(filter.containsRE).toBeInstanceOf(RegExp);
+  });
+
   it('builds and applies standard text matchers', () => {
     const [startsWith] = setupFilters([{ term: 'Act', condition: FILTER_CONDITIONS.startsWith }]);
     const [endsWith] = setupFilters([{ term: 'ive', condition: FILTER_CONDITIONS.endsWith }]);

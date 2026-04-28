@@ -1089,7 +1089,7 @@ export class UiGridComponent {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${this.options().id}.csv`;
+    link.download = `${this.sanitizeDownloadFilename(this.options().id)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -1653,44 +1653,90 @@ export class UiGridComponent {
   }
 
   private restoreState(state: GridSavedState): void {
-    if (state.columnOrder) {
-      this.columnOrder.set([...state.columnOrder]);
-    }
-
-    if (state.filters) {
-      this.activeFilters.set({ ...state.filters });
-      this.gridApi.core.raise.filterChanged(this.activeFilters());
-    }
-
-    if (state.sort) {
-      this.sortState.set({ ...state.sort });
-    }
-
-    if (state.grouping) {
-      this.groupByColumns.set([...state.grouping]);
-      this.gridApi.core.raise.groupingChanged(this.groupByColumns());
-    }
-
-    if (state.pagination) {
-      this.pageSize.set(state.pagination.paginationPageSize);
-      this.currentPage.set(state.pagination.paginationCurrentPage);
-      this.gridApi.pagination.raise.paginationChanged(
-        state.pagination.paginationCurrentPage,
-        state.pagination.paginationPageSize
+    if (Array.isArray(state.columnOrder)) {
+      this.columnOrder.set(
+        state.columnOrder.filter((columnName): columnName is string => typeof columnName === 'string' && this.isSafeStateKey(columnName))
       );
     }
 
-    if (state.expandable) {
-      this.expandedRows.set({ ...state.expandable });
+    if (state.filters && typeof state.filters === 'object') {
+      const filters = Object.entries(state.filters).reduce<Record<string, string>>((accumulator, [key, value]) => {
+        if (typeof key === 'string' && this.isSafeStateKey(key) && typeof value === 'string') {
+          accumulator[key] = value;
+        }
+
+        return accumulator;
+      }, {});
+
+      this.activeFilters.set(filters);
+      this.gridApi.core.raise.filterChanged(this.activeFilters());
     }
 
-    if (state.treeView) {
-      this.expandedTreeRows.set({ ...state.treeView });
+    if (state.sort && typeof state.sort === 'object') {
+      this.sortState.set({
+        columnName: typeof state.sort.columnName === 'string' && this.isSafeStateKey(state.sort.columnName)
+          ? state.sort.columnName
+          : null,
+        direction: state.sort.direction === SORT_DIRECTIONS.asc || state.sort.direction === SORT_DIRECTIONS.desc
+          ? state.sort.direction
+          : SORT_DIRECTIONS.none
+      });
+    }
+
+    if (Array.isArray(state.grouping)) {
+      this.groupByColumns.set(
+        state.grouping.filter((columnName): columnName is string => typeof columnName === 'string' && this.isSafeStateKey(columnName))
+      );
+      this.gridApi.core.raise.groupingChanged(this.groupByColumns());
+    }
+
+    if (state.pagination && typeof state.pagination === 'object') {
+      const paginationCurrentPage = Number(state.pagination.paginationCurrentPage);
+      const paginationPageSize = Number(state.pagination.paginationPageSize);
+
+      if (Number.isFinite(paginationCurrentPage) && paginationCurrentPage > 0) {
+        this.currentPage.set(Math.floor(paginationCurrentPage));
+      }
+
+      if (Number.isFinite(paginationPageSize) && paginationPageSize >= 0) {
+        this.pageSize.set(Math.floor(paginationPageSize));
+      }
+
+      this.gridApi.pagination.raise.paginationChanged(
+        this.getCurrentPageValue(),
+        this.effectivePageSize(this.pipeline().totalItems)
+      );
+    }
+
+    if (state.expandable && typeof state.expandable === 'object') {
+      this.expandedRows.set(this.normalizeBooleanMap(state.expandable));
+    }
+
+    if (state.treeView && typeof state.treeView === 'object') {
+      this.expandedTreeRows.set(this.normalizeBooleanMap(state.treeView));
     }
   }
 
   private isVirtualizationEnabled(itemCount: number): boolean {
     return this.options().enableVirtualization !== false
       && itemCount >= (this.options().virtualizationThreshold ?? 40);
+  }
+
+  private sanitizeDownloadFilename(value: string): string {
+    return value.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'ui-grid';
+  }
+
+  private normalizeBooleanMap(value: Record<string, unknown>): Record<string, boolean> {
+    return Object.entries(value).reduce<Record<string, boolean>>((accumulator, [key, entry]) => {
+      if (typeof key === 'string' && this.isSafeStateKey(key) && typeof entry === 'boolean') {
+        accumulator[key] = entry;
+      }
+
+      return accumulator;
+    }, {});
+  }
+
+  private isSafeStateKey(value: string): boolean {
+    return value !== '__proto__' && value !== 'constructor' && value !== 'prototype';
   }
 }
