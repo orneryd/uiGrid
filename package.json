@@ -36,10 +36,16 @@
     "@angular/build": "^21.2.8",
     "@angular/cli": "^21.2.8",
     "@angular/compiler-cli": "^21.2.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^4.1.5",
     "jsdom": "^28.0.0",
     "ng-packagr": "^21.2.3",
     "prettier": "^3.8.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tsup": "^8.0.0",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"
   }
