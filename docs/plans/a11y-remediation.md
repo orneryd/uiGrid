@@ -389,12 +389,12 @@ The tree toggle button inside the cell keeps its `aria-label` but no longer need
 
 | File | Fixes |
 |---|---|
-| `projects/ui-grid/src/lib/grid/ui-grid.component.html` | #1, #2, #3, #4, #5, #6, #7 |
-| `projects/ui-grid/src/lib/grid/ui-grid.component.ts` | #7 (add `gridRole` computed) |
+| `projects/ui-grid/src/lib/grid/ui-grid.component.html` | #1, #2, #3, #4, #5, #6, #7, #9, #11 |
+| `projects/ui-grid/src/lib/grid/ui-grid.component.ts` | #7 (`gridRole`), #9 (`ariaRowCount`), #11 (`hasTreeChildren`) |
 | `projects/ui-grid/src/lib/grid/grid.core.styles.scss` | #2, #4 (styles for new wrappers) |
-| `projects/ui-grid/src/lib/grid/ui-grid.component.spec.ts` | Update selectors / assertions |
-| `src/app/grid-browser-harness.component.ts` | #8 |
-| `src/app/grid-browser-harness.component.spec.ts` | Update assertions for `role="tab"` |
+| `projects/ui-grid/src/lib/grid/ui-grid.component.spec.ts` | Update selectors / assertions for all fixes |
+| `src/app/grid-browser-harness.component.ts` | #8, #10 |
+| `src/app/grid-browser-harness.component.spec.ts` | Update assertions for `role="tab"`, arrow key nav |
 
 ---
 
@@ -404,7 +404,10 @@ The `display: contents` strategy for `role="row"` wrappers (Fixes #2, #3, #4) pr
 
 1. **No visual regression** — `display: contents` removes the box from the layout, so cells still participate in `.body-grid`'s column template.
 2. **Focus management** — `display: contents` elements cannot receive focus themselves, which is correct — focus belongs on the `gridcell` elements.
-3. **Browser support** — `display: contents` is supported in all evergreen browsers. Safari had a11y bugs with it historically but these are fixed as of Safari 16+.
+3. **Browser support** — `display: contents` is supported in all evergreen browsers.
+   - **Safari caveat:** Safari versions before 16 stripped `display: contents` elements from the accessibility tree entirely, making ARIA roles on them invisible to VoiceOver. This was fixed in Safari 16 (Sep 2022). Our minimum supported Safari is 16+ so this is safe, but add a regression test that confirms `role="row"` wrappers are exposed to the accessibility tree.
+   - **Firefox:** Fully supported since Firefox 62.
+   - **Chrome:** Fully supported since Chrome 65.
 
 Add minimal CSS for the new wrapper elements:
 
@@ -415,6 +418,10 @@ Add minimal CSS for the new wrapper elements:
   display: contents;
 }
 ```
+
+### Alternative: CSS `subgrid`
+
+If `display: contents` causes any issues, CSS `subgrid` is an alternative. The row wrapper gets `display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;` which makes it a real box that inherits the parent's column tracks. Subgrid has full support in Chrome 117+, Firefox 71+, Safari 16+. This approach preserves the element's box model (background, border, padding work normally) while still participating in the parent grid. Consider this as a fallback if `display: contents` causes visual or a11y regressions.
 
 ---
 
@@ -445,12 +452,13 @@ Add minimal CSS for the new wrapper elements:
 ## Execution Order
 
 1. **Fix #1** — Trivial element swap, no dependencies
-2. **Fix #8** — Isolated to browser harness, no grid changes
-3. **Fix #7** — Add `gridRole` computed (needed before row wrappers)
-4. **Fix #5** — Optional header `rowgroup` wrapper
-5. **Fix #6** — Filter row `role="row"` wrapper
-6. **Fix #2** — Data row wrappers (most impactful change)
-7. **Fix #3** — Expandable row wrappers
-8. **Fix #4** — Group row restructure (most complex change)
-9. **Run full test suite** — Verify no regressions
-10. **Run axe audit** — Confirm all violations resolved
+2. **Fix #8 + #10** — Isolated to browser harness: add `role="tab"`, roving tabindex, arrow key navigation
+3. **Fix #7** — Add `gridRole` computed (needed before row wrappers use `aria-expanded`)
+4. **Fix #9** — Add `aria-rowcount`, `aria-colcount`, `aria-colindex` (foundational, applies to all row fixes)
+5. **Fix #5** — Header `rowgroup` wrapper (recommended for strict compliance)
+6. **Fix #6** — Filter row `role="row"` + `role="gridcell"` wrapper
+7. **Fix #2 + #11** — Data row wrappers with conditional `aria-expanded` for tree rows
+8. **Fix #3** — Expandable row wrappers
+9. **Fix #4** — Group row restructure (most complex change)
+10. **Run full test suite** — Verify no regressions
+11. **Run axe audit** — Confirm all violations resolved
