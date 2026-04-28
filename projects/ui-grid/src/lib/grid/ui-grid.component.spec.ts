@@ -886,13 +886,17 @@ describe('UiGridComponent', () => {
 
     expect(component.sortButtonLabel(statusColumn)).toBe('Sort');
     component.sortState.set({ columnName: 'status', direction: SORT_DIRECTIONS.asc });
-    expect(component.sortButtonLabel(statusColumn)).toBe('Asc');
+    expect(component.sortButtonLabel(statusColumn)).toBe('Sort ascending');
     component.sortState.set({ columnName: 'status', direction: SORT_DIRECTIONS.desc });
-    expect(component.sortButtonLabel(statusColumn)).toBe('Desc');
+    expect(component.sortButtonLabel(statusColumn)).toBe('Sort descending');
 
-    expect(component.groupingButtonLabel(statusColumn)).toBe('Group');
+    expect(component.sortAriaSort(statusColumn)).toBe('descending');
+    component.sortState.set({ columnName: 'status', direction: SORT_DIRECTIONS.none });
+    expect(component.sortAriaSort(statusColumn)).toBe('none');
+
+    expect(component.groupingButtonLabel(statusColumn)).toBe('Group by this column');
     component.groupByColumns.set(['status']);
-    expect(component.groupingButtonLabel(statusColumn)).toBe('Grouped');
+    expect(component.groupingButtonLabel(statusColumn)).toBe('Remove grouping');
 
     expect(component.filterValue('status')).toBe('');
     component.activeFilters.set({ status: 'Active' });
@@ -902,18 +906,43 @@ describe('UiGridComponent', () => {
     expect(component.isFilterInputDisabled(statusColumn)).toBe(false);
     expect(component.isFilterInputDisabled({ ...statusColumn, filterable: false })).toBe(true);
 
-    expect(component.groupDisclosureLabel({ collapsed: false })).toBe('Collapse');
-    expect(component.groupDisclosureLabel({ collapsed: true })).toBe('Expand');
+    expect(component.groupDisclosureLabel({ collapsed: false })).toBe('Collapse group');
+    expect(component.groupDisclosureLabel({ collapsed: true })).toBe('Expand group');
 
     component.expandedTreeRows.set({ [statusRow.id]: true });
-    expect(component.treeToggleSymbol(statusRow)).toBe('−');
+    expect(component.treeToggleLabel(statusRow)).toBe('Collapse row');
+    expect(component.isTreeRowExpanded(statusRow)).toBe(true);
     component.expandedTreeRows.set({});
-    expect(component.treeToggleSymbol(statusRow)).toBe('+');
+    expect(component.treeToggleLabel(statusRow)).toBe('Expand row');
+    expect(component.isTreeRowExpanded(statusRow)).toBe(false);
 
     statusRow.expanded = true;
-    expect(component.expandToggleSymbol(statusRow)).toBe('▾');
+    expect(component.expandToggleLabel(statusRow)).toBe('Collapse details');
     statusRow.expanded = false;
-    expect(component.expandToggleSymbol(statusRow)).toBe('▸');
+    expect(component.expandToggleLabel(statusRow)).toBe('Expand details');
+  });
+
+  it('resolves custom i18n label overrides while keeping defaults for unset keys', () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      labels: {
+        sortDefault: 'Trier',
+        sortAsc: 'Tri croissant',
+        paginationNext: 'Suivant',
+      }
+    }));
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as any;
+    const labels = component.labels();
+
+    expect(labels.sortDefault).toBe('Trier');
+    expect(labels.sortAsc).toBe('Tri croissant');
+    expect(labels.paginationNext).toBe('Suivant');
+    expect(labels.sortDesc).toBe('Sort descending');
+    expect(labels.groupColumn).toBe('Group by this column');
+    expect(labels.filterPlaceholder).toBe('Filter…');
+    expect(labels.emptyHeading).toBe('No matching rows');
   });
 
   it('supports keyboard-driven cell editing with commit, navigation, and cancel events', async () => {

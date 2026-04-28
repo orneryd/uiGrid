@@ -1,4 +1,4 @@
-# UI Grid - Next-gen
+# UI Grid - Remastered
 
 [![Coverage Status](https://coveralls.io/repos/github/orneryd/uiGrid/badge.svg?branch=main)](https://coveralls.io/github/orneryd/uiGrid?branch=main)
 
@@ -135,14 +135,14 @@ import { UiGridComponent } from '@ornery/ui-grid';
 @Component({
   selector: 'app-root',
   imports: [UiGridComponent],
-  template: `<app-ui-grid [options]="gridOptions" />`
+  template: `<app-ui-grid [options]="gridOptions" />`,
 })
 export class AppComponent {
   gridOptions = {
     id: 'customers',
     data: [
       { id: '1', name: 'Bob', company: 'Northwind', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', company: 'Blue Harbor', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', company: 'Blue Harbor', status: 'Pilot', revenue: 900 },
     ],
     enableSorting: true,
     enableFiltering: true,
@@ -152,11 +152,11 @@ export class AppComponent {
       { name: 'name' },
       { name: 'company' },
       { name: 'status' },
-      { name: 'revenue', align: 'end' }
+      { name: 'revenue', align: 'end' },
     ],
     onRegisterApi: (gridApi) => {
       console.log('grid ready', gridApi);
-    }
+    },
   };
 }
 ```
@@ -174,13 +174,9 @@ After building the element bundle:
     id: 'customers',
     data: [
       { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
     ],
-    columnDefs: [
-      { name: 'name' },
-      { name: 'status' },
-      { name: 'revenue' }
-    ]
+    columnDefs: [{ name: 'name' }, { name: 'status' }, { name: 'revenue' }],
   };
 </script>
 ```

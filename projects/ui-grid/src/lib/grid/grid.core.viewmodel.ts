@@ -1,5 +1,9 @@
 import { SORT_DIRECTIONS, SortDirection } from './grid.constants';
-import { GridColumnDef, GridOptions, GridRow } from './grid.models';
+import { DEFAULT_GRID_LABELS, GridColumnDef, GridLabels, GridOptions, GridRow } from './grid.models';
+
+export function resolveGridLabels(overrides?: Partial<GridLabels>): GridLabels {
+  return overrides ? { ...DEFAULT_GRID_LABELS, ...overrides } : DEFAULT_GRID_LABELS;
+}
 
 export function isGridTreeEnabled(options: GridOptions): boolean {
   return options.enableTreeView === true;
@@ -70,27 +74,38 @@ export function shouldShowGridExpandToggle(
   return isGridPrimaryColumn(visibleColumns, column) && canGridExpandRows(options);
 }
 
-export function gridSortButtonLabel(direction: SortDirection): string {
+export function gridSortButtonLabel(direction: SortDirection, labels: GridLabels): string {
   switch (direction) {
     case SORT_DIRECTIONS.asc:
-      return 'Asc';
+      return labels.sortAsc;
     case SORT_DIRECTIONS.desc:
-      return 'Desc';
+      return labels.sortDesc;
     default:
-      return 'Sort';
+      return labels.sortDefault;
   }
 }
 
-export function gridGroupingButtonLabel(isGrouped: boolean): string {
-  return isGrouped ? 'Grouped' : 'Group';
+export function gridSortAriaSort(direction: SortDirection): string {
+  switch (direction) {
+    case SORT_DIRECTIONS.asc:
+      return 'ascending';
+    case SORT_DIRECTIONS.desc:
+      return 'descending';
+    default:
+      return 'none';
+  }
 }
 
-export function gridFilterPlaceholder(isFilterable: boolean): string {
-  return isFilterable ? 'Filter…' : 'Filter disabled';
+export function gridGroupingButtonLabel(isGrouped: boolean, labels: GridLabels): string {
+  return isGrouped ? labels.ungroupColumn : labels.groupColumn;
 }
 
-export function gridGroupDisclosureLabel(collapsed: boolean): string {
-  return collapsed ? 'Expand' : 'Collapse';
+export function gridFilterPlaceholder(isFilterable: boolean, labels: GridLabels): string {
+  return isFilterable ? labels.filterPlaceholder : labels.filterDisabled;
+}
+
+export function gridGroupDisclosureLabel(collapsed: boolean, labels: GridLabels): string {
+  return collapsed ? labels.groupExpand : labels.groupCollapse;
 }
 
 export function gridEditorInputType(column: GridColumnDef): string {
@@ -121,20 +136,12 @@ export function gridCellIndent(
   return `${row.treeLevel * (options.treeIndent ?? 10)}px`;
 }
 
-export function gridTreeToggleLabel(expanded: boolean): string {
-  return expanded ? 'Collapse' : 'Expand';
+export function gridTreeToggleLabel(expanded: boolean, labels: GridLabels): string {
+  return expanded ? labels.treeCollapse : labels.treeExpand;
 }
 
-export function gridTreeToggleSymbol(expanded: boolean): string {
-  return expanded ? '−' : '+';
-}
-
-export function gridExpandToggleLabel(expanded: boolean): string {
-  return expanded ? 'Collapse detail' : 'Expand detail';
-}
-
-export function gridExpandToggleSymbol(expanded: boolean): string {
-  return expanded ? '▾' : '▸';
+export function gridExpandToggleLabel(expanded: boolean, labels: GridLabels): string {
+  return expanded ? labels.collapseDetail : labels.expandDetail;
 }
 
 export function isGridColumnGrouped(groupByColumns: readonly string[], column: GridColumnDef): boolean {
@@ -147,22 +154,12 @@ export function isGridTreeRowExpanded(expandedTreeRows: Readonly<Record<string, 
 
 export function gridTreeToggleLabelForRow(
   expandedTreeRows: Readonly<Record<string, boolean>>,
-  row: GridRow
+  row: GridRow,
+  labels: GridLabels
 ): string {
-  return gridTreeToggleLabel(isGridTreeRowExpanded(expandedTreeRows, row));
+  return gridTreeToggleLabel(isGridTreeRowExpanded(expandedTreeRows, row), labels);
 }
 
-export function gridTreeToggleSymbolForRow(
-  expandedTreeRows: Readonly<Record<string, boolean>>,
-  row: GridRow
-): string {
-  return gridTreeToggleSymbol(isGridTreeRowExpanded(expandedTreeRows, row));
-}
-
-export function gridExpandToggleLabelForRow(row: GridRow): string {
-  return gridExpandToggleLabel(row.expanded);
-}
-
-export function gridExpandToggleSymbolForRow(row: GridRow): string {
-  return gridExpandToggleSymbol(row.expanded);
+export function gridExpandToggleLabelForRow(row: GridRow, labels: GridLabels): string {
+  return gridExpandToggleLabel(row.expanded, labels);
 }

@@ -18,7 +18,7 @@
       </button>
       <div class="stats-card" part="stats-card">
         <span>{{ visibleRowCount() }}</span>
-        <small>visible rows</small>
+        <small>{{ labels().statsVisibleRows }}</small>
       </div>
     </div>
   </header>
@@ -42,11 +42,11 @@
     </article>
   </section>
 
-  <section class="grid-frame ui-grid" part="grid-frame">
+  <section class="grid-frame ui-grid" part="grid-frame" role="grid" [attr.aria-label]="options().title ?? 'Data grid'">
     <div class="grid-toolbar" part="grid-toolbar">
       <div>
         <strong>{{ visibleRowCount() }}</strong>
-        <span>of {{ totalRows() }} rows</span>
+        <span>{{ labels().toolbarOf }} {{ totalRows() }} {{ labels().toolbarRows }}</span>
       </div>
       <p>
         `gridOptions` compatibility layer: sorting, filtering, grouping, column moving, templating,
@@ -55,9 +55,9 @@
     </div>
 
     <div class="grid-table ui-grid-contents-wrapper" part="grid-table">
-      <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal" [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
+      <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" role="row" [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal" [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
         @for (column of visibleColumns(); track column.name) {
-          <div class="header-cell ui-grid-header-cell" part="header-cell" cdkDrag [cdkDragData]="column" [class.is-active]="sortDirection(column) !== 'none'">
+          <div class="header-cell ui-grid-header-cell" part="header-cell" role="columnheader" [attr.aria-sort]="sortAriaSort(column)" cdkDrag [cdkDragData]="column" [class.is-active]="sortDirection(column) !== 'none'">
             <span class="header-label">{{ headerLabel(column) }}</span>
 
             <div class="header-actions">
@@ -106,7 +106,7 @@
         <div class="filter-grid ui-grid-header" part="filters" [style.gridTemplateColumns]="gridTemplateColumns()">
           @for (column of visibleColumns(); track column.name) {
             <label class="filter-cell ui-grid-filter-container" part="filter-cell">
-              <span class="sr-only ui-grid-sr-only">Filter {{ headerLabel(column) }}</span>
+              <span class="sr-only ui-grid-sr-only">{{ labels().filterColumn }} {{ headerLabel(column) }}</span>
               <input
                 class="ui-grid-filter-input"
                 type="text"
@@ -121,10 +121,13 @@
 
       <ng-template #displayItemTemplate let-item>
         @if (isGroupItem(item)) {
-          <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
+          <button type="button" class="group-row ui-grid-row ui-grid-group-row" part="group-row" role="row" [attr.aria-expanded]="!item.collapsed" [style.gridColumn]="'1 / -1'" [style.paddingInlineStart.rem]="item.depth * 1.25 + 1" (click)="toggleGroup(item)">
             <strong>{{ item.field }}: {{ item.label }}</strong>
-            <span>{{ item.count }} rows</span>
-            <small>{{ groupDisclosureLabel(item) }}</small>
+            <span>{{ item.count }} {{ labels().groupRowsSuffix }}</span>
+            <svg class="toggle-icon group-disclosure-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path [attr.d]="item.collapsed ? 'M10 7l5 5-5 5z' : 'M7 10l5 5 5-5z'" />
+            </svg>
+            <span class="sr-only">{{ groupDisclosureLabel(item) }}</span>
           </button>
         } @else if (isExpandableItem(item)) {
           <div class="expandable-row ui-grid-row ui-grid-expandable-row" part="expandable-row" [style.gridColumn]="'1 / -1'" [style.minHeight.px]="item.row.expandedRowHeight">
@@ -137,18 +140,22 @@
             <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [class.body-cell-odd]="isOddStripedRow(item)" [class.align-center]="column.align === 'center'" [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)" [class.cell-editing]="isEditingCell(item.row, column)" (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)" (dblclick)="handleCellDoubleClick(item.row, column, $event)" (keydown)="handleCellKeyDown(item.row, column, $event)">
               <div class="cell-shell" [style.paddingInlineStart]="cellIndent(item.row, column)">
                 @if (showTreeToggle(item.row, column)) {
-                  <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" (click)="toggleTreeRow(item.row, $event)">
-                    {{ treeToggleSymbol(item.row) }}
+                  <button type="button" class="row-toggle row-toggle-tree" part="tree-toggle" [attr.aria-label]="treeToggleLabel(item.row)" [attr.aria-expanded]="isTreeRowExpanded(item.row)" (click)="toggleTreeRow(item.row, $event)">
+                    <svg class="toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path [attr.d]="isTreeRowExpanded(item.row) ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'" />
+                    </svg>
                   </button>
                 }
                 @if (showExpandToggle(item.row, column)) {
-                  <button type="button" class="row-toggle row-toggle-expand" part="expand-toggle" [attr.aria-label]="expandToggleLabel(item.row)" (click)="toggleRowExpansion(item.row, $event)">
-                    {{ expandToggleSymbol(item.row) }}
+                  <button type="button" class="row-toggle row-toggle-expand" part="expand-toggle" [attr.aria-label]="expandToggleLabel(item.row)" [attr.aria-expanded]="item.row.expanded" (click)="toggleRowExpansion(item.row, $event)">
+                    <svg class="toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path [attr.d]="item.row.expanded ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'" />
+                    </svg>
                   </button>
                 }
                 <span class="cell-value">
                   @if (isEditingCell(item.row, column)) {
-                    <input class="cell-editor" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [type]="editorInputType(column)" [value]="editingValue()" (input)="updateEditingValue($any($event.target).value)" (keydown)="handleEditorKeyDown($event)" (blur)="handleEditorBlur($event)" />
+                    <input class="cell-editor" [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name" [attr.aria-label]="headerLabel(column)" [type]="editorInputType(column)" [value]="editingValue()" (input)="updateEditingValue($any($event.target).value)" (keydown)="handleEditorKeyDown($event)" (blur)="handleEditorBlur($event)" />
                   } @else if (cellTemplate(column); as template) {
                     <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="cellContext(item.row, column)" />
                   } @else {
@@ -164,14 +171,14 @@
       @if (displayItems().length) {
         @if (renderVirtualViewport()) {
           <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()" [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange($event)">
-            <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
+            <div class="body-grid ui-grid-canvas" part="body" role="rowgroup" [style.gridTemplateColumns]="gridTemplateColumns()">
               <ng-container *cdkVirtualFor="let item of displayItems(); trackBy: trackDisplayItem">
                 <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
               </ng-container>
             </div>
           </cdk-virtual-scroll-viewport>
         } @else {
-          <div class="body-grid ui-grid-canvas" part="body" [style.gridTemplateColumns]="gridTemplateColumns()">
+          <div class="body-grid ui-grid-canvas" part="body" role="rowgroup" [style.gridTemplateColumns]="gridTemplateColumns()">
             @for (item of renderedDisplayItems(); track item.id) {
               <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
             }
@@ -179,26 +186,32 @@
         }
       } @else {
         <div class="empty-state ui-grid-no-row-overlay" part="empty-state">
-          <strong>{{ options().emptyMessage ?? 'No matching rows' }}</strong>
-          <p>Adjust the active filters, grouping, or sort order.</p>
+          <strong>{{ options().emptyMessage ?? labels().emptyHeading }}</strong>
+          <p>{{ labels().emptyDescription }}</p>
         </div>
       }
 
       @if (showPaginationControls()) {
-        <footer class="pagination-bar ui-grid-pagination" part="pagination">
+        <footer class="pagination-bar ui-grid-pagination" part="pagination" role="navigation" [attr.aria-label]="labels().paginationPage">
           <p>{{ paginationSummary() }}</p>
           <div class="pagination-controls">
-            <button type="button" class="action action-secondary pagination-button" [disabled]="paginationCurrentPage() <= 1" (click)="previousPage()">
-              Previous
+            <button type="button" class="action action-secondary pagination-button" [attr.aria-label]="labels().paginationPrevious" [disabled]="paginationCurrentPage() <= 1" (click)="previousPage()">
+              <svg class="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+              <span class="sr-only">{{ labels().paginationPrevious }}</span>
             </button>
-            <span>Page {{ paginationCurrentPage() }} of {{ paginationTotalPages() }}</span>
-            <button type="button" class="action action-secondary pagination-button" [disabled]="paginationCurrentPage() >= paginationTotalPages()" (click)="nextPage()">
-              Next
+            <span>{{ labels().paginationPage }} {{ paginationCurrentPage() }} {{ labels().paginationOf }} {{ paginationTotalPages() }}</span>
+            <button type="button" class="action action-secondary pagination-button" [attr.aria-label]="labels().paginationNext" [disabled]="paginationCurrentPage() >= paginationTotalPages()" (click)="nextPage()">
+              <svg class="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+              </svg>
+              <span class="sr-only">{{ labels().paginationNext }}</span>
             </button>
             @if (pageSizeOptions().length > 0) {
               <label class="pagination-size">
-                <span>Rows</span>
-                <select [value]="paginationSelectedPageSize()" (change)="onPageSizeChange($any($event.target).value)">
+                <span class="sr-only">{{ labels().paginationRows }}</span>
+                <select [attr.aria-label]="labels().paginationRows" [value]="paginationSelectedPageSize()" (change)="onPageSizeChange($any($event.target).value)">
                   @for (size of pageSizeOptions(); track size) {
                     <option [value]="size">{{ size }}</option>
                   }

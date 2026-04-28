@@ -1,6 +1,7 @@
 import type { TemplateRef } from '@angular/core';
 import { FilterCondition, SortDirection } from './grid.constants';
 import { nextUid } from './grid.utils';
+import defaultLabels from './i18n/en-US.json';
 
 export type GridRecord = Record<string, unknown>;
 
@@ -112,11 +113,73 @@ export interface GridSavedState {
   treeView?: Record<string, boolean>;
 }
 
+export interface GridLabels {
+  /** Sort button – unsorted state */
+  sortDefault: string;
+  /** Sort button – ascending */
+  sortAsc: string;
+  /** Sort button – descending */
+  sortDesc: string;
+  /** Group toggle – not grouped */
+  groupColumn: string;
+  /** Group toggle – grouped */
+  ungroupColumn: string;
+  /** Group row – collapse */
+  groupCollapse: string;
+  /** Group row – expand */
+  groupExpand: string;
+  /** Tree toggle – collapse */
+  treeCollapse: string;
+  /** Tree toggle – expand */
+  treeExpand: string;
+  /** Expand detail row */
+  expandDetail: string;
+  /** Collapse detail row */
+  collapseDetail: string;
+  /** Filter input placeholder */
+  filterPlaceholder: string;
+  /** Filter input placeholder when disabled */
+  filterDisabled: string;
+  /** Filter column sr-only prefix ("Filter" in "Filter {column}") */
+  filterColumn: string;
+  /** Pagination – previous page */
+  paginationPrevious: string;
+  /** Pagination – next page */
+  paginationNext: string;
+  /** Pagination – "Page" prefix in "Page X of Y" */
+  paginationPage: string;
+  /** Pagination – "of" in "Page X of Y" */
+  paginationOf: string;
+  /** Pagination – page size label */
+  paginationRows: string;
+  /** Empty state heading (fallback if emptyMessage not set) */
+  emptyHeading: string;
+  /** Empty state description */
+  emptyDescription: string;
+  /** Toolbar – "of" in "X of Y rows" */
+  toolbarOf: string;
+  /** Toolbar – "rows" */
+  toolbarRows: string;
+  /** Stats card – "visible rows" */
+  statsVisibleRows: string;
+  /** Group row – "rows" suffix */
+  groupRowsSuffix: string;
+}
+
+/**
+ * Default English (en-US) labels loaded from `i18n/en-US.json`.
+ * A future build step can swap in a different JSON file at compile time.
+ * At runtime, consumers can pass `labels: Partial<GridLabels>` in GridOptions
+ * to override individual keys — missing keys are backfilled from this default.
+ */
+export const DEFAULT_GRID_LABELS: Readonly<GridLabels> = defaultLabels;
+
 export interface GridOptions {
   id: string;
   title?: string;
   data: readonly GridRecord[];
   columnDefs: readonly GridColumnDef[];
+  labels?: Partial<GridLabels>;
   rowHeight?: number;
   headerRowHeight?: number;
   emptyMessage?: string;

@@ -27,6 +27,7 @@ import {
   GridCellTemplateContext,
   GridColumnDef,
   GridExpandableTemplateContext,
+  GridLabels,
   GridOptions,
   GridRecord,
   GridRow,
@@ -58,13 +59,14 @@ import {
   gridColumnWidth,
   gridEditorInputType,
   gridExpandToggleLabelForRow,
-  gridExpandToggleSymbolForRow,
   gridFilterPlaceholder,
   gridGroupDisclosureLabel,
   gridGroupingButtonLabel,
+  gridSortAriaSort,
   gridSortButtonLabel,
   gridTreeToggleLabelForRow,
-  gridTreeToggleSymbolForRow,
+  isGridTreeRowExpanded,
+  resolveGridLabels,
   isGridColumnFilterable,
   isGridColumnGrouped,
   isGridColumnSortable,
@@ -348,6 +350,7 @@ export class UiGridComponent {
   });
   protected readonly pipelineMs = computed(() => this.pipeline().pipelineMs);
   protected readonly virtualizationEnabled = computed(() => this.pipeline().virtualizationEnabled);
+  protected readonly labels = computed<GridLabels>(() => resolveGridLabels(this.options().labels));
   protected readonly paginationCurrentPage = computed(() => this.getCurrentPageValue());
   protected readonly paginationTotalPages = computed(() => this.getTotalPagesValue());
   protected readonly paginationSelectedPageSize = computed(() => this.effectivePageSize(this.pipeline().totalItems));
@@ -390,11 +393,15 @@ export class UiGridComponent {
   }
 
   protected sortButtonLabel(column: GridColumnDef): string {
-    return gridSortButtonLabel(this.sortDirection(column));
+    return gridSortButtonLabel(this.sortDirection(column), this.labels());
+  }
+
+  protected sortAriaSort(column: GridColumnDef): string {
+    return gridSortAriaSort(this.sortDirection(column));
   }
 
   protected groupingButtonLabel(column: GridColumnDef): string {
-    return gridGroupingButtonLabel(this.isGrouped(column));
+    return gridGroupingButtonLabel(this.isGrouped(column), this.labels());
   }
 
   protected filterValue(columnName: string): string {
@@ -402,7 +409,7 @@ export class UiGridComponent {
   }
 
   protected filterPlaceholder(column: GridColumnDef): string {
-    return gridFilterPlaceholder(this.isColumnFilterable(column));
+    return gridFilterPlaceholder(this.isColumnFilterable(column), this.labels());
   }
 
   protected isFilterInputDisabled(column: GridColumnDef): boolean {
@@ -410,7 +417,7 @@ export class UiGridComponent {
   }
 
   protected groupDisclosureLabel(item: GroupItem): string {
-    return gridGroupDisclosureLabel(item.collapsed);
+    return gridGroupDisclosureLabel(item.collapsed, this.labels());
   }
 
   protected displayValue(row: GridRow, column: GridColumnDef): string {
@@ -578,19 +585,15 @@ export class UiGridComponent {
   }
 
   protected treeToggleLabel(row: GridRow): string {
-    return gridTreeToggleLabelForRow(this.expandedTreeRows(), row);
+    return gridTreeToggleLabelForRow(this.expandedTreeRows(), row, this.labels());
   }
 
-  protected treeToggleSymbol(row: GridRow): string {
-    return gridTreeToggleSymbolForRow(this.expandedTreeRows(), row);
+  protected isTreeRowExpanded(row: GridRow): boolean {
+    return isGridTreeRowExpanded(this.expandedTreeRows(), row);
   }
 
   protected expandToggleLabel(row: GridRow): string {
-    return gridExpandToggleLabelForRow(row);
-  }
-
-  protected expandToggleSymbol(row: GridRow): string {
-    return gridExpandToggleSymbolForRow(row);
+    return gridExpandToggleLabelForRow(row, this.labels());
   }
 
   protected isGrouped(column: GridColumnDef): boolean {
