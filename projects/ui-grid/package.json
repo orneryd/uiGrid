@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Angular data-grid component and web component bundle",
   "private": false,
   "sideEffects": false,

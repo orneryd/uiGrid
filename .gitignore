@@ -43,3 +43,5 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 *.bak
+*node_modules*
+*dist*

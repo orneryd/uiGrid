@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ornery/ui-grid": ["../ui-grid/src/public-api.react.ts"]
+    }
+  },
+  "include": ["src"]
+}

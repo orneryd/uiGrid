@@ -5,7 +5,7 @@
 ### Added
 
 - Demo theming for default and wireframe modes with light and dark variants.
-- A 10,000-row demo dataset to showcase virtualization and performance.
+- A 100,000-row demo dataset to showcase virtualization and performance.
 - GitHub Pages deployment and packaging automation for the demo and library builds.
 - CI coverage upload to Coveralls and expanded library coverage around the grid, filters, and API wrappers.
 
@@ -54,7 +54,7 @@ import { UiGridComponent } from '@ornery/ui-grid';
 @Component({
   selector: 'app-customers',
   imports: [UiGridComponent],
-  template: `<app-ui-grid [options]="gridOptions" />`
+  template: `<app-ui-grid [options]="gridOptions" />`,
 })
 export class CustomersComponent {
   gridOptions = {
@@ -62,17 +62,17 @@ export class CustomersComponent {
     title: 'Customers',
     data: [
       { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
     ],
     columnDefs: [
       { name: 'name', displayName: 'Customer' },
       { name: 'status' },
-      { name: 'revenue', align: 'end' }
+      { name: 'revenue', align: 'end' },
     ],
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: true,
-    enableColumnMoving: true
+    enableColumnMoving: true,
   };
 }
 ```
@@ -92,22 +92,23 @@ import { GridCellTemplateContext, UiGridComponent } from '@ornery/ui-grid';
     </ng-template>
 
     <app-ui-grid [options]="gridOptions" />
-  `
+  `,
 })
 export class TemplatedGridComponent {
-  private readonly statusTemplate = viewChild.required<TemplateRef<GridCellTemplateContext>>('statusTemplate');
+  private readonly statusTemplate =
+    viewChild.required<TemplateRef<GridCellTemplateContext>>('statusTemplate');
 
   readonly gridOptions = {
     id: 'templated-customers',
     data: [
       { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
     ],
     columnDefs: [
       { name: 'name', displayName: 'Customer' },
       { name: 'status', cellTemplate: this.statusTemplate() },
-      { name: 'revenue', align: 'end' }
-    ]
+      { name: 'revenue', align: 'end' },
+    ],
   };
 }
 ```
@@ -130,25 +131,26 @@ import { GridExpandableTemplateContext, UiGridComponent } from '@ornery/ui-grid'
     </ng-template>
 
     <app-ui-grid [options]="gridOptions" />
-  `
+  `,
 })
 export class ExpandableGridComponent {
-  private readonly detailTemplate = viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detailTemplate');
+  private readonly detailTemplate =
+    viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detailTemplate');
 
   readonly gridOptions = {
     id: 'expandable-customers',
     data: [
       { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
     ],
     columnDefs: [
       { name: 'name', displayName: 'Customer' },
       { name: 'status' },
-      { name: 'revenue', align: 'end' }
+      { name: 'revenue', align: 'end' },
     ],
     enableExpandable: true,
     expandableRowHeight: 120,
-    expandableRowTemplate: this.detailTemplate()
+    expandableRowTemplate: this.detailTemplate(),
   };
 }
 ```
@@ -164,13 +166,9 @@ export class ExpandableGridComponent {
     id: 'customers',
     data: [
       { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 }
+      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
     ],
-    columnDefs: [
-      { name: 'name' },
-      { name: 'status' },
-      { name: 'revenue' }
-    ]
+    columnDefs: [{ name: 'name' }, { name: 'status' }, { name: 'revenue' }],
   };
 </script>
 ```

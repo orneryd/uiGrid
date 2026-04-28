@@ -12,7 +12,10 @@
     "build:package": "npm run build:library:preset -- --preset=full && npm run build:library:preset -- --preset=minimal && npm run build:element && node scripts/prepare-release-package.mjs --presets full,minimal",
     "publish:package": "npm publish ./dist/npm-package --access public",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "start:react": "npm run start --prefix projects/ui-grid-react",
+    "test": "ng test --watch=false && ng test --prefix projects/ui-grid-react --watch=false ",
+    "test:angular": "ng test --watch=false",
+    "test:react": "ng test --watch=false --prefix projects/ui-grid-react"
   },
   "private": true,
   "packageManager": "npm@11.11.1",

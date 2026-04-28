@@ -1,0 +1,177 @@
+.app-shell {
+	--app-ui-grid-status-active-bg: color-mix(in srgb, #2ecc71 18%, var(--grid-surface));
+	--app-ui-grid-status-active-color: color-mix(in srgb, #9cfcc4 78%, var(--grid-text));
+	--app-ui-grid-status-expansion-bg: color-mix(in srgb, var(--grid-accent) 22%, var(--grid-surface));
+	--app-ui-grid-status-expansion-color: color-mix(in srgb, var(--grid-accent) 78%, var(--grid-text));
+	--app-ui-grid-status-enterprise-bg: color-mix(in srgb, #20c997 20%, var(--grid-surface));
+	--app-ui-grid-status-enterprise-color: color-mix(in srgb, #6ef7d2 74%, var(--grid-text));
+	--app-ui-grid-status-pilot-bg: color-mix(in srgb, #ffb454 22%, var(--grid-surface));
+	--app-ui-grid-status-pilot-color: color-mix(in srgb, #ffe4a8 82%, var(--grid-text));
+	--ui-grid-status-active-bg: var(--app-ui-grid-status-active-bg);
+	--ui-grid-status-active-color: var(--app-ui-grid-status-active-color);
+	--ui-grid-status-expansion-bg: var(--app-ui-grid-status-expansion-bg);
+	--ui-grid-status-expansion-color: var(--app-ui-grid-status-expansion-color);
+	--ui-grid-status-enterprise-bg: var(--app-ui-grid-status-enterprise-bg);
+	--ui-grid-status-enterprise-color: var(--app-ui-grid-status-enterprise-color);
+	--ui-grid-status-pilot-bg: var(--app-ui-grid-status-pilot-bg);
+	--ui-grid-status-pilot-color: var(--app-ui-grid-status-pilot-color);
+	min-height: 100vh;
+	width: min(1380px, calc(100% - 2rem));
+	margin: 0 auto;
+	padding: clamp(1rem, 2vw, 2rem);
+	display: grid;
+	gap: clamp(1.25rem, 2vw, 2rem);
+	color: var(--ink-strong);
+	transition: color 180ms ease;
+}
+
+.demo-header {
+	display: block;
+}
+
+.hero-panel,
+.grid-stage,
+.harness-stage {
+	position: relative;
+	overflow: hidden;
+	border: 1px solid var(--card-border);
+	border-radius: var(--theme-radius);
+	background: var(--panel-surface);
+	box-shadow: var(--card-shadow);
+	backdrop-filter: var(--theme-card-filter);
+}
+
+.hero-panel {
+	padding: clamp(1rem, 1.5vw, 1.75rem);
+	background:
+		radial-gradient(circle at top right, color-mix(in srgb, var(--teal-strong) 20%, transparent), transparent 32%),
+		linear-gradient(145deg, var(--panel-surface-strong), var(--panel-surface-alt));
+	display: grid;
+	gap: 1rem;
+}
+
+.hero-copy {
+	display: grid;
+	gap: 0.6rem;
+	max-width: 54rem;
+}
+
+.eyebrow {
+	margin: 0;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-size: 0.76rem;
+	font-weight: 800;
+	color: var(--teal-strong);
+}
+
+.hero-copy h1 {
+	margin: 0;
+	color: var(--ink-strong);
+	line-height: 1;
+	font-size: clamp(1.8rem, 3.5vw, 2.75rem);
+}
+
+.hero-accent {
+	background: linear-gradient(135deg, var(--teal-strong), var(--grid-accent));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+
+.hero-summary {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.6;
+	color: color-mix(in srgb, var(--ink-strong) 72%, var(--teal-strong) 28%);
+}
+
+.hero-summary code {
+	padding: 0.16rem 0.42rem;
+	border-radius: calc(var(--theme-switch-radius) + 2px);
+	background: color-mix(in srgb, var(--ink-strong) 8%, transparent);
+	font-size: 0.95em;
+	font-weight: 700;
+	color: var(--ink-strong);
+}
+
+.hero-cta {
+	margin: 0;
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.cta-link {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.55rem 1rem;
+	border-radius: var(--theme-switch-radius);
+	font-weight: 800;
+	text-decoration: none;
+	font-size: 0.88rem;
+	transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.cta-link:hover {
+	transform: translateY(-1px);
+}
+
+.cta-link:not(.cta-link-secondary) {
+	background: linear-gradient(135deg, color-mix(in srgb, var(--ink-strong) 90%, black), color-mix(in srgb, var(--teal-strong) 78%, var(--ink-strong)));
+	color: #f8fafc;
+	border: 1px solid color-mix(in srgb, white 18%, transparent);
+	box-shadow: 0 12px 24px rgba(8, 39, 61, 0.18);
+}
+
+.cta-link-secondary {
+	background: color-mix(in srgb, var(--teal-strong) 14%, var(--panel-surface-strong));
+	color: var(--teal-strong);
+	border: 1px solid color-mix(in srgb, var(--teal-strong) 25%, transparent);
+}
+
+.status-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.26rem 0.7rem;
+	border-radius: var(--theme-switch-radius);
+	font-size: 0.83rem;
+	font-weight: 700;
+	border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.status-pill-active {
+	background: var(--ui-grid-status-active-bg);
+	color: var(--ui-grid-status-active-color);
+}
+
+.status-pill-expansion {
+	background: var(--ui-grid-status-expansion-bg);
+	color: var(--ui-grid-status-expansion-color);
+}
+
+.status-pill-enterprise {
+	background: var(--ui-grid-status-enterprise-bg);
+	color: var(--ui-grid-status-enterprise-color);
+}
+
+.status-pill-pilot {
+	background: var(--ui-grid-status-pilot-bg);
+	color: var(--ui-grid-status-pilot-color);
+}
+
+.grid-stage,
+.harness-stage {
+	padding: clamp(0.85rem, 1.5vw, 1.25rem);
+}
+
+@media (max-width: 960px) {
+	.app-shell {
+		width: min(100%, calc(100% - 1rem));
+		padding: 0.5rem;
+	}
+
+	.hero-copy h1 {
+		max-width: none;
+	}
+}

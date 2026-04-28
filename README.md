@@ -1,433 +1,237 @@
-# UI Grid - Remastered
-
+[![CI](https://github.com/orneryd/uiGrid/actions/workflows/ci.yml/badge.svg)](https://github.com/orneryd/uiGrid/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/orneryd/uiGrid/badge.svg?branch=main)](https://coveralls.io/github/orneryd/uiGrid?branch=main)
+[![npm](https://img.shields.io/npm/v/@ornery/ui-grid)](https://www.npmjs.com/package/@ornery/ui-grid)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
 
-A modern Angular data grid with a familiar ui-grid-style API, rebuilt on Angular 21, TypeScript, Angular CDK, and browser-native primitives.
+# UI Grid — Remastered
 
-Start here:
+**The modern Angular data grid. Every feature free and open source.**
 
-```bash
-npm install @ornery/ui-grid
-```
+A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` mental model, modern Angular signals internals, and zero legacy baggage.
 
-If you just want to play with the live build first, open:
+**[Live Demo & Docs](https://orneryd.github.io/uiGrid/)** | **[npm](https://www.npmjs.com/package/@ornery/ui-grid)**
 
-Live demo: [https://orneryd.github.io/uiGrid/](https://orneryd.github.io/uiGrid/)
+---
 
-This project keeps the classic ui-grid mental model:
+## Why Remastered?
 
-- a `gridOptions` object
-- `columnDefs`
-- `data`
-- `onRegisterApi`
-- a programmable `gridApi`
+- **Original authorship** — built by the same engineer who created AngularJS ui-grid, with a decade of hindsight on what worked and what didn't
+- **Familiar API** — if you used the original ui-grid, you already know this one: `gridOptions`, `columnDefs`, `onRegisterApi`, `gridApi.core.*`
+- **Modern internals** — pure Angular signals architecture, `ChangeDetectionStrategy.OnPush`, Shadow DOM encapsulation, CDK virtual scrolling, standalone components
+- **No legacy** — no `$scope`, no Bower, no Grunt, no jQuery, no module system from 2013
 
-The implementation is not a direct AngularJS port. It is a modern Angular rewrite that preserves the usage model while replacing legacy directives, watchers, and build tooling.
+---
 
-## Plans
+## Feature Comparison
 
-- [Seam split refactor plan](docs/seam-split-refactor-plan.md)
-- [Recommended Rust approach](docs/rust-approach-plan.md)
-- [Build flavors and feature flags plan](docs/build-flavors-plan.md)
+Everything below ships free and MIT-licensed. No enterprise tier, no license keys, no per-developer fees.
 
-## What Ships
+| Feature | UI Grid | ag-Grid Community | ag-Grid Enterprise | Vaadin Grid | Kendo UI | Syncfusion |
+|---------|:-------:|:-----------------:|:------------------:|:-----------:|:--------:|:----------:|
+| Sorting | **Free** | Free | — | Free | Paid | Community* |
+| Filtering | **Free** | Free | — | Free | Paid | Community* |
+| **Row Grouping** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
+| **Tree Data** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
+| **Master/Detail Rows** | **Free** | — | ~$999/dev/yr | — | Paid | Community* |
+| **Inline Cell Editing** | **Free** | Free | — | Pro ~$99/dev/mo | Paid | Community* |
+| CSV Export | **Free** | Free | — | — | Paid | Community* |
+| Virtual Scrolling | **Free** | Free | — | Free | Paid | Community* |
+| Pagination | **Free** | Free | — | Free | Paid | Community* |
+| Column Reordering | **Free** | Free | — | Free | Paid | Community* |
+| **Save/Restore State** | **Free** | — | ~$999/dev/yr | — | Paid | — |
+| **Infinite Scroll** | **Free** | Free | — | — | Paid | Community* |
+| **Shadow DOM** | **Free** | — | — | — | — | — |
+| **Web Component Build** | **Free** | — | — | Native | — | — |
+| **Feature Tree-Shaking** | **Free** | — | — | — | — | — |
+| **SSR Support** | **Free** | — | ~$999/dev/yr | — | — | — |
+| i18n | **Free** | — | ~$999/dev/yr | Free | Paid | Community* |
+| Angular Native | **Yes** | Wrapper | Wrapper | No | Wrapper | Wrapper |
+| **License** | **MIT** | MIT | Commercial | Apache/Comm. | Commercial | Comm./Community |
 
-The current implementation includes:
+> **Bold** = features where UI Grid gives you for free what competitors charge for.
+>
+> *Syncfusion Community license is free for companies with <$1M annual revenue. Prices are approximate and subject to change.*
 
-- sorting
-- filtering
-- grouping
-- column moving
-- row virtualization with Angular CDK
-- cell templates
-- expandable rows
-- tree view / tree base behaviors
-- inline cell editing with spreadsheet-style keyboard navigation
-- icon-based sort and grouping controls in the grid header
-- pagination controls and API
-- infinite scroll hooks
-- auto-resize hooks
-- CSV export
-- benchmark hook
-- transient save-state support
-- Shadow DOM encapsulation with CSS variables and `part` hooks
-- standalone Angular component usage
-- custom-element build output
-- an in-app browser harness for virtual-scroll branches that jsdom does not reliably materialize
-- SSR support
+---
 
-## Compatibility
-
-This repository targets the current toolchain as of April 2026.
-
-- Angular 21.2
-- Angular CLI 21.2.8
-- Angular Build 21.2.8
-- Angular CDK 21.2.8
-- Angular Elements 21.2.10
-- TypeScript 5.9
-- RxJS 7.8
-- Node 22.20.0
-- npm 11.11.1
-
-## Install
-
-Install the public package in your own app:
+## Quick Start
 
 ```bash
 npm install @ornery/ui-grid
 ```
-
-For local development in this repo:
-
-```bash
-npm install
-```
-
-## Run Locally
-
-Start the demo app:
-
-```bash
-npm start
-```
-
-Default local URL:
-
-```text
-http://localhost:4200/
-```
-
-The app includes:
-
-- the main demo grid
-- the browser harness section for real-browser virtual-scroll scenarios
-
-## Build
-
-Build the Angular app:
-
-```bash
-npm run build
-```
-
-Build the custom element bundle:
-
-```bash
-npm run build:element
-```
-
-Outputs:
-
-- app build: `dist/uiGrid/`
-- custom element build: `dist/ui-grid-element/`
-
-The custom element registers `ui-grid-element`.
-
-## Usage
 
 ### Angular Component
 
-```ts
+```typescript
 import { Component } from '@angular/core';
-import { UiGridComponent } from '@ornery/ui-grid';
+import { GridOptions, UiGridComponent } from '@ornery/ui-grid';
 
 @Component({
-  selector: 'app-root',
+  selector: 'app-my-grid',
   imports: [UiGridComponent],
-  template: `<app-ui-grid [options]="gridOptions" />`,
+  template: `<app-ui-grid [options]="gridOptions" />`
 })
-export class AppComponent {
-  gridOptions = {
-    id: 'customers',
+export class MyGridComponent {
+  gridOptions: GridOptions = {
+    id: 'my-grid',
     data: [
-      { id: '1', name: 'Bob', company: 'Northwind', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', company: 'Blue Harbor', status: 'Pilot', revenue: 900 },
+      { name: 'Alice', role: 'Engineer', salary: 120000 },
+      { name: 'Bob', role: 'Designer', salary: 95000 },
     ],
-    enableSorting: true,
-    enableFiltering: true,
-    enableGrouping: true,
-    enableColumnMoving: true,
     columnDefs: [
       { name: 'name' },
-      { name: 'company' },
-      { name: 'status' },
-      { name: 'revenue', align: 'end' },
+      { name: 'role' },
+      { name: 'salary', type: 'number', align: 'end' },
     ],
-    onRegisterApi: (gridApi) => {
-      console.log('grid ready', gridApi);
-    },
+    onRegisterApi: (api) => { this.gridApi = api; },
   };
 }
 ```
 
-### Custom Element
-
-After building the element bundle:
+### Custom Element (Web Component)
 
 ```html
-<ui-grid-element></ui-grid-element>
-<script type="module" src="./dist/ui-grid-element/main.js"></script>
-<script>
-  const grid = document.querySelector('ui-grid-element');
-  grid.options = {
-    id: 'customers',
-    data: [
-      { id: '1', name: 'Bob', status: 'Active', revenue: 1200 },
-      { id: '2', name: 'Alice', status: 'Pilot', revenue: 900 },
-    ],
-    columnDefs: [{ name: 'name' }, { name: 'status' }, { name: 'revenue' }],
+<script type="module" src="ui-grid-element/main.js"></script>
+
+<ui-grid-element id="my-grid"></ui-grid-element>
+
+<script type="module">
+  document.querySelector('#my-grid').options = {
+    id: 'element-demo',
+    data: [{ name: 'Alice', role: 'Engineer' }],
+    columnDefs: [{ name: 'name' }, { name: 'role' }],
   };
 </script>
 ```
 
-## Grid Options
+---
 
-Common `gridOptions` fields include:
+## Features
 
-- `id`
-- `title`
-- `data`
-- `columnDefs`
-- `emptyMessage`
-- `rowIdentity`
-- `onRegisterApi`
-- `rowHeight`
-- `viewportHeight`
-- `enableSorting`
-- `enableFiltering`
-- `enableGrouping`
-- `enableColumnMoving`
-- `enableVirtualization`
-- `virtualizationThreshold`
-- `grouping`
-- `benchmark`
+- **Sorting** — click column headers to cycle asc/desc/none, custom comparators, programmatic API
+- **Filtering** — per-column inputs with conditions: contains, exact, startsWith, endsWith, greaterThan, regex, custom predicates
+- **Row Grouping** — nested multi-column grouping with collapsible group headers
+- **Tree View** — hierarchical data with expand/collapse per node, arbitrary nesting depth
+- **Expandable Rows** — master/detail pattern with custom Angular templates
+- **Cell Editing** — inline spreadsheet-style editing with full keyboard navigation (Tab, Enter, Escape)
+- **Pagination** — client-side or external pagination with configurable page sizes
+- **Infinite Scroll** — bi-directional infinite scrolling with loading state management
+- **Column Moving** — drag-and-drop column reordering via Angular CDK
+- **CSV Export** — download visible rows with formula-injection protection
+- **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows
+- **Save/Restore State** — serialize and restore sort, filter, grouping, pagination, and expansion state
+- **Auto Resize** — ResizeObserver-driven viewport height recalculation
+- **Custom Cell Templates** — Angular `ng-template` or `cellRenderer` function for fully custom cells
+- **Shadow DOM** — encapsulated styles with CSS custom property and `::part()` hooks
+- **Web Component** — ship as `<ui-grid-element>` for non-Angular apps
+- **Feature-Flag Builds** — compile-time tree-shaking of unused features
+- **i18n** — override any UI string at runtime or bake in a locale at build time
+- **SSR Support** — server-side rendering with platform-safe guards
 
-Advanced options currently supported:
+---
 
-- `enablePagination`
-- `enablePaginationControls`
-- `paginationPageSizes`
-- `paginationPageSize`
-- `paginationCurrentPage`
-- `useExternalPagination`
-- `totalItems`
-- `enableExpandable`
-- `expandableRowHeight`
-- `expandableRowTemplate`
-- `expandableRowScope`
-- `enableTreeView`
-- `treeChildrenField`
-- `treeIndent`
-- `showTreeExpandNoChildren`
-- `enableAutoResize`
-- `infiniteScrollRowsFromEnd`
-- `infiniteScrollUp`
-- `infiniteScrollDown`
+## Theming
 
-## Column Definitions
+The grid renders inside Shadow DOM. Customize it via CSS custom properties:
 
-Common column definition fields include:
-
-- `name`
-- `displayName`
-- `field`
-- `visible`
-- `width`
-- `align`
-- `filter`
-- `sort`
-- `sortable`
-- `filterable`
-- `enableSorting`
-- `enableFiltering`
-- `enableGrouping`
-- `sortingAlgorithm`
-- `formatter`
-- `cellRenderer`
-- `cellTemplate`
-
-## API Surface
-
-The runtime API is registered through `onRegisterApi`.
-
-### `gridApi.core`
-
-- `refresh()`
-- `getVisibleRows()`
-- `setFilter(columnName, value)`
-- `clearAllFilters()`
-- `sortColumn(columnName, direction)`
-- `groupByColumn(columnName)`
-- `clearGrouping()`
-- `moveColumn(fromIndex, toIndex)`
-- `setRowInvisible(row, reason)`
-- `clearRowInvisible(row, reason)`
-- `benchmark(iterations?)`
-- `exportCsv()`
-
-### `gridApi.pagination`
-
-- `getPage()`
-- `getTotalPages()`
-- `getFirstRowIndex()`
-- `getLastRowIndex()`
-- `nextPage()`
-- `previousPage()`
-- `seek(page)`
-- `setPageSize(pageSize)`
-
-### `gridApi.expandable`
-
-- `toggleRowExpansion(row)`
-- `expandAllRows()`
-- `collapseAllRows()`
-- `toggleAllRows()`
-
-### `gridApi.treeBase`
-
-- `expandAllRows()`
-- `collapseAllRows()`
-- `toggleRowTreeState(row)`
-- `expandRow(row)`
-- `collapseRow(row)`
-- `getRowChildren(row)`
-
-### `gridApi.treeView`
-
-- `getTreeView()`
-- `setTreeView(state)`
-
-### `gridApi.infiniteScroll`
-
-- `dataLoaded(scrollUp?, scrollDown?)`
-- `resetScroll(scrollUp?, scrollDown?)`
-- `saveScrollPercentage()`
-- `dataRemovedTop(scrollUp?, scrollDown?)`
-- `dataRemovedBottom(scrollUp?, scrollDown?)`
-- `setScrollDirections(scrollUp, scrollDown)`
-
-### `gridApi.saveState`
-
-- `save()`
-- `restore(state)`
-
-### `gridApi.edit`
-
-- `beginCellEdit(row, columnName, triggerEvent?)`
-- `endCellEdit()`
-- `cancelCellEdit()`
-- `getEditingCell()`
-
-## Browser Harness
-
-The demo app now includes a browser harness dedicated to virtual-scroll rendering paths that are difficult to assert in jsdom.
-
-Scenarios included:
-
-- `Expandable`
-- `Tree`
-- `Templated`
-
-Use it by running the app locally and scrolling to the harness section:
-
-```bash
-npm start
+```css
+.my-app {
+  --ui-grid-surface: #1e1b2e;
+  --ui-grid-accent: #8b5cf6;
+  --ui-grid-header-background: #2d2640;
+  --ui-grid-cell-color: #e2e0f0;
+  --ui-grid-border-color: rgba(139, 92, 246, 0.2);
+  --ui-grid-row-hover: #322e4a;
+}
 ```
 
-This is intended for manual real-browser validation of:
+Target structural elements with `::part()`:
 
-- expandable-row rendering inside the virtual viewport
-- tree toggle behavior inside the virtual viewport
-- templated cell rendering inside the virtual viewport
-
-## Styling
-
-The component renders inside Shadow DOM but keeps a familiar neutral ui-grid look.
-
-Styling hooks include:
-
-- CSS custom properties
-- exposed `part` attributes
-- legacy-oriented structural class names in the rendered markup
-
-Common CSS variables include:
-
-- `--ui-grid-border-color`
-- `--ui-grid-header-background`
-- `--ui-grid-row-odd`
-- `--ui-grid-row-even`
-- `--ui-grid-row-hover`
-- `--ui-grid-cell-color`
-- `--ui-grid-muted-color`
-- `--ui-grid-surface`
-- `--ui-grid-radius`
-- `--ui-grid-shadow`
-- `--ui-grid-accent`
-
-Useful exposed parts include:
-
-- `shell`
-- `hero`
-- `grid-frame`
-- `grid-toolbar`
-- `header`
-- `header-cell`
-- `filter-cell`
-- `body-cell`
-- `group-row`
-- `expandable-row`
-- `pagination`
-- `empty-state`
-
-## Testing And Validation
-
-Watch mode:
-
-```bash
-npm test
+```css
+app-ui-grid::part(header) {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 ```
 
-Run tests once:
+See [docs/theming.md](./docs/theming.md) for the full variable reference, `::part()` hooks, and the demo app's 4-mode theme system.
+
+---
+
+## Custom Builds
+
+Ship only the features you use:
 
 ```bash
-./node_modules/.bin/ng test --watch=false
+# Only sorting and filtering — everything else is tree-shaken
+node scripts/build-grid.mjs --features sorting,filtering
+
+# Bake in a locale at build time
+node scripts/build-grid.mjs --features sorting,filtering,pagination --locale i18n/fr-FR.json
+
+# See all available flags
+node scripts/build-grid.mjs --list
 ```
 
-Run tests with coverage:
+See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag table and build presets.
+
+---
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](./docs/getting-started.md) | Install, minimal setup, run the demo |
+| [Features](./docs/features.md) | Overview of all features with code examples |
+| [Theming](./docs/theming.md) | CSS custom properties, `::part()` hooks, sample themes |
+| [API Reference](./docs/api-reference.md) | GridOptions, GridColumnDef, UiGridApi |
+| [Cell Editing](./docs/cell-editing.md) | Keyboard navigation, conditional editing, API |
+| [Tree View](./docs/tree-view.md) | Hierarchical data, options, API |
+| [Expandable Rows](./docs/expandable-rows.md) | Master/detail, template context, API |
+| [Custom Builds](./docs/custom-builds.md) | Feature flags, build presets, locale baking |
+| [Web Component](./docs/web-component.md) | Build, usage, styling the custom element |
+| [Internationalization](./docs/i18n.md) | Runtime overrides, build-time locales |
+
+Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
+
+---
+
+## Development
 
 ```bash
-./node_modules/.bin/ng test --watch=false --coverage
+npm start          # Dev server at localhost:4200
+npm test           # Run tests (Vitest)
+npm run build      # Production build
+npm run build:library   # Build the library (ng-packagr)
+npm run build:element   # Build the web component
 ```
 
-Current deterministic unit coverage is above 90 for statements, lines, and functions. Branch coverage is close to 90 and is mainly limited by remaining Angular template and virtual-scroll control-path branches.
+---
 
-## Performance Notes
+## Compatibility
 
-Performance-sensitive defaults in the current implementation:
+| Dependency | Version |
+|------------|---------|
+| Angular | 21.2 |
+| Angular CDK | 21.2 |
+| TypeScript | 5.9 |
+| RxJS | 7.8 |
+| Node | 22.20 |
+| npm | 11.11 |
 
-- Angular CDK fixed-size virtual scroll for large row sets
-- pure TypeScript sorting and filtering helpers
-- flattened display-item pipeline for grouped, tree, and expandable rendering
-- benchmark timings exposed through `gridApi.core.benchmark()`
+---
 
-## What Changed From Legacy ui-grid
+## Contributing
 
-This modernization intentionally replaces the legacy infrastructure:
+Contributions are welcome. Please open an issue first to discuss what you'd like to change.
 
-- AngularJS modules and directives were replaced with standalone Angular components
-- Bower and Grunt were removed
-- `$scope`, `$compile`, `$parse`, and digest-driven rendering were removed
-- old browser and polyfill assumptions were dropped
-- CDK virtualization and modern Angular control flow replaced AngularJS-era rendering patterns
-- Shadow DOM and CSS variables replaced global stylesheet assumptions
-- native browser download APIs are used for CSV export
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Run `npm test` to ensure all tests pass
+4. Submit a pull request
 
-What did not change is the general mental model: define `gridOptions`, define `columnDefs`, pass `data`, and interact with the grid through a registered API.
+---
 
-## Roadmap
+## License
 
-Next in line:
-
-- accessibility compatibility work, including a11y-focused polish and validation
-- i18n integration
+[MIT](./LICENSE.md)

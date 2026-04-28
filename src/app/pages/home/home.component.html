@@ -1,0 +1,38 @@
+<ng-template #statusTemplate let-value>
+  <span
+    class="status-pill"
+    [class.status-pill-enterprise]="value === 'Enterprise'"
+    [class.status-pill-active]="value === 'Active'"
+    [class.status-pill-expansion]="value === 'Expansion'"
+    [class.status-pill-pilot]="value === 'Pilot'">
+    {{ value }}
+  </span>
+</ng-template>
+
+<main class="app-shell">
+  <header class="demo-header">
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <p class="eyebrow">Open-source Angular data grid</p>
+        <h1>UI Grid <span class="hero-accent">Remastered</span></h1>
+        <p class="hero-summary">
+          A from-scratch rewrite of the original AngularJS ui-grid — by the original author.
+          Familiar <code>gridOptions</code> / <code>columnDefs</code> / <code>onRegisterApi</code> mental model,
+          modern Angular signals internals, and app-level theming through Shadow DOM.
+        </p>
+        <p class="hero-cta">
+          <a routerLink="/docs/getting-started" class="cta-link">Get started</a>
+          <a routerLink="/docs" class="cta-link cta-link-secondary">Browse docs</a>
+        </p>
+      </div>
+    </section>
+  </header>
+
+  <section class="grid-stage">
+    <app-ui-grid [options]="options()" />
+  </section>
+
+  <section class="harness-stage">
+    <app-grid-browser-harness />
+  </section>
+</main>
