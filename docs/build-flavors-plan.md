@@ -19,6 +19,17 @@ It is not massively prohibitively complex if it is built on top of:
 
 It becomes expensive and fragile if attempted directly against the current monolithic Angular component and library surface.
 
+## Implementation Status
+
+Current progress as of the latest refactor pass:
+
+- `scripts/build-library-preset.mjs` now exists as the first preset-aware library build wrapper
+- `npm run build:library:preset -- --preset=full` now builds a generated preset entry through `ng-packagr` into `dist/ui-grid-full`
+- the wrapper emits `dist/ui-grid-full/build-flavor.json` with the selected preset and feature list
+- planned presets `minimal`, `data-heavy`, and `interactive` are defined and currently fail fast with explicit messages instead of attempting invalid builds
+- the current supported preset is intentionally only `full` because the Angular adapter is still too coarse to deliver honest byte savings for slimmer presets
+- one library-compatibility issue was fixed during this work by removing `Object.fromEntries` from the shared core so `ng-packagr` can compile the library target cleanly
+
 ## Current Constraint
 
 Today, the build surface is still coarse:

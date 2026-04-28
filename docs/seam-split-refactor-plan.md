@@ -10,21 +10,31 @@ This plan is about supporting more than the current Angular implementation path.
 
 Current progress as of the latest refactor pass:
 
-- the grid pipeline has started moving into a shared core module at `projects/ui-grid/src/lib/grid/grid.core.ts`
+- `projects/ui-grid/src/lib/grid/grid.core.ts` is now a barrel over smaller core feature files instead of a single large implementation unit
+- the shared core is now split into feature-level modules for pagination, identity, edit-state, infinite-scroll, row-state, saved-state, and pipeline/export logic
+- the old pipeline implementation file is now further decomposed so filtering, sorting, grouping, and tree traversal each live in their own core modules with `buildGridPipeline(...)` reduced to orchestration
+- CSV header and row serialization now live in a dedicated core export module while the Angular adapter keeps only renderer-aware value selection and browser download transport
+- renderer-agnostic cell context and display formatting now live in a dedicated core display module, and the Angular adapter delegates resize observation, CSV download transport, and shadow-DOM focus behavior through smaller host helpers
+- option-derived UI predicates for grouping, filtering, pagination, column movement, and tree/expand toggles now live in a shared view-model helper module instead of inside the Angular component
+- remaining pure view-model calculations such as button labels, input types, column widths, and tree indentation now also live in the shared view-model helper module, leaving the component with mostly thin template-facing wrappers
+- grouped-state and expanded-state view helpers now also live in the shared view-model module, and adapter event-raising has started moving behind a dedicated `ui-grid.events.ts` helper instead of being inlined throughout the component
+- render lifecycle, visible-row, canvas-height, resize, and scroll event dispatch now also route through `ui-grid.events.ts`, so the Angular component no longer calls `gridApi.*.raise(...)` directly in its main effect and lifecycle paths
+- grouping toggles, column-order mutations, visible-column reorder logic, and restore-state planning now have a dedicated `ui-grid.state.ts` helper, leaving the component with mostly signal updates plus API/event delegation in those flows
+- adapter-side mutation orchestration now also has a dedicated `ui-grid.commands.ts` helper for filter, sort, grouping, column-order, pagination, restore-state, row/tree expansion, infinite-scroll, and edit-session commands, so those non-DOM state transitions no longer sit inline beside the component's host integration code
 - pagination math and header label handling are now shared helpers instead of component-only logic
 - the Angular adapter currently delegates its core pipeline and virtualization checks to the shared core while keeping browser-only behavior in the component
 - pure sanitization and safe-state helpers now live in the shared core and the adapter calls them directly
-- save-state snapshot assembly now lives in the shared core while the adapter keeps the restore mutations and event dispatch
+- save-state snapshot assembly now lives in the shared core while restore-state normalization and mutation planning are split across the shared core and adapter-side helper modules
 - row-id resolution and row lookup now live in the shared core and the adapter delegates to them
 - the main grid SCSS now lives in a shared core stylesheet module that the Angular stylesheet wrapper consumes
 - restore-state normalization now lives in the shared core while the adapter keeps signal mutation and event raising
-- row invisibility, expandable-row state, and tree expansion state transitions now live in the shared core while the adapter keeps the event emission layer
-- sort-state construction, infinite-scroll helper state transitions, and pagination command helpers now live in the shared core while the adapter keeps event emission and viewport integration
-- edit-session state and next-cell navigation now live in the shared core while the adapter keeps DOM focus, parser behavior, and row mutation
+- row invisibility, expandable-row state, and tree expansion state transitions now live in the shared core while adapter-side command orchestration and event emission are split into dedicated helper modules
+- sort-state construction, pagination command helpers, restore-state follow-through, and infinite-scroll state/request coordination now live behind shared core plus adapter command helpers while the component keeps viewport integration and remaining browser-only behavior
+- edit-session state transitions and their event dispatch now live behind adapter command helpers while the component keeps DOM focus transport, edit parsing, row mutation, and next-cell navigation
 - editor value conversion, printable-key detection, and focus-to-edit decisions now live in the shared core while the adapter keeps keyboard event wiring and DOM focus transport
 - Angular still owns CSV export because it must preserve cell-renderer-aware output and browser download behavior
 - the component remains the adapter surface for Angular-specific state, focus, keyboard, and DOM behavior
-- the next extraction step is to move the remaining feature-state helpers out of `UiGridComponent`
+- the next extraction step is to keep shrinking the Angular adapter around browser-only and DOM-only behaviors, especially the initialization/reset path, row invisibility commands, and any remaining non-focus edit wrappers, rather than growing the core barrel again
 - the focused `UiGridComponent` test slice passed again after restoring the missing adapter wrappers
 
 ## Why This Refactor Is Needed

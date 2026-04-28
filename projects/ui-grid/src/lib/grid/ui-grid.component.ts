@@ -1,5 +1,5 @@
 import { NgTemplateOutlet, isPlatformServer } from '@angular/common';
-import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import {
   CdkFixedSizeVirtualScroll,
   CdkVirtualForOf,
@@ -35,25 +35,46 @@ import {
 } from './grid.models';
 import { runColumnFilter, setupFilters } from './row-searcher';
 import { getSortFn } from './row-sorter';
-import { getCellValue, getPathValue, setPathValue, stringifyCellValue, titleize, toCsvValue } from './grid.utils';
+import { getCellValue, getPathValue, setPathValue } from './grid.utils';
 import {
   addGridRowInvisibleReason,
   areAllGridRowsExpanded,
-  beginGridEditSession,
+  buildGridCellContext,
   buildGridFocusCellResult,
   buildGridSavedState,
   buildGridSortState,
   buildGridPipeline,
   buildGridRows,
+  canGridExpandRows,
+  canGridMoveColumns,
   clearGridRowInvisibleReason,
-  clearGridEditSession,
-  completeInfiniteScrollDataLoad,
-  expandAllGridRows,
-  expandAllGridTreeRows,
+  exportCsvRows,
   findGridRowById as coreFindGridRowById,
   findNextGridCell,
+  formatGridCellDisplayValue,
   GridInfiniteScrollState,
   getGridTreeRowChildren,
+  gridCellIndent,
+  gridColumnWidth,
+  gridEditorInputType,
+  gridExpandToggleLabelForRow,
+  gridExpandToggleSymbolForRow,
+  gridFilterPlaceholder,
+  gridGroupDisclosureLabel,
+  gridGroupingButtonLabel,
+  gridSortButtonLabel,
+  gridTreeToggleLabelForRow,
+  gridTreeToggleSymbolForRow,
+  isGridColumnFilterable,
+  isGridColumnGrouped,
+  isGridColumnSortable,
+  isGridFilteringEnabled,
+  isGridGroupingEnabled,
+  isGridInfiniteScrollEnabled,
+  isGridPaginationEnabled,
+  isGridPrimaryColumn,
+  isGridSortingEnabled,
+  isGridTreeEnabled,
   isPrintableGridKey,
   isGridCellPosition,
   isVirtualizationEnabled as coreIsVirtualizationEnabled,
@@ -62,25 +83,57 @@ import {
   getFirstRowIndexValue as coreGetFirstRowIndexValue,
   getLastRowIndexValue as coreGetLastRowIndexValue,
   getTotalPagesValue as coreGetTotalPagesValue,
-  maybeRequestInfiniteScrollData,
-  normalizeGridSavedState,
   parseGridEditedValue,
-  resetInfiniteScrollState,
-  resolveGridPageSize,
   resolveGridRowId as coreResolveGridRowId,
-  saveInfiniteScrollPercentage,
-  seekGridPage,
-  setGridTreeRowExpanded,
-  setInfiniteScrollDirectionsState,
+  shouldShowGridExpandToggle,
+  shouldShowGridPaginationControls,
+  shouldShowGridTreeToggle,
   shouldGridEditOnFocus,
   stringifyGridEditorValue,
-  headerLabel as coreHeaderLabel
-  , normalizeBooleanMap,
-  sanitizeDownloadFilename,
-  toggleGridRowExpanded,
-  toggleGridTreeRowExpanded
+  headerLabel as coreHeaderLabel,
+  normalizeBooleanMap,
+  sanitizeDownloadFilename
 } from './grid.core';
 import type { DisplayItem, ExpandableItem, GroupItem, PipelineResult } from './grid.core';
+import {
+  applyGridSortStateCommand,
+  beginGridCellEditCommand,
+  cancelGridCellEditCommand,
+  collapseAllGridRowsCommand,
+  collapseAllGridTreeRowsCommand,
+  clearGridFiltersCommand,
+  clearGridGroupingCommand,
+  commitGridCellEditCommand,
+  completeGridInfiniteScrollDataLoadCommand,
+  expandAllGridRowsCommand,
+  expandAllGridTreeRowsCommand,
+  maybeRequestInfiniteScrollCommand,
+  moveGridColumnCommand,
+  moveGridVisibleColumnCommand,
+  resetGridInfiniteScrollCommand,
+  restoreGridStateCommand,
+  saveGridInfiniteScrollPercentageCommand,
+  seekGridPaginationCommand,
+  setGridInfiniteScrollDirectionsCommand,
+  setGridTreeRowExpandedCommand,
+  setGridPaginationPageSizeCommand,
+  sortGridColumnCommand,
+  toggleGridRowExpansionCommand,
+  toggleGridGroupingCommand,
+  toggleGridTreeRowCommand,
+  updateGridFilterCommand
+} from './ui-grid.commands';
+import { downloadGridCsvFile, focusGridEditor, focusGridRenderedCell, observeGridHostSize } from './ui-grid.host';
+import {
+  raiseGridBenchmarkComplete,
+  raiseGridCanvasHeightChanged,
+  raiseGridDimensionChanged,
+  raiseGridRenderingComplete,
+  raiseGridRowsRendered,
+  raiseGridRowsVisibleChanged,
+  raiseGridScrollBegin,
+  raiseGridScrollEnd
+} from './ui-grid.events';
 
 @Component({
   selector: 'app-ui-grid',
@@ -151,7 +204,7 @@ export class UiGridComponent {
       sortColumn: (columnName, direction) => this.sortColumn(columnName, direction),
       moveColumn: (fromIndex, toIndex) => this.moveColumn(fromIndex, toIndex),
       toggleGrouping: (columnName) => this.toggleGroupingByName(columnName),
-      clearGrouping: () => this.groupByColumns.set([]),
+      clearGrouping: () => this.clearGrouping(),
       benchmark: (iterations) => this.runBenchmark(iterations),
       exportCsv: () => this.exportCsv(),
       paginationGetPage: () => this.getCurrentPageValue(),
@@ -221,39 +274,33 @@ export class UiGridComponent {
         direction: initialSort?.sort?.direction ?? SORT_DIRECTIONS.none
       });
       options.onRegisterApi?.(this.gridApi);
-      this.gridApi.core.raise.renderingComplete(this.gridApi);
+      raiseGridRenderingComplete(this.gridApi);
     });
 
     effect(() => {
       const pipeline = this.pipeline();
-      this.gridApi.core.raise.rowsRendered(pipeline.visibleRows);
-      this.gridApi.core.raise.rowsVisibleChanged(pipeline.visibleRows);
+      raiseGridRowsRendered(this.gridApi, pipeline.visibleRows);
+      raiseGridRowsVisibleChanged(this.gridApi, pipeline.visibleRows);
 
       const newHeight = pipeline.displayItems.length * this.rowSize();
       if (newHeight !== this.lastCanvasHeight) {
-        this.gridApi.core.raise.canvasHeightChanged(this.lastCanvasHeight, newHeight);
+        raiseGridCanvasHeightChanged(this.gridApi, this.lastCanvasHeight, newHeight);
         this.lastCanvasHeight = newHeight;
       }
     });
 
     effect((onCleanup) => {
-      if (!this.options().enableAutoResize || typeof ResizeObserver === 'undefined') {
+      if (!this.options().enableAutoResize) {
         return;
       }
 
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) {
-          return;
-        }
-
-        const nextHeight = Math.round(entry.contentRect.height);
-        const nextWidth = Math.round(entry.contentRect.width);
+      const observer = observeGridHostSize(this.hostElement.nativeElement, ({ height: nextHeight, width: nextWidth }) => {
         if (nextHeight === this.lastGridHeight && nextWidth === this.lastGridWidth) {
           return;
         }
 
-        this.gridApi.core.raise.gridDimensionChanged(
+        raiseGridDimensionChanged(
+          this.gridApi,
           this.lastGridHeight,
           this.lastGridWidth,
           nextHeight,
@@ -267,7 +314,10 @@ export class UiGridComponent {
         }
       });
 
-      observer.observe(this.hostElement.nativeElement);
+      if (!observer) {
+        return;
+      }
+
       onCleanup(() => observer.disconnect());
     });
   }
@@ -340,18 +390,11 @@ export class UiGridComponent {
   }
 
   protected sortButtonLabel(column: GridColumnDef): string {
-    switch (this.sortDirection(column)) {
-      case SORT_DIRECTIONS.asc:
-        return 'Asc';
-      case SORT_DIRECTIONS.desc:
-        return 'Desc';
-      default:
-        return 'Sort';
-    }
+    return gridSortButtonLabel(this.sortDirection(column));
   }
 
   protected groupingButtonLabel(column: GridColumnDef): string {
-    return this.isGrouped(column) ? 'Grouped' : 'Group';
+    return gridGroupingButtonLabel(this.isGrouped(column));
   }
 
   protected filterValue(columnName: string): string {
@@ -359,7 +402,7 @@ export class UiGridComponent {
   }
 
   protected filterPlaceholder(column: GridColumnDef): string {
-    return this.isColumnFilterable(column) ? 'Filter…' : 'Filter disabled';
+    return gridFilterPlaceholder(this.isColumnFilterable(column));
   }
 
   protected isFilterInputDisabled(column: GridColumnDef): boolean {
@@ -367,18 +410,11 @@ export class UiGridComponent {
   }
 
   protected groupDisclosureLabel(item: GroupItem): string {
-    return item.collapsed ? 'Expand' : 'Collapse';
+    return gridGroupDisclosureLabel(item.collapsed);
   }
 
   protected displayValue(row: GridRow, column: GridColumnDef): string {
-    const context = this.cellContext(row, column);
-    if (column.cellRenderer) {
-      return column.cellRenderer(context);
-    }
-
-    return column.formatter
-      ? column.formatter(context.value, row.entity)
-      : stringifyCellValue(context.value);
+    return formatGridCellDisplayValue(this.cellContext(row, column));
   }
 
   protected isFocusedCell(row: GridRow, column: GridColumnDef): boolean {
@@ -390,14 +426,7 @@ export class UiGridComponent {
   }
 
   protected editorInputType(column: GridColumnDef): string {
-    switch (column.type) {
-      case 'number':
-        return 'number';
-      case 'date':
-        return 'date';
-      default:
-        return 'text';
-    }
+    return gridEditorInputType(column);
   }
 
   protected cellTemplate(column: GridColumnDef): TemplateRef<GridCellTemplateContext> | null {
@@ -409,14 +438,7 @@ export class UiGridComponent {
   }
 
   protected cellContext(row: GridRow, column: GridColumnDef): GridCellTemplateContext {
-    const value = getCellValue(row.entity, column);
-    return {
-      $implicit: value,
-      value,
-      row: row.entity,
-      column,
-      rowIndex: row.index
-    };
+    return buildGridCellContext(row, column);
   }
 
   protected sortDirection(column: GridColumnDef): SortDirection {
@@ -437,27 +459,24 @@ export class UiGridComponent {
           ? SORT_DIRECTIONS.desc
           : SORT_DIRECTIONS.none;
 
-    this.sortState.set({
+    applyGridSortStateCommand(this.gridApi, (state) => this.sortState.set(state), {
       columnName: nextDirection === SORT_DIRECTIONS.none ? null : column.name,
       direction: nextDirection
     });
-    this.gridApi.core.raise.sortChanged(
-      nextDirection === SORT_DIRECTIONS.none ? null : column.name,
-      nextDirection
-    );
   }
 
   protected updateFilter(columnName: string, value: string): void {
-    this.activeFilters.update((current) => ({
-      ...current,
-      [columnName]: value
-    }));
-    this.gridApi.core.raise.filterChanged(this.activeFilters());
+    updateGridFilterCommand(
+      this.gridApi,
+      (updater) => this.activeFilters.update(updater),
+      () => this.activeFilters(),
+      columnName,
+      value
+    );
   }
 
   protected clearAllFilters(): void {
-    this.activeFilters.set({});
-    this.gridApi.core.raise.filterChanged({});
+    clearGridFiltersCommand(this.gridApi, (filters) => this.activeFilters.set(filters));
   }
 
   protected expandedContext(row: GridRow): GridExpandableTemplateContext & Record<string, unknown> {
@@ -471,15 +490,15 @@ export class UiGridComponent {
   }
 
   protected columnWidth(column: GridColumnDef): string {
-    return column.width ?? 'minmax(11rem, 1fr)';
+    return gridColumnWidth(column);
   }
 
   protected isColumnSortable(column: GridColumnDef): boolean {
-    return this.isSortingEnabled() && column.sortable !== false && column.enableSorting !== false;
+    return isGridColumnSortable(this.options(), column);
   }
 
   protected isColumnFilterable(column: GridColumnDef): boolean {
-    return this.isFilteringEnabled() && column.filterable !== false && column.enableFiltering !== false;
+    return isGridColumnFilterable(this.options(), column);
   }
 
   protected isCellEditable(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean {
@@ -507,83 +526,75 @@ export class UiGridComponent {
   }
 
   protected isGroupingEnabled(): boolean {
-    return this.options().enableGrouping === true && !this.isTreeEnabled();
+    return isGridGroupingEnabled(this.options());
   }
 
   protected isTreeEnabled(): boolean {
-    return this.options().enableTreeView === true;
+    return isGridTreeEnabled(this.options());
   }
 
   protected canExpandRows(): boolean {
-    return this.options().enableExpandable === true && !!this.options().expandableRowTemplate;
+    return canGridExpandRows(this.options());
   }
 
   protected isPaginationEnabled(): boolean {
-    return this.options().enablePagination === true || (this.options().paginationPageSize ?? 0) > 0;
+    return isGridPaginationEnabled(this.options());
   }
 
   protected showPaginationControls(): boolean {
-    return this.isPaginationEnabled() && this.options().enablePaginationControls !== false;
+    return shouldShowGridPaginationControls(this.options());
   }
 
   protected isInfiniteScrollEnabled(): boolean {
-    return this.options().infiniteScrollRowsFromEnd !== undefined
-      || this.options().infiniteScrollUp === true
-      || this.options().infiniteScrollDown !== undefined;
+    return isGridInfiniteScrollEnabled(this.options());
   }
 
   protected isSortingEnabled(): boolean {
-    return this.options().enableSorting !== false;
+    return isGridSortingEnabled(this.options());
   }
 
   protected isFilteringEnabled(): boolean {
-    return this.options().enableFiltering !== false;
+    return isGridFilteringEnabled(this.options());
   }
 
   protected canMoveColumns(): boolean {
-    return this.options().enableColumnMoving === true;
+    return canGridMoveColumns(this.options());
   }
 
   protected isPrimaryColumn(column: GridColumnDef): boolean {
-    return this.visibleColumns()[0]?.name === column.name;
+    return isGridPrimaryColumn(this.visibleColumns(), column);
   }
 
   protected showTreeToggle(row: GridRow, column: GridColumnDef): boolean {
-    return this.isPrimaryColumn(column)
-      && this.isTreeEnabled()
-      && (row.hasChildren || this.options().showTreeExpandNoChildren !== false);
+    return shouldShowGridTreeToggle(this.options(), this.visibleColumns(), row, column);
   }
 
   protected showExpandToggle(row: GridRow, column: GridColumnDef): boolean {
-    return this.isPrimaryColumn(column) && this.canExpandRows();
+    return shouldShowGridExpandToggle(this.options(), this.visibleColumns(), column);
   }
 
   protected cellIndent(row: GridRow, column: GridColumnDef): string {
-    if (!this.isPrimaryColumn(column) || !this.isTreeEnabled()) {
-      return '0px';
-    }
-
-    return `${row.treeLevel * (this.options().treeIndent ?? 10)}px`;
+    return gridCellIndent(this.options(), this.visibleColumns(), row, column);
   }
 
   protected treeToggleLabel(row: GridRow): string {
-    return this.expandedTreeRows()[row.id] ? 'Collapse' : 'Expand';
+    return gridTreeToggleLabelForRow(this.expandedTreeRows(), row);
   }
 
   protected treeToggleSymbol(row: GridRow): string {
-    return this.expandedTreeRows()[row.id] ? '−' : '+';
+    return gridTreeToggleSymbolForRow(this.expandedTreeRows(), row);
   }
 
   protected expandToggleLabel(row: GridRow): string {
-    return row.expanded ? 'Collapse detail' : 'Expand detail';
+    return gridExpandToggleLabelForRow(row);
   }
 
   protected expandToggleSymbol(row: GridRow): string {
-    return row.expanded ? '▾' : '▸';
+    return gridExpandToggleSymbolForRow(row);
   }
 
   protected isGrouped(column: GridColumnDef): boolean {
-    return this.groupByColumns().includes(column.name);
+    return isGridColumnGrouped(this.groupByColumns(), column);
   }
 
   protected toggleGrouping(column: GridColumnDef, event?: Event): void {
@@ -592,16 +603,17 @@ export class UiGridComponent {
   }
 
   private toggleGroupingByName(columnName: string): void {
-    if (!this.isGroupingEnabled()) {
-      return;
-    }
-
-    this.groupByColumns.update((current) =>
-      current.includes(columnName)
-        ? current.filter((name) => name !== columnName)
-        : [...current, columnName]
+    toggleGridGroupingCommand(
+      this.gridApi,
+      this.isGroupingEnabled(),
+      (updater) => this.groupByColumns.update(updater),
+      () => this.groupByColumns(),
+      columnName
     );
-    this.gridApi.core.raise.groupingChanged(this.groupByColumns());
+  }
+
+  private clearGrouping(): void {
+    clearGridGroupingCommand(this.gridApi, (grouping) => this.groupByColumns.set(grouping), false);
   }
 
   protected toggleGroup(item: GroupItem): void {
@@ -666,48 +678,25 @@ export class UiGridComponent {
   }
 
   private moveColumn(fromIndex: number, toIndex: number): void {
-    if (!this.canMoveColumns()) {
-      return;
-    }
-
-    this.columnOrder.update((current) => {
-      const next = [...current];
-      moveItemInArray(next, fromIndex, toIndex);
-      this.gridApi.core.raise.columnOrderChanged(next);
-      return next;
-    });
+    moveGridColumnCommand(
+      this.gridApi,
+      this.canMoveColumns(),
+      (updater) => this.columnOrder.update(updater),
+      fromIndex,
+      toIndex
+    );
   }
 
   private moveVisibleColumn(columnName: string, targetColumnName: string): void {
-    if (!this.canMoveColumns()) {
-      return;
-    }
-
-    const currentOrder = this.columnOrder();
-    const visibleNames = new Set(this.visibleColumns().map((column) => column.name));
-    const visibleOrder = currentOrder.filter((name) => visibleNames.has(name));
-    const fromIndex = visibleOrder.indexOf(columnName);
-    const toIndex = visibleOrder.indexOf(targetColumnName);
-
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
-      return;
-    }
-
-    moveItemInArray(visibleOrder, fromIndex, toIndex);
-
-    const nextOrder: string[] = [];
-    let visibleCursor = 0;
-
-    for (const name of currentOrder) {
-      if (visibleNames.has(name)) {
-        nextOrder.push(visibleOrder[visibleCursor++] ?? name);
-      } else {
-        nextOrder.push(name);
-      }
-    }
-
-    this.columnOrder.set(nextOrder);
-    this.gridApi.core.raise.columnOrderChanged(nextOrder);
+    moveGridVisibleColumnCommand(
+      this.gridApi,
+      this.canMoveColumns(),
+      this.columnOrder(),
+      this.visibleColumns().map((column) => column.name),
+      columnName,
+      targetColumnName,
+      (order) => this.columnOrder.set(order)
+    );
   }
 
   protected trackDisplayItem = (_index: number, item: DisplayItem): string => item.id;
@@ -826,7 +815,7 @@ export class UiGridComponent {
   protected onViewportIndexChange(startIndex = 0): void {
     if (!this.scrolling) {
       this.scrolling = true;
-      this.gridApi.core.raise.scrollBegin();
+      raiseGridScrollBegin(this.gridApi);
     }
 
     if (this.scrollEndHandle) {
@@ -835,7 +824,7 @@ export class UiGridComponent {
 
     this.scrollEndHandle = window.setTimeout(() => {
       this.scrolling = false;
-      this.gridApi.core.raise.scrollEnd();
+      raiseGridScrollEnd(this.gridApi);
     }, 120);
 
     this.maybeRequestMoreData(startIndex);
@@ -860,24 +849,22 @@ export class UiGridComponent {
     };
 
     this.benchmarkResult.set(result);
-    this.gridApi.core.raise.benchmarkComplete(result);
+    raiseGridBenchmarkComplete(this.gridApi, result);
     return result;
   }
 
   protected exportCsv(): void {
     const columns = this.visibleColumns();
-    const header = columns.map((column) => toCsvValue(this.headerLabel(column))).join(',');
-    const rows = this.pipeline().visibleRows.map((row) =>
-      columns.map((column) => toCsvValue(this.displayValue(row, column))).join(',')
-    );
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${sanitizeDownloadFilename(this.options().id)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const csv = exportCsvRows(columns, this.pipeline().visibleRows);
+    this.downloadCsv(csv, `${sanitizeDownloadFilename(this.options().id)}.csv`);
+  }
+
+  private downloadCsv(csv: string, filename: string): void {
+    if (isPlatformServer(this.platformId)) {
+      return;
+    }
+
+    downloadGridCsvFile(csv, filename);
   }
 
   private refresh(): void {
@@ -902,66 +889,71 @@ export class UiGridComponent {
   private startCellEdit(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null, initialValue?: string): void {
     const currentValue = getCellValue(row.entity, column);
     const focusToken = ++this.editorFocusToken;
-    const nextEditSession = beginGridEditSession(
-      row.id,
-      column.name,
-      initialValue ?? stringifyGridEditorValue(currentValue)
+    const editingCell = beginGridCellEditCommand(
+      this.gridApi,
+      {
+        setFocusedCell: (focusedCell) => this.focusedCell.set(focusedCell),
+        setEditingCell: (editingCellState) => this.editingCell.set(editingCellState),
+        setEditingValue: (editingValue) => this.editingValue.set(editingValue)
+      },
+      row,
+      column,
+      currentValue,
+      triggerEvent,
+      initialValue
     );
-    this.focusedCell.set(nextEditSession.focusedCell);
-    this.editingCell.set(nextEditSession.editingCell);
-    this.editingValue.set(nextEditSession.editingValue);
-    this.gridApi.edit.raise.beginCellEdit(row.entity, column, triggerEvent);
-    queueMicrotask(() => this.focusEditorInput(focusToken));
+
+    if (editingCell) {
+      queueMicrotask(() => this.focusEditorInput(focusToken));
+    }
   }
 
   private commitCellEdit(direction?: 'left' | 'right' | 'up' | 'down', restoreFocus = true): void {
-    const editingCell = this.editingCell();
-    if (!editingCell) {
+    const result = commitGridCellEditCommand(this.gridApi, {
+      getEditingCell: () => this.editingCell(),
+      getEditingValue: () => this.editingValue(),
+      setEditingCell: (editingCell) => this.editingCell.set(editingCell),
+      setEditingValue: (editingValue) => this.editingValue.set(editingValue),
+      findRowById: (rowId) => this.findRowById(rowId),
+      findColumnByName: (columnName) => this.visibleColumns().find((candidate) => candidate.name === columnName),
+      parseEditedValue: (column, value, oldValue) => this.parseEditedValue(column, value, oldValue),
+      setCellValue: (rowEntity, column, value) => this.setCellValue(rowEntity, column, value)
+    });
+
+    if (!result.committed || !result.row || !result.column || !result.focusTarget) {
       return;
     }
 
-    const row = this.findRowById(editingCell.rowId);
-    const column = this.visibleColumns().find((candidate) => candidate.name === editingCell.columnName);
-    if (!row || !column) {
-      this.editingCell.set(null);
-      return;
-    }
-
-    const oldValue = getCellValue(row.entity, column);
-    const newValue = parseGridEditedValue(column, this.editingValue(), oldValue);
-    this.setCellValue(row.entity, column, newValue);
-    const clearedEditSession = clearGridEditSession();
-    this.editingCell.set(clearedEditSession.editingCell);
     this.editorFocusToken += 1;
-    this.gridApi.edit.raise.afterCellEdit(row.entity, column, newValue, oldValue);
-
-    this.editingValue.set(clearedEditSession.editingValue);
 
     if (direction) {
-      const moved = this.moveFocus(row, column, direction);
+      const moved = this.moveFocus(result.row, result.column, direction);
       if (!moved) {
-        this.focusRenderedCell({ rowId: row.id, columnName: column.name });
+        this.focusRenderedCell(result.focusTarget);
       }
     } else if (restoreFocus) {
-      this.focusRenderedCell({ rowId: row.id, columnName: column.name });
+      this.focusRenderedCell(result.focusTarget);
     }
   }
 
   private cancelCellEdit(): void {
-    const editingCell = this.editingCell();
-    if (!editingCell) {
+    const hadEditingCell = this.editingCell() !== null;
+    const result = cancelGridCellEditCommand(this.gridApi, {
+      getEditingCell: () => this.editingCell(),
+      setEditingCell: (editingCell) => this.editingCell.set(editingCell),
+      setEditingValue: (editingValue) => this.editingValue.set(editingValue),
+      findRowById: (rowId) => this.findRowById(rowId),
+      findColumnByName: (columnName) => this.visibleColumns().find((candidate) => candidate.name === columnName)
+    });
+
+    if (!hadEditingCell) {
       return;
     }
 
-    const row = this.findRowById(editingCell.rowId);
-    const column = this.visibleColumns().find((candidate) => candidate.name === editingCell.columnName);
-    const clearedEditSession = clearGridEditSession();
-    this.editingCell.set(clearedEditSession.editingCell);
-    this.editingValue.set(clearedEditSession.editingValue);
     this.editorFocusToken += 1;
-    if (row && column) {
-      this.gridApi.edit.raise.cancelCellEdit(row.entity, column);
-      this.focusRenderedCell(editingCell);
+
+    if (result.focusTarget) {
+      this.focusRenderedCell(result.focusTarget);
     }
   }
 
@@ -1014,28 +1006,7 @@ export class UiGridComponent {
 
   private focusRenderedCell(position: GridCellPosition): void {
     const focusToken = ++this.renderedCellFocusToken;
-    const focusCell = (retry = true): void => {
-      if (focusToken !== this.renderedCellFocusToken) {
-        return;
-      }
-
-      const shadowRoot = this.hostElement.nativeElement.shadowRoot;
-      const selector = `.body-cell[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
-      const target = shadowRoot?.querySelector(selector) as HTMLElement | null;
-      if (!target) {
-        if (retry) {
-          requestAnimationFrame(() => focusCell(false));
-        }
-        return;
-      }
-
-      target.focus();
-      if (retry && shadowRoot?.activeElement !== target) {
-        requestAnimationFrame(() => focusCell(false));
-      }
-    };
-
-    queueMicrotask(() => focusCell(true));
+    focusGridRenderedCell(this.hostElement.nativeElement, position, () => focusToken === this.renderedCellFocusToken);
   }
 
   private focusEditorInput(focusToken: number, retry = true): void {
@@ -1048,16 +1019,15 @@ export class UiGridComponent {
       return;
     }
 
-    const shadowRoot = this.hostElement.nativeElement.shadowRoot;
-    const selector = `.cell-editor[data-row-id="${editingCell.rowId}"][data-col-name="${editingCell.columnName}"]`;
-    const input = shadowRoot?.querySelector(selector) as HTMLInputElement | null;
-    if (!input && retry) {
-      requestAnimationFrame(() => this.focusEditorInput(focusToken, false));
+    if (!retry) {
       return;
     }
 
-    input?.focus();
-    input?.select();
+    focusGridEditor(
+      this.hostElement.nativeElement,
+      editingCell,
+      () => focusToken === this.editorFocusToken && this.editingCell()?.rowId === editingCell.rowId && this.editingCell()?.columnName === editingCell.columnName
+    );
   }
 
   private initialPageSize(options: GridOptions): number {
@@ -1085,20 +1055,22 @@ export class UiGridComponent {
   }
 
   private seekPage(page: number): void {
-    const nextPage = seekGridPage(page, this.getTotalPagesValue());
-    this.currentPage.set(nextPage);
-    this.gridApi.pagination.raise.paginationChanged(nextPage, this.effectivePageSize(this.pipeline().totalItems));
+    seekGridPaginationCommand(
+      this.gridApi,
+      (nextPage) => this.currentPage.set(nextPage),
+      () => this.getTotalPagesValue(),
+      () => this.effectivePageSize(this.pipeline().totalItems),
+      page
+    );
   }
 
   private setPaginationPageSize(pageSize: number): void {
-    const nextPageSize = resolveGridPageSize(pageSize);
-    if (nextPageSize === null) {
-      return;
-    }
-
-    this.pageSize.set(nextPageSize);
-    this.currentPage.set(1);
-    this.gridApi.pagination.raise.paginationChanged(1, nextPageSize);
+    setGridPaginationPageSizeCommand(
+      this.gridApi,
+      (nextPageSize) => this.pageSize.set(nextPageSize),
+      (nextPage) => this.currentPage.set(nextPage),
+      pageSize
+    );
   }
 
   private buildRows(data: readonly GridRecord[]): GridRow[] {
@@ -1119,19 +1091,15 @@ export class UiGridComponent {
   }
 
   private toggleRowExpansionByRef(row: GridRow | GridRecord | string): void {
-    if (!this.canExpandRows()) {
-      return;
-    }
-
     const rowId = this.resolveRowId(row);
-    const { expanded, nextExpandedRows } = toggleGridRowExpanded(this.expandedRows(), rowId);
-    this.expandedRows.set(nextExpandedRows);
-
-    const gridRow = this.findRowById(rowId);
-    if (gridRow) {
-      gridRow.expanded = expanded;
-      this.gridApi.expandable.raise.rowExpandedStateChanged(gridRow, expanded);
-    }
+    toggleGridRowExpansionCommand(
+      this.gridApi,
+      this.canExpandRows(),
+      this.expandedRows(),
+      rowId,
+      (expandedRows) => this.expandedRows.set(expandedRows),
+      (resolvedRowId) => this.findRowById(resolvedRowId)
+    );
   }
 
   protected toggleRowExpansion(row: GridRow, event?: Event): void {
@@ -1144,11 +1112,15 @@ export class UiGridComponent {
       return;
     }
 
-    this.expandedRows.set(expandAllGridRows(this.buildRows(this.options().data)));
+    expandAllGridRowsCommand(
+      (data) => this.buildRows(data),
+      this.options().data,
+      (expandedRows) => this.expandedRows.set(expandedRows)
+    );
   }
 
   private collapseAllRows(): void {
-    this.expandedRows.set({});
+    collapseAllGridRowsCommand((expandedRows) => this.expandedRows.set(expandedRows));
   }
 
   private toggleAllRows(): void {
@@ -1167,43 +1139,49 @@ export class UiGridComponent {
 
   private toggleTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    const { expanded, nextExpandedTreeRows } = toggleGridTreeRowExpanded(this.expandedTreeRows(), rowId);
-    this.expandedTreeRows.set(nextExpandedTreeRows);
-
-    const gridRow = this.findRowById(rowId);
-    if (gridRow) {
-      if (expanded) {
-        this.gridApi.treeBase.raise.rowExpanded(gridRow);
-      } else {
-        this.gridApi.treeBase.raise.rowCollapsed(gridRow);
-      }
-    }
+    toggleGridTreeRowCommand(
+      this.gridApi,
+      this.expandedTreeRows(),
+      rowId,
+      (expandedRows) => this.expandedTreeRows.set(expandedRows),
+      (resolvedRowId) => this.findRowById(resolvedRowId)
+    );
   }
 
   private expandTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    this.expandedTreeRows.set(setGridTreeRowExpanded(this.expandedTreeRows(), rowId, true));
-    const gridRow = this.findRowById(rowId);
-    if (gridRow) {
-      this.gridApi.treeBase.raise.rowExpanded(gridRow);
-    }
+    setGridTreeRowExpandedCommand(
+      this.gridApi,
+      this.expandedTreeRows(),
+      rowId,
+      true,
+      (expandedRows) => this.expandedTreeRows.set(expandedRows),
+      (resolvedRowId) => this.findRowById(resolvedRowId)
+    );
   }
 
   private collapseTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    this.expandedTreeRows.set(setGridTreeRowExpanded(this.expandedTreeRows(), rowId, false));
-    const gridRow = this.findRowById(rowId);
-    if (gridRow) {
-      this.gridApi.treeBase.raise.rowCollapsed(gridRow);
-    }
+    setGridTreeRowExpandedCommand(
+      this.gridApi,
+      this.expandedTreeRows(),
+      rowId,
+      false,
+      (expandedRows) => this.expandedTreeRows.set(expandedRows),
+      (resolvedRowId) => this.findRowById(resolvedRowId)
+    );
   }
 
   private expandAllTreeRows(): void {
-    this.expandedTreeRows.set(expandAllGridTreeRows(this.buildRows(this.options().data)));
+    expandAllGridTreeRowsCommand(
+      (data) => this.buildRows(data),
+      this.options().data,
+      (expandedRows) => this.expandedTreeRows.set(expandedRows)
+    );
   }
 
   private collapseAllTreeRows(): void {
-    this.expandedTreeRows.set({});
+    collapseAllGridTreeRowsCommand((expandedRows) => this.expandedTreeRows.set(expandedRows));
   }
 
   private getTreeRowChildren(row: GridRow | GridRecord | string): GridRow[] {
@@ -1222,50 +1200,41 @@ export class UiGridComponent {
   }
 
   private sortColumn(columnName: string, direction?: SortDirection): void {
-    const nextSortState = buildGridSortState(columnName, direction);
-    this.sortState.set(nextSortState);
-    this.gridApi.core.raise.sortChanged(nextSortState.columnName!, nextSortState.direction);
+    sortGridColumnCommand(this.gridApi, (sortState) => this.sortState.set(sortState), columnName, direction);
   }
 
   private maybeRequestMoreData(startIndex: number): void {
-    if (!this.isInfiniteScrollEnabled() || !this.virtualizationEnabled()) {
-      return;
-    }
-
-    const visibleRows = this.pipeline().visibleRows.length;
-    const viewportRows = Math.max(1, Math.ceil((this.options().viewportHeight ?? this.autoViewportHeight() ?? 560) / this.rowSize()));
-    const threshold = this.options().infiniteScrollRowsFromEnd ?? 20;
-    const { request, nextState } = maybeRequestInfiniteScrollData({
+    maybeRequestInfiniteScrollCommand(this.gridApi, {
+      enabled: this.isInfiniteScrollEnabled(),
+      virtualizationEnabled: this.virtualizationEnabled(),
       state: this.infiniteScrollState(),
       startIndex,
-      visibleRows,
-      viewportRows,
-      threshold
+      visibleRows: this.pipeline().visibleRows.length,
+      viewportRows: Math.max(1, Math.ceil((this.options().viewportHeight ?? this.autoViewportHeight() ?? 560) / this.rowSize())),
+      threshold: this.options().infiniteScrollRowsFromEnd ?? 20,
+      setState: (state) => this.infiniteScrollState.set(state)
     });
-
-    if (request === 'top') {
-      this.infiniteScrollState.set(nextState);
-      this.gridApi.infiniteScroll.raise.needLoadMoreDataTop();
-      return;
-    }
-
-    if (request === 'bottom') {
-      this.infiniteScrollState.set(nextState);
-      this.gridApi.infiniteScroll.raise.needLoadMoreData();
-    }
   }
 
   private infiniteScrollDataLoaded(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): Promise<void> {
-    this.infiniteScrollState.set(completeInfiniteScrollDataLoad(this.infiniteScrollState(), scrollUp, scrollDown));
-    return Promise.resolve();
+    return completeGridInfiniteScrollDataLoadCommand(
+      this.infiniteScrollState(),
+      (state) => this.infiniteScrollState.set(state),
+      scrollUp,
+      scrollDown
+    );
   }
 
   private resetInfiniteScroll(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): void {
-    this.infiniteScrollState.set(resetInfiniteScrollState(scrollUp, scrollDown));
+    resetGridInfiniteScrollCommand((state) => this.infiniteScrollState.set(state), scrollUp, scrollDown);
   }
 
   private saveScrollPercentage(): void {
-    this.infiniteScrollState.set(saveInfiniteScrollPercentage(this.infiniteScrollState(), this.pipeline().visibleRows.length));
+    saveGridInfiniteScrollPercentageCommand(
+      this.infiniteScrollState(),
+      this.pipeline().visibleRows.length,
+      (state) => this.infiniteScrollState.set(state)
+    );
   }
 
   private handleInfiniteDataRemovedTop(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): void {
@@ -1277,7 +1246,12 @@ export class UiGridComponent {
   }
 
   private setInfiniteScrollDirections(scrollUp: boolean, scrollDown: boolean): void {
-    this.infiniteScrollState.set(setInfiniteScrollDirectionsState(this.infiniteScrollState(), scrollUp, scrollDown));
+    setGridInfiniteScrollDirectionsCommand(
+      this.infiniteScrollState(),
+      (state) => this.infiniteScrollState.set(state),
+      scrollUp,
+      scrollDown
+    );
   }
 
   private saveState(): GridSavedState {
@@ -1295,43 +1269,17 @@ export class UiGridComponent {
   }
 
   private restoreState(state: GridSavedState): void {
-    const normalizedState = normalizeGridSavedState(state);
-
-    if (normalizedState.columnOrder) {
-      this.columnOrder.set(normalizedState.columnOrder);
-    }
-
-    if (normalizedState.filters) {
-      this.activeFilters.set(normalizedState.filters);
-      this.gridApi.core.raise.filterChanged(this.activeFilters());
-    }
-
-    if (normalizedState.sort) {
-      this.sortState.set(normalizedState.sort);
-    }
-
-    if (normalizedState.grouping) {
-      this.groupByColumns.set(normalizedState.grouping);
-      this.gridApi.core.raise.groupingChanged(this.groupByColumns());
-    }
-
-    if (normalizedState.pagination) {
-      this.currentPage.set(normalizedState.pagination.paginationCurrentPage);
-      this.pageSize.set(normalizedState.pagination.paginationPageSize);
-
-      this.gridApi.pagination.raise.paginationChanged(
-        this.getCurrentPageValue(),
-        this.effectivePageSize(this.pipeline().totalItems)
-      );
-    }
-
-    if (normalizedState.expandable) {
-      this.expandedRows.set(normalizedState.expandable);
-    }
-
-    if (normalizedState.treeView) {
-      this.expandedTreeRows.set(normalizedState.treeView);
-    }
+    restoreGridStateCommand(this.gridApi, state, {
+      setColumnOrder: (order) => this.columnOrder.set(order),
+      setActiveFilters: (filters) => this.activeFilters.set(filters),
+      setSortState: (sortState) => this.sortState.set(sortState),
+      setGroupByColumns: (grouping) => this.groupByColumns.set(grouping),
+      setCurrentPage: (page) => this.currentPage.set(page),
+      setPageSize: (pageSize) => this.pageSize.set(pageSize),
+      setExpandedRows: (expandedRows) => this.expandedRows.set(expandedRows),
+      setExpandedTreeRows: (expandedRows) => this.expandedTreeRows.set(expandedRows),
+      getEffectivePageSize: () => this.effectivePageSize(this.pipeline().totalItems)
+    });
   }
 
 }
