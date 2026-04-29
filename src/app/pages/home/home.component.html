@@ -1,9 +1,6 @@
 <ng-template #statusTemplate let-value>
-  <span
-    class="status-pill"
-    [class.status-pill-enterprise]="value === 'Enterprise'"
-    [class.status-pill-active]="value === 'Active'"
-    [class.status-pill-expansion]="value === 'Expansion'"
+  <span class="status-pill" [class.status-pill-enterprise]="value === 'Enterprise'"
+    [class.status-pill-active]="value === 'Active'" [class.status-pill-expansion]="value === 'Expansion'"
     [class.status-pill-pilot]="value === 'Pilot'">
     {{ value }}
   </span>
@@ -17,7 +14,7 @@
         <h1>UI Grid <span class="hero-accent">Remastered</span></h1>
         <p class="hero-summary">
           A from-scratch rewrite of the original AngularJS ui-grid — by the original author.
-          Familiar <code>gridOptions</code> / <code>columnDefs</code> / <code>onRegisterApi</code> mental model,
+          Familiar <code>gridOptions</code> / <code>columnDefs</code> / <code>onRegisterApi</code> api surface,
           modern Angular signals internals, and app-level theming through Shadow DOM.
         </p>
         <p class="hero-cta">
