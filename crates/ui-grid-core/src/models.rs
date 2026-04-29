@@ -251,7 +251,11 @@ impl GridRow {
 
     pub fn set_this_row_invisible(&mut self, reason: impl Into<String>) {
         let reason = reason.into();
-        if !self.invisible_reasons.iter().any(|existing| existing == &reason) {
+        if !self
+            .invisible_reasons
+            .iter()
+            .any(|existing| existing == &reason)
+        {
             self.invisible_reasons.push(reason);
         }
         self.visible = false;

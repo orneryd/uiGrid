@@ -19,13 +19,20 @@ pub fn sort_grid_rows(
         return rows.to_vec();
     };
 
-    let Some(column) = columns.iter().find(|column| {
-        column.name == *column_name && column.sortable && column.enable_sorting
-    }) else {
+    let Some(column) = columns
+        .iter()
+        .find(|column| column.name == *column_name && column.sortable && column.enable_sorting)
+    else {
         return rows.to_vec();
     };
 
-    let kind = guess_sort_kind(column, &rows.iter().map(|row| row.entity.clone()).collect::<Vec<_>>());
+    let kind = guess_sort_kind(
+        column,
+        &rows
+            .iter()
+            .map(|row| row.entity.clone())
+            .collect::<Vec<_>>(),
+    );
     let mut sorted = rows.to_vec();
     sorted.sort_by(|left, right| {
         let left_value = get_cell_value(&left.entity, column);

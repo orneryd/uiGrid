@@ -5,7 +5,10 @@ use crate::{
 };
 
 pub fn header_label(column: &GridColumnDef) -> String {
-    column.display_name.clone().unwrap_or_else(|| titleize(&column.name))
+    column
+        .display_name
+        .clone()
+        .unwrap_or_else(|| titleize(&column.name))
 }
 
 pub fn export_csv_rows(columns: &[GridColumnDef], rows: &[GridRow]) -> String {
@@ -26,5 +29,8 @@ pub fn export_csv_rows(columns: &[GridColumnDef], rows: &[GridRow]) -> String {
         })
         .collect::<Vec<_>>();
 
-    std::iter::once(header).chain(body).collect::<Vec<_>>().join("\n")
+    std::iter::once(header)
+        .chain(body)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

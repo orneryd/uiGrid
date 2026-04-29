@@ -1,10 +1,10 @@
 use crate::{
+    filtering::matches_grid_row_filters,
     grouping::build_grid_display_items,
     models::{BuildGridPipelineContext, PipelineResult},
     pagination::{is_virtualization_enabled, paginate_grid_rows},
     sorting::sort_grid_rows,
     tree::{build_grid_rows, filter_and_flatten_grid_tree_rows, is_tree_enabled},
-    filtering::matches_grid_row_filters,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

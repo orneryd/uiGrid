@@ -43,7 +43,8 @@ pub fn calculate_virtual_window(request: &VirtualWindowRequest) -> VirtualWindow
     let raw_start = (request.scroll_top / request.item_size) as isize - request.overscan as isize;
     let start = raw_start.max(0) as usize;
     let viewport_items = request.viewport_height.div_ceil(request.item_size);
-    let raw_end = raw_start + viewport_items as isize + (request.overscan.saturating_mul(2)) as isize;
+    let raw_end =
+        raw_start + viewport_items as isize + (request.overscan.saturating_mul(2)) as isize;
     let end = raw_end.max(0) as usize;
     let end = end.min(request.item_count);
 

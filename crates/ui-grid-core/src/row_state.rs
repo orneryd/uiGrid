@@ -16,8 +16,12 @@ pub fn expand_all_grid_rows(rows: &[GridRow]) -> BTreeMap<String, bool> {
     rows.iter().map(|row| (row.id.clone(), true)).collect()
 }
 
-pub fn are_all_grid_rows_expanded(rows: &[GridRow], expanded_rows: &BTreeMap<String, bool>) -> bool {
-    rows.iter().all(|row| expanded_rows.get(&row.id).copied().unwrap_or(false))
+pub fn are_all_grid_rows_expanded(
+    rows: &[GridRow],
+    expanded_rows: &BTreeMap<String, bool>,
+) -> bool {
+    rows.iter()
+        .all(|row| expanded_rows.get(&row.id).copied().unwrap_or(false))
 }
 
 pub fn set_grid_tree_row_expanded(
@@ -35,7 +39,10 @@ pub fn toggle_grid_tree_row_expanded(
     row_id: &str,
 ) -> (bool, BTreeMap<String, bool>) {
     let expanded = !expanded_tree_rows.get(row_id).copied().unwrap_or(false);
-    (expanded, set_grid_tree_row_expanded(expanded_tree_rows, row_id, expanded))
+    (
+        expanded,
+        set_grid_tree_row_expanded(expanded_tree_rows, row_id, expanded),
+    )
 }
 
 pub fn expand_all_grid_tree_rows(rows: &[GridRow]) -> BTreeMap<String, bool> {

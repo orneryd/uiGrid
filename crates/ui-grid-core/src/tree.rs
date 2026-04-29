@@ -143,7 +143,10 @@ pub fn filter_and_flatten_grid_tree_rows(
 ) -> Vec<GridRow> {
     let mut rows_by_parent: BTreeMap<Option<String>, Vec<GridRow>> = BTreeMap::new();
     for row in rows {
-        rows_by_parent.entry(row.parent_id.clone()).or_default().push(row.clone());
+        rows_by_parent
+            .entry(row.parent_id.clone())
+            .or_default()
+            .push(row.clone());
     }
 
     let mut included = BTreeSet::new();
@@ -165,14 +168,25 @@ pub fn filter_and_flatten_grid_tree_rows(
             return false;
         }
 
-        let children = rows_by_parent.get(&Some(row.id.clone())).cloned().unwrap_or_default();
+        let children = rows_by_parent
+            .get(&Some(row.id.clone()))
+            .cloned()
+            .unwrap_or_default();
         let mut child_included = false;
         for child in children {
-            child_included = visit(&child, rows_by_parent, included, columns, options, active_filters) || child_included;
+            child_included = visit(
+                &child,
+                rows_by_parent,
+                included,
+                columns,
+                options,
+                active_filters,
+            ) || child_included;
         }
 
         let mut current = row.clone();
-        let self_included = matches_grid_row_filters(&mut current, columns, options, active_filters);
+        let self_included =
+            matches_grid_row_filters(&mut current, columns, options, active_filters);
         if child_included {
             clear_grid_filter_reasons(&mut current);
         }
@@ -185,7 +199,14 @@ pub fn filter_and_flatten_grid_tree_rows(
     }
 
     for root_row in rows_by_parent.get(&None).cloned().unwrap_or_default() {
-        visit(&root_row, &rows_by_parent, &mut included, columns, options, active_filters);
+        visit(
+            &root_row,
+            &rows_by_parent,
+            &mut included,
+            columns,
+            options,
+            active_filters,
+        );
     }
 
     let mut flattened = Vec::new();

@@ -56,7 +56,10 @@ pub fn stringify_cell_value(value: &Value) -> String {
 pub fn to_csv_value(value: &str) -> String {
     let mut escaped = value.to_string();
 
-    if matches!(escaped.chars().next(), Some('=' | '+' | '-' | '@' | '\t' | '\r')) {
+    if matches!(
+        escaped.chars().next(),
+        Some('=' | '+' | '-' | '@' | '\t' | '\r')
+    ) {
         escaped = format!("'{}", escaped);
     }
 

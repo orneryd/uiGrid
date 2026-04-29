@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    models::{DisplayItem, ExpandableItem, GridColumnDef, GridOptions, GridRow, GroupItem, RowItem},
+    models::{
+        DisplayItem, ExpandableItem, GridColumnDef, GridOptions, GridRow, GroupItem, RowItem,
+    },
     utils::{get_path_value, stringify_cell_value},
 };
 
@@ -51,10 +53,19 @@ fn build_grouped_items(
     for row in rows {
         let value = stringify_cell_value(
             &get_path_value(&row.entity, current_field)
-                .or_else(|| columns.iter().find(|column| column.name == *current_field).map(|column| crate::utils::get_cell_value(&row.entity, column)))
+                .or_else(|| {
+                    columns
+                        .iter()
+                        .find(|column| column.name == *current_field)
+                        .map(|column| crate::utils::get_cell_value(&row.entity, column))
+                })
                 .unwrap_or(serde_json::Value::Null),
         );
-        let key = if value.is_empty() { "Unassigned".to_string() } else { value };
+        let key = if value.is_empty() {
+            "Unassigned".to_string()
+        } else {
+            value
+        };
         groups.entry(key).or_default().push(row.clone());
     }
 
@@ -64,7 +75,12 @@ fn build_grouped_items(
         let collapsed = collapsed_groups
             .get(&group_id)
             .copied()
-            .or_else(|| options.grouping.as_ref().map(|grouping| grouping.start_collapsed))
+            .or_else(|| {
+                options
+                    .grouping
+                    .as_ref()
+                    .map(|grouping| grouping.start_collapsed)
+            })
             .unwrap_or(false);
 
         items.push(DisplayItem::Group(GroupItem {

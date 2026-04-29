@@ -3,7 +3,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{constants::SortDirection, models::{GridSavedPaginationState, GridSavedState, SortState}};
+use crate::{
+    constants::SortDirection,
+    models::{GridSavedPaginationState, GridSavedState, SortState},
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,20 +117,35 @@ fn current_page_value(current_page: usize) -> usize {
 }
 
 fn effective_page_size(page_size: usize, total_items: usize) -> usize {
-    if page_size > 0 { page_size } else { total_items }
+    if page_size > 0 {
+        page_size
+    } else {
+        total_items
+    }
 }
 
 pub fn sanitize_download_filename(value: &str) -> String {
     let sanitized = value
         .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') { ch } else { '_' })
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
+                ch
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
     let trimmed = sanitized.trim_matches('_').to_string();
-    if trimmed.is_empty() { "ui-grid".to_string() } else { trimmed }
+    if trimmed.is_empty() {
+        "ui-grid".to_string()
+    } else {
+        trimmed
+    }
 }
 
 pub fn normalize_boolean_map(value: &serde_json::Map<String, Value>) -> BTreeMap<String, bool> {
-    value.iter()
+    value
+        .iter()
         .filter_map(|(key, entry)| {
             let boolean = entry.as_bool()?;
             is_safe_state_key(key).then(|| (key.clone(), boolean))

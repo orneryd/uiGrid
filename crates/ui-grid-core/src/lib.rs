@@ -9,7 +9,7 @@ pub mod pipeline;
 pub mod row_searcher;
 pub mod row_sorter;
 pub mod row_state;
-pub mod state;
 pub mod sorting;
+pub mod state;
 pub mod tree;
 pub mod utils;

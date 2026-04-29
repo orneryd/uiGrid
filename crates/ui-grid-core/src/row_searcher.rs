@@ -100,15 +100,24 @@ pub fn setup_filters(filters: &[GridFilterDescriptor]) -> Vec<ParsedFilter> {
 
         let condition = match filter.condition.unwrap_or(FilterCondition::Contains) {
             FilterCondition::StartsWith => ParsedCondition::Regex(regex_from_pattern(
-                &format!("^{}", build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))),
+                &format!(
+                    "^{}",
+                    build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))
+                ),
                 filter.flags.case_sensitive,
             )),
             FilterCondition::EndsWith => ParsedCondition::Regex(regex_from_pattern(
-                &format!("{}$", build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))),
+                &format!(
+                    "{}$",
+                    build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))
+                ),
                 filter.flags.case_sensitive,
             )),
             FilterCondition::Exact => ParsedCondition::Regex(regex_from_pattern(
-                &format!("^{}$", build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))),
+                &format!(
+                    "^{}$",
+                    build_literal_pattern(term.as_ref().unwrap_or(&Value::Null))
+                ),
                 filter.flags.case_sensitive,
             )),
             FilterCondition::Contains => {
@@ -144,11 +153,22 @@ pub fn run_column_filter(row: &GridRecord, column: &GridColumnDef, filter: &Pars
     match &filter.condition {
         ParsedCondition::Regex(regex) => regex.is_match(&value_to_string(&value)),
         ParsedCondition::Comparator(condition) => match condition {
-            FilterCondition::NotEqual => value_to_string(&value) != value_to_string(filter.term.as_ref().unwrap_or(&Value::Null)),
-            FilterCondition::GreaterThan => compare_numeric_or_string(&value, filter.term.as_ref()) > 0,
-            FilterCondition::GreaterThanOrEqual => compare_numeric_or_string(&value, filter.term.as_ref()) >= 0,
-            FilterCondition::LessThan => compare_numeric_or_string(&value, filter.term.as_ref()) < 0,
-            FilterCondition::LessThanOrEqual => compare_numeric_or_string(&value, filter.term.as_ref()) <= 0,
+            FilterCondition::NotEqual => {
+                value_to_string(&value)
+                    != value_to_string(filter.term.as_ref().unwrap_or(&Value::Null))
+            }
+            FilterCondition::GreaterThan => {
+                compare_numeric_or_string(&value, filter.term.as_ref()) > 0
+            }
+            FilterCondition::GreaterThanOrEqual => {
+                compare_numeric_or_string(&value, filter.term.as_ref()) >= 0
+            }
+            FilterCondition::LessThan => {
+                compare_numeric_or_string(&value, filter.term.as_ref()) < 0
+            }
+            FilterCondition::LessThanOrEqual => {
+                compare_numeric_or_string(&value, filter.term.as_ref()) <= 0
+            }
             _ => true,
         },
     }

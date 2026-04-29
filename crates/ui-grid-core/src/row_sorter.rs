@@ -60,7 +60,9 @@ fn compare_numbers(left: &Value, right: &Value) -> Ordering {
 
     let left_number = left.as_f64().unwrap_or_default();
     let right_number = right.as_f64().unwrap_or_default();
-    left_number.partial_cmp(&right_number).unwrap_or(Ordering::Equal)
+    left_number
+        .partial_cmp(&right_number)
+        .unwrap_or(Ordering::Equal)
 }
 
 fn compare_number_strings(left: &Value, right: &Value) -> Ordering {
@@ -95,7 +97,9 @@ fn compare_date(left: &Value, right: &Value) -> Ordering {
         return ordering;
     }
 
-    left.as_str().unwrap_or_default().cmp(right.as_str().unwrap_or_default())
+    left.as_str()
+        .unwrap_or_default()
+        .cmp(right.as_str().unwrap_or_default())
 }
 
 fn compare_boolean(left: &Value, right: &Value) -> Ordering {
@@ -103,7 +107,10 @@ fn compare_boolean(left: &Value, right: &Value) -> Ordering {
         return ordering;
     }
 
-    match (left.as_bool().unwrap_or(false), right.as_bool().unwrap_or(false)) {
+    match (
+        left.as_bool().unwrap_or(false),
+        right.as_bool().unwrap_or(false),
+    ) {
         (true, true) | (false, false) => Ordering::Equal,
         (true, false) => Ordering::Greater,
         (false, true) => Ordering::Less,
