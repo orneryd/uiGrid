@@ -76,7 +76,10 @@ fn guess_condition(filter: &GridFilterDescriptor) -> ParsedCondition {
         ));
     }
 
-    ParsedCondition::Comparator(FilterCondition::Contains)
+    ParsedCondition::Regex(regex_from_pattern(
+        &escape_reg_exp(&term),
+        filter.flags.case_sensitive,
+    ))
 }
 
 pub fn setup_filters(filters: &[GridFilterDescriptor]) -> Vec<ParsedFilter> {
