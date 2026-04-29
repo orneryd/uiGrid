@@ -26,36 +26,40 @@ fn get_tree_children(options: &GridOptions, entity: &GridRecord) -> Vec<GridReco
 }
 
 fn resolve_row_id(options: &GridOptions, entity: &GridRecord, index: usize) -> String {
-    if let Some(field) = &options.row_id_field {
-        if let Some(Value::String(id)) = get_path_value(entity, field) {
-            return id;
-        }
+    if let Some(field) = &options.row_id_field
+        && let Some(Value::String(id)) = get_path_value(entity, field)
+    {
+        return id;
     }
 
     format!("{}-{}", options.id, index)
 }
 
+struct CreateRowContext<'a> {
+    options: &'a GridOptions,
+    row_size: usize,
+    hidden_row_reasons: &'a BTreeMap<String, Vec<String>>,
+    expanded_rows: &'a BTreeMap<String, bool>,
+}
+
 fn create_row(
-    options: &GridOptions,
+    context: &CreateRowContext<'_>,
     entity: &GridRecord,
     index: usize,
-    row_size: usize,
-    hidden_row_reasons: &BTreeMap<String, Vec<String>>,
     tree_level: usize,
     parent_id: Option<String>,
     child_count: usize,
-    expanded: bool,
 ) -> GridRow {
-    let row_id = resolve_row_id(options, entity, index);
-    let mut row = GridRow::new(row_id.clone(), entity.clone(), index, row_size);
+    let row_id = resolve_row_id(context.options, entity, index);
+    let mut row = GridRow::new(row_id.clone(), entity.clone(), index, context.row_size);
     row.tree_level = tree_level;
     row.parent_id = parent_id;
     row.child_count = child_count;
     row.has_children = child_count > 0;
-    row.expanded = expanded;
-    row.expanded_row_height = options.expandable_row_height.unwrap_or(150);
+    row.expanded = context.expanded_rows.get(&row_id).copied().unwrap_or(false);
+    row.expanded_row_height = context.options.expandable_row_height.unwrap_or(150);
 
-    if let Some(reasons) = hidden_row_reasons.get(&row_id) {
+    if let Some(reasons) = context.hidden_row_reasons.get(&row_id) {
         for reason in reasons {
             row.set_this_row_invisible(reason.clone());
         }
@@ -72,46 +76,46 @@ pub fn build_grid_rows(
 ) -> Vec<GridRow> {
     let mut rows = Vec::new();
     let mut next_index = 0usize;
+    let context = CreateRowContext {
+        options,
+        row_size,
+        hidden_row_reasons,
+        expanded_rows,
+    };
+
+    struct VisitContext<'a> {
+        create_row: CreateRowContext<'a>,
+    }
 
     fn visit(
+        context: &VisitContext<'_>,
         rows: &mut Vec<GridRow>,
         next_index: &mut usize,
         entities: &[GridRecord],
-        options: &GridOptions,
-        row_size: usize,
-        hidden_row_reasons: &BTreeMap<String, Vec<String>>,
-        expanded_rows: &BTreeMap<String, bool>,
         tree_level: usize,
         parent_id: Option<String>,
     ) {
         for entity in entities {
-            let child_entities = get_tree_children(options, entity);
-            let row_id = resolve_row_id(options, entity, *next_index);
+            let child_entities = get_tree_children(context.create_row.options, entity);
             let row = create_row(
-                options,
+                &context.create_row,
                 entity,
                 *next_index,
-                row_size,
-                hidden_row_reasons,
                 tree_level,
                 parent_id.clone(),
                 child_entities.len(),
-                expanded_rows.get(&row_id).copied().unwrap_or(false),
             );
 
             *next_index += 1;
             let parent = row.id.clone();
             rows.push(row);
 
-            if is_tree_enabled(options) && !child_entities.is_empty() {
+            if is_tree_enabled(context.create_row.options) && !child_entities.is_empty() {
                 visit(
+                    context,
                     rows,
                     next_index,
                     &child_entities,
-                    options,
-                    row_size,
-                    hidden_row_reasons,
-                    expanded_rows,
                     tree_level + 1,
                     Some(parent),
                 );
@@ -119,14 +123,13 @@ pub fn build_grid_rows(
         }
     }
 
+    let visit_context = VisitContext { create_row: context };
+
     visit(
+        &visit_context,
         &mut rows,
         &mut next_index,
         &options.data,
-        options,
-        row_size,
-        hidden_row_reasons,
-        expanded_rows,
         0,
         None,
     );
@@ -211,55 +214,65 @@ pub fn filter_and_flatten_grid_tree_rows(
 
     let mut flattened = Vec::new();
 
+    struct FlattenContext<'a> {
+        rows_by_parent: &'a BTreeMap<Option<String>, Vec<GridRow>>,
+        included: &'a BTreeSet<String>,
+        columns: &'a [GridColumnDef],
+        options: &'a GridOptions,
+        expanded_tree_rows: &'a BTreeMap<String, bool>,
+        sort_state: &'a SortState,
+    }
+
     fn flatten(
+        context: &FlattenContext<'_>,
         parent_id: Option<String>,
-        rows_by_parent: &BTreeMap<Option<String>, Vec<GridRow>>,
-        included: &BTreeSet<String>,
         flattened: &mut Vec<GridRow>,
-        columns: &[GridColumnDef],
-        options: &GridOptions,
-        expanded_tree_rows: &BTreeMap<String, bool>,
-        sort_state: &SortState,
     ) {
         let siblings = sort_grid_rows(
-            &rows_by_parent
+            &context
+                .rows_by_parent
                 .get(&parent_id)
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|row| included.contains(&row.id))
+                .filter(|row| context.included.contains(&row.id))
                 .collect::<Vec<_>>(),
-            columns,
-            options,
-            sort_state,
+            context.columns,
+            context.options,
+            context.sort_state,
         );
 
         for row in siblings {
             flattened.push(row.clone());
-            if row.has_children && expanded_tree_rows.get(&row.id).copied().unwrap_or(false) {
+            if row.has_children
+                && context
+                    .expanded_tree_rows
+                    .get(&row.id)
+                    .copied()
+                    .unwrap_or(false)
+            {
                 flatten(
+                    context,
                     Some(row.id.clone()),
-                    rows_by_parent,
-                    included,
                     flattened,
-                    columns,
-                    options,
-                    expanded_tree_rows,
-                    sort_state,
                 );
             }
         }
     }
 
-    flatten(
-        None,
-        &rows_by_parent,
-        &included,
-        &mut flattened,
+    let flatten_context = FlattenContext {
+        rows_by_parent: &rows_by_parent,
+        included: &included,
         columns,
         options,
         expanded_tree_rows,
         sort_state,
+    };
+
+    flatten(
+        &flatten_context,
+        None,
+        &mut flattened,
     );
     flattened
 }
