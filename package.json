@@ -21,7 +21,7 @@
     "test:angular": "ng test --watch=false",
     "test:rust": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --workspace",
     "test:react": "npm test --prefix projects/ui-grid-react",
-    "test:vanilla": "npm test --prefix projects/ui-grid-vanilla"
+    "test:vanilla": "npm run build:library && npm run build:rust:web && npm test --prefix projects/ui-grid-vanilla"
   },
   "private": true,
   "packageManager": "npm@11.11.1",

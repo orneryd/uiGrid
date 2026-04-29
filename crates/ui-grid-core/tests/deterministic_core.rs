@@ -3,10 +3,15 @@ use std::collections::BTreeMap;
 use serde_json::json;
 use ui_grid_core::{
     constants::{FilterCondition, SortDirection},
+    edit::{
+        begin_grid_edit_session, build_grid_focus_cell_result, clear_grid_edit_session,
+        find_next_grid_cell, parse_grid_edited_value, should_grid_edit_on_focus,
+        stringify_grid_editor_value, GridMoveDirection,
+    },
     export::export_csv_rows,
     models::{
-        BuildGridPipelineContext, DisplayItem, GridColumnDef, GridColumnType, GridGroupingOptions,
-        GridOptions, GridRow, SortState,
+        BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef, GridColumnType,
+        GridGroupingOptions, GridOptions, GridRow, SortState,
     },
     pipeline::build_grid_pipeline,
     row_state::{
@@ -35,6 +40,8 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_sorting: true,
             enable_filtering: true,
             enable_grouping: true,
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -53,6 +60,8 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_sorting: true,
             enable_filtering: true,
             enable_grouping: true,
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -71,6 +80,8 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_sorting: true,
             enable_filtering: true,
             enable_grouping: true,
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -271,6 +282,190 @@ fn save_state_and_normalization_deeply_assert_results() {
         sanitize_download_filename("Quarterly / Revenue: 2026.csv"),
         "Quarterly___Revenue__2026.csv"
     );
+}
+
+#[test]
+fn edit_helpers_manage_focus_sessions_and_value_parsing() {
+    let options = GridOptions {
+        enable_cell_edit_on_focus: true,
+        ..Default::default()
+    };
+    let editable_column = GridColumnDef {
+        name: "owner".to_string(),
+        r#type: GridColumnType::String,
+        enable_cell_edit: true,
+        ..base_columns()[0].clone()
+    };
+
+    assert!(should_grid_edit_on_focus(&options, &editable_column));
+
+    let edit_session = begin_grid_edit_session("row-1", "owner", "Alice");
+    assert_eq!(
+        edit_session.focused_cell,
+        GridCellPosition {
+            row_id: "row-1".to_string(),
+            column_name: "owner".to_string(),
+        }
+    );
+    assert_eq!(edit_session.editing_cell, edit_session.focused_cell);
+    assert_eq!(edit_session.editing_value, "Alice");
+
+    let focus_result = build_grid_focus_cell_result(
+        None,
+        None,
+        "row-1",
+        "owner",
+        true,
+        true,
+    );
+    assert!(focus_result.should_begin_edit);
+
+    let duplicate_focus_result = build_grid_focus_cell_result(
+        Some(&focus_result.focused_cell),
+        None,
+        "row-1",
+        "owner",
+        true,
+        true,
+    );
+    assert!(!duplicate_focus_result.should_begin_edit);
+
+    let cleared = clear_grid_edit_session();
+    assert_eq!(cleared.0, None);
+    assert!(cleared.1.is_empty());
+
+    assert_eq!(
+        stringify_grid_editor_value(&json!(true)),
+        "true".to_string()
+    );
+    assert_eq!(stringify_grid_editor_value(&json!(null)), String::new());
+
+    let numeric_column = GridColumnDef {
+        name: "revenue".to_string(),
+        r#type: GridColumnType::Number,
+        enable_cell_edit: true,
+        ..base_columns()[2].clone()
+    };
+    assert_eq!(parse_grid_edited_value(&numeric_column, "42", &json!(5)), json!(42.0));
+    assert_eq!(
+        parse_grid_edited_value(&numeric_column, "nope", &json!(5)),
+        json!(5)
+    );
+
+    let boolean_column = GridColumnDef {
+        name: "active".to_string(),
+        r#type: GridColumnType::Boolean,
+        enable_cell_edit: true,
+        enable_cell_edit_on_focus: false,
+        ..GridColumnDef::default()
+    };
+    assert_eq!(
+        parse_grid_edited_value(&boolean_column, "true", &json!(false)),
+        json!(true)
+    );
+    assert_eq!(
+        parse_grid_edited_value(&editable_column, "Taylor Morgan", &json!("Mina Patel")),
+        json!("Taylor Morgan")
+    );
+}
+
+#[test]
+fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
+    let rows = build_grid_rows(&base_options(), 44, &BTreeMap::new(), &BTreeMap::new());
+    let columns = vec![
+        GridColumnDef {
+            name: "name".to_string(),
+            enable_cell_edit: true,
+            enable_cell_edit_on_focus: false,
+            ..GridColumnDef::default()
+        },
+        GridColumnDef {
+            name: "status".to_string(),
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
+            ..GridColumnDef::default()
+        },
+        GridColumnDef {
+            name: "owner".to_string(),
+            enable_cell_edit: true,
+            enable_cell_edit_on_focus: false,
+            ..GridColumnDef::default()
+        },
+    ];
+
+    let right = find_next_grid_cell(
+        &rows,
+        &columns,
+        "row-1",
+        "name",
+        GridMoveDirection::Right,
+        Some(|_row: &GridRow, column: &GridColumnDef| column.enable_cell_edit),
+    );
+    assert_eq!(
+        right,
+        Some(GridCellPosition {
+            row_id: "row-1".to_string(),
+            column_name: "owner".to_string(),
+        })
+    );
+
+    let wrapped = find_next_grid_cell(
+        &rows,
+        &columns,
+        "row-1",
+        "owner",
+        GridMoveDirection::Right,
+        Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
+    );
+    assert_eq!(
+        wrapped,
+        Some(GridCellPosition {
+            row_id: "row-2".to_string(),
+            column_name: "name".to_string(),
+        })
+    );
+
+    let left = find_next_grid_cell(
+        &rows,
+        &columns,
+        "row-2",
+        "name",
+        GridMoveDirection::Left,
+        Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
+    );
+    assert_eq!(
+        left,
+        Some(GridCellPosition {
+            row_id: "row-1".to_string(),
+            column_name: "owner".to_string(),
+        })
+    );
+
+    let down = find_next_grid_cell(
+        &rows,
+        &columns,
+        "row-1",
+        "status",
+        GridMoveDirection::Down,
+        Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
+    );
+    assert_eq!(
+        down,
+        Some(GridCellPosition {
+            row_id: "row-2".to_string(),
+            column_name: "status".to_string(),
+        })
+    );
+
+    let none = find_next_grid_cell(
+        &rows,
+        &columns,
+        "row-1",
+        "name",
+        GridMoveDirection::Up,
+        Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
+    );
+    assert_eq!(none, None);
 }
 
 #[test]

@@ -53,7 +53,7 @@ pub struct GridSortDescriptor {
     pub ignore_sort: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GridColumnDef {
     pub name: String,
@@ -75,6 +75,10 @@ pub struct GridColumnDef {
     pub enable_filtering: bool,
     #[serde(default = "default_true")]
     pub enable_grouping: bool,
+    #[serde(default)]
+    pub enable_cell_edit: bool,
+    #[serde(default)]
+    pub enable_cell_edit_on_focus: bool,
     #[serde(default)]
     pub sort: Option<GridSortDescriptor>,
     #[serde(default)]
@@ -110,6 +114,10 @@ pub struct GridOptions {
     pub enable_filtering: bool,
     #[serde(default)]
     pub enable_grouping: bool,
+    #[serde(default)]
+    pub enable_cell_edit: bool,
+    #[serde(default)]
+    pub enable_cell_edit_on_focus: bool,
     #[serde(default = "default_true")]
     pub enable_virtualization: bool,
     #[serde(default)]
@@ -150,6 +158,8 @@ impl Default for GridOptions {
             enable_sorting: true,
             enable_filtering: true,
             enable_grouping: false,
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
             enable_virtualization: true,
             enable_pagination: false,
             use_external_pagination: false,
@@ -166,6 +176,13 @@ impl Default for GridOptions {
             row_id_field: Some("id".to_string()),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GridCellPosition {
+    pub row_id: String,
+    pub column_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

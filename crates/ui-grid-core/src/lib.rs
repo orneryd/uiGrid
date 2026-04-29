@@ -1,5 +1,6 @@
 pub mod constants;
 pub mod display;
+pub mod edit;
 pub mod export;
 pub mod filtering;
 pub mod grouping;
