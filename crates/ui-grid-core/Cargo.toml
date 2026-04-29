@@ -1,0 +1,20 @@
+[package]
+name = "ui-grid-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Deterministic Rust engine for ui-grid"
+
+[dependencies]
+anyhow.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ui-grid-contracts = { path = "../ui-grid-contracts" }
+
+[dev-dependencies]
+ui-grid-fixtures = { path = "../ui-grid-fixtures" }

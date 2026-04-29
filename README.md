@@ -194,6 +194,7 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Web Component](./docs/web-component.md)     | Build, usage, styling the custom element               |
 | [Internationalization](./docs/i18n.md)       | Runtime overrides, build-time locales                  |
 | [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
+| [Rust / WASM](./docs/rust.md)                | Build and run the Rust-backed browser demo locally     |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 
@@ -207,6 +208,8 @@ npm test           # Run tests (Vitest)
 npm run build      # Production build
 npm run build:library   # Build the library (ng-packagr)
 npm run build:element   # Build the web component
+npm run build:rust:web  # Build the browser-native Rust/WASM artifact
+npm run start:vanilla   # Run the Rust-backed browser demo at 127.0.0.1:4174
 ```
 
 ---

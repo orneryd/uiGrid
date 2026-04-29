@@ -58,7 +58,6 @@ import {
   buildGridFocusCellResult,
   buildGridSavedState,
   buildGridSortState,
-  buildGridPipeline,
   buildGridRows,
   canGridExpandRows,
   canGridMoveColumns,
@@ -111,6 +110,7 @@ import {
   sanitizeDownloadFilename
 } from './grid.core';
 import type { DisplayItem, ExpandableItem, GroupItem, PipelineResult } from './grid.core';
+import { defaultGridEngine } from './ui-grid.engine';
 import {
   applyGridSortStateCommand,
   beginGridCellEditCommand,
@@ -170,7 +170,11 @@ import {
   }
 })
 export class UiGridComponent {
-  readonly options = input.required<GridOptions>();
+  readonly options = input<GridOptions>({
+    id: '__ui-grid-pending__',
+    data: [],
+    columnDefs: []
+  });
 
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly platformId = inject(PLATFORM_ID);
@@ -374,7 +378,7 @@ export class UiGridComponent {
   }
 
   private buildPipeline(): PipelineResult {
-    return buildGridPipeline({
+    return defaultGridEngine.buildPipeline({
       options: this.options(),
       columns: this.visibleColumns(),
       activeFilters: this.activeFilters(),

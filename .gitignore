@@ -45,3 +45,4 @@ Thumbs.db
 *.bak
 *node_modules*
 *dist*
+target

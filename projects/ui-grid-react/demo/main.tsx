@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { UiGrid } from '../src/index';
 import type { GridOptions, UiGridApi } from '../src/index';
 import { FILTER_CONDITIONS } from '@ornery/ui-grid';
+import { enableReactUiGridWasmEngine } from '../src/rustWasmGridEngine';
 import '../src/ui-grid.css';
 
 const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'] as const;
@@ -92,4 +93,10 @@ function App() {
   return <UiGrid options={options} onRegisterApi={options.onRegisterApi} />;
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+void enableReactUiGridWasmEngine()
+  .then(() => {
+    createRoot(document.getElementById('root')!).render(<App />);
+  })
+  .catch((err) => {
+    console.error(err);
+  });

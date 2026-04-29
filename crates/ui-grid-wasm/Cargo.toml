@@ -1,0 +1,24 @@
+[package]
+name = "ui-grid-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "WASM boundary for the ui-grid Rust core"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+console_error_panic_hook.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen.workspace = true
+ui-grid-core = { path = "../ui-grid-core" }
+ui-grid-virtualization = { path = "../ui-grid-virtualization" }
+wasm-bindgen.workspace = true
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true

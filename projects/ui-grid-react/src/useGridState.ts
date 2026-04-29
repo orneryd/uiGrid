@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  buildGridTemplateColumns,
+  computeViewportHeightPx,
+  computeViewportRows,
+  formatPaginationSummary,
+  orderVisibleColumns,
+  resolveBenchmarkIterations,
+} from './gridStateMath';
+import {
   createGridApi,
   UiGridApi,
   GridApiBindings,
@@ -16,7 +24,7 @@ import {
   getCellValue,
   setPathValue,
   SORT_DIRECTIONS,
-  buildGridPipeline,
+  defaultGridEngine,
   resolveGridLabels,
   gridColumnWidth,
   headerLabel as coreHeaderLabel,
@@ -311,17 +319,14 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   const rowSize = options.rowHeight ?? 44;
 
   const visibleColumns = useMemo(() => {
-    const order = columnOrder;
-    return [...options.columnDefs]
-      .filter((column) => column.visible !== false)
-      .sort((left, right) => order.indexOf(left.name) - order.indexOf(right.name));
+    return orderVisibleColumns(options.columnDefs, columnOrder);
   }, [options.columnDefs, columnOrder]);
 
   const visibleColumnsRef = useRef(visibleColumns);
   visibleColumnsRef.current = visibleColumns;
 
   const pipeline = useMemo<PipelineResult>(() => {
-    return buildGridPipeline({
+    return defaultGridEngine.buildPipeline({
       options,
       columns: visibleColumns,
       activeFilters,
@@ -343,7 +348,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   const labels = useMemo(() => resolveGridLabels(options.labels), [options.labels]);
 
   const gridTemplateColumns = useMemo(
-    () => visibleColumns.map((column) => gridColumnWidth(column)).join(' '),
+    () => buildGridTemplateColumns(visibleColumns),
     [visibleColumns]
   );
 
@@ -816,9 +821,9 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   }, [focusRenderedCell, isCellEditable, shouldEditOnFocusFn, startCellEditFn]);
 
   const runBenchmarkFn = useCallback((iterations?: number): GridBenchmarkResult => {
-    const safeIterations = Math.max(1, iterations ?? optionsRef.current.benchmark?.iterations ?? 25);
+    const safeIterations = resolveBenchmarkIterations(iterations, optionsRef.current.benchmark?.iterations);
     const startedAt = performance.now();
-    let lastResult = buildGridPipeline({
+    let lastResult = defaultGridEngine.buildPipeline({
       options: optionsRef.current,
       columns: visibleColumnsRef.current,
       activeFilters: activeFiltersRef.current,
@@ -834,7 +839,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     });
 
     for (let i = 1; i < safeIterations; i++) {
-      lastResult = buildGridPipeline({
+      lastResult = defaultGridEngine.buildPipeline({
         options: optionsRef.current,
         columns: visibleColumnsRef.current,
         activeFilters: activeFiltersRef.current,
@@ -956,7 +961,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   const paginationCurrentPage = getCurrentPageValueFn();
   const paginationTotalPages = getTotalPagesValueFn();
   const paginationSelectedPageSize = effectivePageSizeFn(pipeline.totalItems);
-  const viewportHeightPx = `${options.viewportHeight ?? autoViewportHeight ?? 560}px`;
+  const viewportHeightPx = computeViewportHeightPx(options.viewportHeight, autoViewportHeight);
 
   // --- Display helper functions ---
 
@@ -1072,8 +1077,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
 
   const paginationSummaryFn = useCallback((): string => {
     const ti = pipelineRef.current.totalItems;
-    if (ti === 0) return '0-0 of 0';
-    return `${getFirstRowIndexValueFn(ti) + 1}-${getLastRowIndexValueFn(ti) + 1} of ${ti}`;
+    return formatPaginationSummary(ti, getFirstRowIndexValueFn(ti), getLastRowIndexValueFn(ti));
   }, [getFirstRowIndexValueFn, getLastRowIndexValueFn]);
 
   const pageSizeOptionsFn = useCallback((): number[] => {
@@ -1302,7 +1306,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       state: infiniteScrollStateRef.current,
       startIndex,
       visibleRows: pipelineRef.current.visibleRows.length,
-      viewportRows: Math.max(1, Math.ceil((optionsRef.current.viewportHeight ?? 560) / (optionsRef.current.rowHeight ?? 44))),
+      viewportRows: computeViewportRows(optionsRef.current.viewportHeight, optionsRef.current.rowHeight),
       threshold: optionsRef.current.infiniteScrollRowsFromEnd ?? 20,
       setState: (state) => setInfiniteScrollState(state),
     });

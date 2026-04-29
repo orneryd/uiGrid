@@ -4,15 +4,23 @@
 
 Do not begin by rewriting the Angular component or by building a Rust-native UI adapter first.
 
+The target architecture should be:
+
+- one Rust implementation of the grid core
+- thin Angular, React, and web-component adapters that call that Rust core
+- a future Rust-native UI wrapper that preserves the same mental-model API
+
 The recommended path is:
 
 1. split out a framework-agnostic grid core in TypeScript
 2. freeze its contracts with cross-language fixtures
 3. implement the stable core in Rust
-4. expose it through a thin WASM wrapper for web adapters
-5. add a Rust-native adapter only after the engine boundary is proven
+4. expose it through a thin WASM wrapper for Angular, React, and web-component consumers
+5. dual-run TypeScript and Rust only long enough to prove parity
+6. retire the TypeScript engine so JavaScript owns adapters, not duplicate core logic
+7. add a Rust-native adapter only after the engine boundary is proven
 
-This keeps the current Angular product moving while creating a credible path to a portable Rust-backed engine.
+This keeps the current Angular product moving while creating a credible path to a portable Rust-backed engine without committing to permanent dual maintenance.
 
 ## Why Rust Fits ui-grid
 
@@ -34,7 +42,7 @@ Rust is a poor first target for the parts that are highly framework- and platfor
 - focus management against live elements
 - `ResizeObserver`, scroll, and file download APIs
 
-That means the right architectural role for Rust is the engine, not the adapter.
+That means the right architectural role for Rust is the engine, with TypeScript retained only for framework adapters and browser integration.
 
 ## What Rust Should Own
 
@@ -63,6 +71,18 @@ The first Rust engine scope should include:
 - real browser focus behavior
 - actual file download triggering
 - framework event emitter surfaces such as `UiGridApi`
+
+## Target End State
+
+The intended end state is not "a Rust version and a JavaScript version".
+
+The intended end state is:
+
+- Rust owns the full deterministic grid engine
+- Angular, React, and web components adapt their existing APIs onto the Rust engine
+- JavaScript remains only where the browser or framework requires it
+
+That means the TypeScript core should be treated as a migration scaffold, parity oracle, and rollback path during the transition, not as a permanently co-equal implementation.
 
 ## Recommended Boundary Shape
 
@@ -191,28 +211,43 @@ Exit criteria:
 
 - parity is proven against real adapter usage before switching production paths
 
-## Phase 5: Switch Selected Engine Paths to Rust
+## Phase 5: Switch Angular, React, and Web Components to Rust
 
 Deliverables:
 
-- use Rust for pure pipeline and transformation work first
+- route all pure engine work through Rust
 - keep Angular rendering, host integration, and `UiGridApi` orchestration in TypeScript
+- keep React and web-component packages on the same Rust engine contract
 
 Exit criteria:
 
-- production Angular adapter can run on the Rust engine without public API changes
+- production Angular, React, and web-component adapters can run on the Rust engine without public API changes
 
-## Phase 6: Add the First Rust-Native Adapter
+## Phase 6: Retire the TypeScript Engine
+
+Deliverables:
+
+- freeze the legacy TypeScript engine behind a fallback flag only
+- stop landing new engine behavior in TypeScript
+- remove the fallback once parity and performance hold across supported adapters
+
+Exit criteria:
+
+- Rust is the only maintained implementation of pipeline and state-transition logic
+- TypeScript remains only as adapter, packaging, and browser-integration code
+
+## Phase 7: Add the First Rust-Native Adapter
 
 Recommendation:
 
-- target Dioxus before Leptos
+- target Dioxus first, while re-checking ecosystem traction before implementation starts
 
 Reasoning:
 
-- Dioxus is prominent and visible, but the ecosystem signal for a serious native datagrid is weaker
-- Leptos already has a more credible native table option in `leptos-struct-table`
-- Yew is also a reasonable follow-on target, especially because AG Grid bindings are notable there, which suggests native datagrid supply is still weak
+- Dioxus is growing quickly across web and desktop, which matters if the same thin wrapper should serve multiple Rust surfaces
+- the market gap for a serious grid appears stronger in Dioxus than in Leptos, where `leptos-struct-table` already covers more of the table space
+- Yew remains a credible follow-on target, especially because existing AG Grid bindings there suggest proven demand for richer grids
+- the wrapper should preserve the same mental model: grid options in, commands in, state and view-model results out
 
 Exit criteria:
 

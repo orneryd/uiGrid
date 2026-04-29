@@ -2,6 +2,10 @@
 
 UI Grid ships as a standard Web Component via Angular Elements. Use `<ui-grid-element>` in any HTML page — no Angular required.
 
+For a Rust-first, framework-agnostic bootstrap path, import `defineUiGridRustElement()` from `@ornery/ui-grid` or use the thin `@ornery/ui-grid-vanilla` wrapper package to mount the element with plain DOM APIs.
+
+See [Rust / WASM](./rust.md) for the full local build and run steps for the browser-native Rust-backed demo.
+
 ## Build
 
 ```bash

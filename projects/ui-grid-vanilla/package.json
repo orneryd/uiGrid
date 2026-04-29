@@ -1,0 +1,31 @@
+{
+  "name": "@ornery/ui-grid-vanilla",
+  "version": "0.1.3",
+  "description": "Vanilla DOM wrapper for the Rust/WASM-backed @ornery/ui-grid custom element",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@ornery/ui-grid": "^0.1.3"
+  },
+  "devDependencies": {
+    "@ornery/ui-grid": "file:../ui-grid",
+    "typescript": "~5.8.0",
+    "tsup": "^8.0.0",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.0",
+    "jsdom": "^26.0.0"
+  },
+  "scripts": {
+    "start": "vite serve",
+    "build": "tsup src/index.ts --format esm,cjs --dts --tsconfig tsconfig.json --external @ornery/ui-grid",
+    "test": "vitest run"
+  }
+}

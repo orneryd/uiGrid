@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UI Grid Vanilla Demo</title>
+    <style>
+      :root {
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: #14213d;
+        background:
+          radial-gradient(circle at top left, rgba(244, 162, 97, 0.28), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(42, 157, 143, 0.24), transparent 32%),
+          #f7f3eb;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+
+      .page {
+        display: grid;
+        gap: 1.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .hero {
+        padding: 1.5rem 1.75rem;
+        border: 1px solid rgba(20, 33, 61, 0.12);
+        border-radius: 1.25rem;
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 80px rgba(20, 33, 61, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        line-height: 0.95;
+      }
+
+      p {
+        margin: 0;
+        max-width: 65ch;
+        line-height: 1.5;
+      }
+
+      #app {
+        min-height: 640px;
+      }
+
+      .shell {
+        --ui-grid-surface: rgba(255, 255, 255, 0.88);
+        --ui-grid-header-background: #143a52;
+        --ui-grid-header-color: #f7f3eb;
+        --ui-grid-accent: #e76f51;
+        --ui-grid-cell-color: #14213d;
+        --ui-grid-border-color: rgba(20, 33, 61, 0.16);
+        --ui-grid-row-hover: rgba(231, 111, 81, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page shell">
+      <section class="hero">
+        <h1>Vanilla + Rust/WASM UI Grid</h1>
+        <p>
+          This page mounts the Rust-backed custom element directly, without Angular or React host code.
+          It is the baseline integration target for future Rust-framework wrappers.
+        </p>
+      </section>
+      <section id="app"></section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+  </html>

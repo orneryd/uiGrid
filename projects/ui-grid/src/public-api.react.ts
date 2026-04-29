@@ -1,6 +1,7 @@
 export * from './lib/grid/grid.api';
 export * from './lib/grid/grid.constants';
 export * from './lib/grid/grid.core';
+export * from './lib/grid/ui-grid.engine';
 export * from './lib/grid/grid.features';
 export * from './lib/grid/grid.models';
 export * from './lib/grid/grid.utils';

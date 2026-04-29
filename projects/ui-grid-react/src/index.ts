@@ -4,6 +4,8 @@ export { useGridState } from './useGridState';
 export type { UseGridStateResult } from './useGridState';
 export { useVirtualScroll } from './useVirtualScroll';
 export type { UseVirtualScrollOptions, UseVirtualScrollResult } from './useVirtualScroll';
+export { orderVisibleColumns, buildGridTemplateColumns, resolveBenchmarkIterations, formatPaginationSummary, computeViewportHeightPx, computeViewportRows } from './gridStateMath';
+export { enableReactUiGridWasmEngine, registerReactUiGridWasmEngineFromModule } from './rustWasmGridEngine';
 
 export type {
   GridOptions,

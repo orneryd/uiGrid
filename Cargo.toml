@@ -1,0 +1,28 @@
+[workspace]
+members = [
+  "crates/ui-grid-contracts",
+  "crates/ui-grid-core",
+  "crates/ui-grid-fixtures",
+  "crates/ui-grid-virtualization",
+  "crates/ui-grid-wasm"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ornerydev/ui-grid"
+rust-version = "1.95"
+authors = ["Ornery UI Grid Contributors"]
+
+[workspace.dependencies]
+anyhow = "1.0.102"
+console_error_panic_hook = "0.1.7"
+regex = "1.12.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde-wasm-bindgen = "0.6.5"
+thiserror = "2.0.18"
+wasm-bindgen = "0.2.120"
+wasm-bindgen-test = "0.3.70"

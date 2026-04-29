@@ -77,8 +77,19 @@ npm start
 
 Open `http://localhost:4200` to see the full demo with 100,000 rows, theming, and all features active.
 
+## Run the Rust-backed Demo Locally
+
+If you want to exercise the Rust/WASM engine directly in the browser:
+
+```bash
+npm run start:vanilla
+```
+
+Open `http://127.0.0.1:4174/` to see the framework-agnostic vanilla demo that mounts the grid through the Rust-backed browser pipeline.
+
 ## Next Steps
 
 - [Features](./features.md) — see everything the grid can do
 - [Theming](./theming.md) — customize colors and layout via CSS custom properties
 - [API Reference](./api-reference.md) — full GridOptions, GridColumnDef, and UiGridApi documentation
+- [Rust / WASM](./rust.md) — build and run the Rust-backed browser demo locally
