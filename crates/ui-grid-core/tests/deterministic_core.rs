@@ -4,9 +4,9 @@ use serde_json::json;
 use ui_grid_core::{
     constants::{FilterCondition, SortDirection},
     edit::{
-        begin_grid_edit_session, build_grid_focus_cell_result, clear_grid_edit_session,
-        find_next_grid_cell, parse_grid_edited_value, should_grid_edit_on_focus,
-        stringify_grid_editor_value, GridMoveDirection,
+        GridMoveDirection, begin_grid_edit_session, build_grid_focus_cell_result,
+        clear_grid_edit_session, find_next_grid_cell, parse_grid_edited_value,
+        should_grid_edit_on_focus, stringify_grid_editor_value,
     },
     export::export_csv_rows,
     models::{
@@ -310,14 +310,7 @@ fn edit_helpers_manage_focus_sessions_and_value_parsing() {
     assert_eq!(edit_session.editing_cell, edit_session.focused_cell);
     assert_eq!(edit_session.editing_value, "Alice");
 
-    let focus_result = build_grid_focus_cell_result(
-        None,
-        None,
-        "row-1",
-        "owner",
-        true,
-        true,
-    );
+    let focus_result = build_grid_focus_cell_result(None, None, "row-1", "owner", true, true);
     assert!(focus_result.should_begin_edit);
 
     let duplicate_focus_result = build_grid_focus_cell_result(
@@ -346,7 +339,10 @@ fn edit_helpers_manage_focus_sessions_and_value_parsing() {
         enable_cell_edit: true,
         ..base_columns()[2].clone()
     };
-    assert_eq!(parse_grid_edited_value(&numeric_column, "42", &json!(5)), json!(42.0));
+    assert_eq!(
+        parse_grid_edited_value(&numeric_column, "42", &json!(5)),
+        json!(42.0)
+    );
     assert_eq!(
         parse_grid_edited_value(&numeric_column, "nope", &json!(5)),
         json!(5)

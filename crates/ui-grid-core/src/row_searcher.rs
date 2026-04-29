@@ -67,7 +67,9 @@ fn guess_condition(filter: &GridFilterDescriptor) -> ParsedCondition {
         return ParsedCondition::Comparator(FilterCondition::Contains);
     };
 
-    if term.contains('*') && let Some(pattern) = build_wildcard_pattern(&term) {
+    if term.contains('*')
+        && let Some(pattern) = build_wildcard_pattern(&term)
+    {
         return ParsedCondition::Regex(regex_from_pattern(
             &format!("^{pattern}$"),
             filter.flags.case_sensitive,

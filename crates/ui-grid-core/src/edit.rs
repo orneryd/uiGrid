@@ -30,7 +30,8 @@ pub fn is_grid_cell_position(
     row_id: &str,
     column_name: &str,
 ) -> bool {
-    position.is_some_and(|position| position.row_id == row_id && position.column_name == column_name)
+    position
+        .is_some_and(|position| position.row_id == row_id && position.column_name == column_name)
 }
 
 pub fn begin_grid_edit_session(

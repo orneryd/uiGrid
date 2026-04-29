@@ -123,7 +123,9 @@ pub fn build_grid_rows(
         }
     }
 
-    let visit_context = VisitContext { create_row: context };
+    let visit_context = VisitContext {
+        create_row: context,
+    };
 
     visit(
         &visit_context,
@@ -251,11 +253,7 @@ pub fn filter_and_flatten_grid_tree_rows(
                     .copied()
                     .unwrap_or(false)
             {
-                flatten(
-                    context,
-                    Some(row.id.clone()),
-                    flattened,
-                );
+                flatten(context, Some(row.id.clone()), flattened);
             }
         }
     }
@@ -269,10 +267,6 @@ pub fn filter_and_flatten_grid_tree_rows(
         sort_state,
     };
 
-    flatten(
-        &flatten_context,
-        None,
-        &mut flattened,
-    );
+    flatten(&flatten_context, None, &mut flattened);
     flattened
 }
