@@ -13,3 +13,4 @@ export * from './grid.core.infinite-scroll';
 export * from './grid.core.row-state';
 export * from './grid.core.state';
 export * from './grid.core.pipeline';
+export * from './grid.core.pinning';

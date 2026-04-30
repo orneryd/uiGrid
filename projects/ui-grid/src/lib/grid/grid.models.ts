@@ -78,6 +78,10 @@ export interface GridColumnDef {
   enableGrouping?: boolean;
   enableCellEdit?: boolean;
   enableCellEditOnFocus?: boolean;
+  /** Pinning */
+  pinnedLeft?: boolean;
+  pinnedRight?: boolean;
+  enablePinning?: boolean;
   cellEditableCondition?: GridCellEditableCondition;
   editModelField?: string;
   width?: string;
@@ -111,6 +115,7 @@ export interface GridSavedState {
   };
   expandable?: Record<string, boolean>;
   treeView?: Record<string, boolean>;
+  pinning?: Record<string, 'left' | 'right'>;
 }
 
 export interface GridLabels {
@@ -164,6 +169,12 @@ export interface GridLabels {
   statsVisibleRows: string;
   /** Group row – "rows" suffix */
   groupRowsSuffix: string;
+  /** Pin left action */
+  pinLeft: string;
+  /** Pin right action */
+  pinRight: string;
+  /** Unpin action */
+  unpin: string;
 }
 
 /**
@@ -215,6 +226,8 @@ export interface GridOptions {
   virtualizationThreshold?: number;
   viewportHeight?: number;
   grouping?: GridGroupingOptions;
+  /** Enable column pinning (freeze left/right) */
+  enablePinning?: boolean;
   benchmark?: GridBenchmarkOptions;
   onRegisterApi?: (gridApi: unknown) => void;
   rowIdentity?: (row: GridRecord, index: number) => string;

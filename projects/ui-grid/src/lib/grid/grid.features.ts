@@ -18,3 +18,4 @@ export const FEATURE_COLUMN_MOVING = true;
 export const FEATURE_CSV_EXPORT = true;
 export const FEATURE_SAVE_STATE = true;
 export const FEATURE_AUTO_RESIZE = true;
+export const FEATURE_PINNING = true;

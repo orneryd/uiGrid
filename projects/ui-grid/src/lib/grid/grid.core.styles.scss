@@ -192,6 +192,40 @@ h1 {
   background: color-mix(in srgb, var(--ui-grid-accent) 8%, var(--ui-grid-header-background));
 }
 
+.header-cell.is-pinned,
+.filter-cell.is-pinned,
+.body-cell.is-pinned {
+  position: sticky;
+  z-index: 2;
+  background: var(--ui-grid-surface);
+}
+
+.header-cell.is-pinned {
+  background: var(--ui-grid-header-background);
+}
+
+.body-cell.is-pinned.body-cell-odd {
+  background: var(--ui-grid-row-odd);
+}
+
+.body-cell.is-pinned:not(.body-cell-odd) {
+  background: var(--ui-grid-row-even);
+}
+
+.header-cell.is-pinned-left-last,
+.filter-cell.is-pinned-left-last,
+.body-cell.is-pinned-left-last {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+  clip-path: inset(0 -4px 0 0);
+}
+
+.header-cell.is-pinned-right-first,
+.filter-cell.is-pinned-right-first,
+.body-cell.is-pinned-right-first {
+  box-shadow: -2px 0 4px rgba(0, 0, 0, 0.06);
+  clip-path: inset(0 0 0 -4px);
+}
+
 .header-label {
   min-width: 0;
 }

@@ -19,7 +19,13 @@ export interface UiGridProps {
   className?: string;
 }
 
-export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRenderer, className }: UiGridProps) {
+export function UiGrid({
+  options,
+  onRegisterApi,
+  cellRenderer,
+  expandableRenderer,
+  className,
+}: UiGridProps) {
   const state = useGridState(options, onRegisterApi);
 
   const {
@@ -80,9 +86,18 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
           style={{ gridColumn: '1 / -1', paddingInlineStart: `${item.depth * 1.25 + 1}rem` }}
           onClick={() => state.toggleGroup(item)}
         >
-          <strong>{item.field}: {item.label}</strong>
-          <span>{item.count} {labels.groupRowsSuffix}</span>
-          <svg className="toggle-icon group-disclosure-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+          <strong>
+            {item.field}: {item.label}
+          </strong>
+          <span>
+            {item.count} {labels.groupRowsSuffix}
+          </span>
+          <svg
+            className="toggle-icon group-disclosure-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable={false}
+          >
             <path d={item.collapsed ? 'M10 7l5 5-5 5z' : 'M7 10l5 5 5-5z'} />
           </svg>
           <span className="sr-only ui-grid-sr-only">{state.groupDisclosureLabel(item)}</span>
@@ -110,7 +125,7 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
     return visibleColumns.map((column) => (
       <div
         key={`${rowItem.row.id}-${column.name}`}
-        className={cellClassName(rowItem, column)}
+        className={`${cellClassName(rowItem, column)}${state.isPinned(column) ? ' is-pinned' : ''}`}
         data-part="body-cell"
         role="gridcell"
         tabIndex={0}
@@ -120,8 +135,23 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
         onClick={() => state.focusCell(rowItem.row, column)}
         onDoubleClick={(e) => state.handleCellDoubleClick(rowItem.row, column, e)}
         onKeyDown={(e) => state.handleCellKeyDown(rowItem.row, column, e)}
+        style={{
+          position: state.isPinned(column) ? 'sticky' : undefined,
+          left:
+            state.pinnedOffset(column)?.side === 'left'
+              ? state.pinnedOffset(column)!.offset
+              : undefined,
+          right:
+            state.pinnedOffset(column)?.side === 'right'
+              ? state.pinnedOffset(column)!.offset
+              : undefined,
+          zIndex: state.isPinned(column) ? 2 : undefined,
+        }}
       >
-        <div className="cell-shell" style={{ paddingInlineStart: state.cellIndent(rowItem.row, column) }}>
+        <div
+          className="cell-shell"
+          style={{ paddingInlineStart: state.cellIndent(rowItem.row, column) }}
+        >
           {treeViewFeature && state.showTreeToggle(rowItem.row, column) && (
             <button
               type="button"
@@ -132,7 +162,9 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
               onClick={(e) => state.toggleTreeRow(rowItem.row, e)}
             >
               <svg className="toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                <path d={state.isTreeRowExpanded(rowItem.row) ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'} />
+                <path
+                  d={state.isTreeRowExpanded(rowItem.row) ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'}
+                />
               </svg>
             </button>
           )}
@@ -164,7 +196,8 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
                 onBlur={(e) => state.handleEditorBlur(e)}
               />
             ) : cellRenderer ? (
-              cellRenderer(state.cellContext(rowItem.row, column)) ?? state.displayValue(rowItem.row, column)
+              (cellRenderer(state.cellContext(rowItem.row, column)) ??
+              state.displayValue(rowItem.row, column))
             ) : (
               state.displayValue(rowItem.row, column)
             )}
@@ -222,11 +255,21 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
           </div>
 
           <div className="hero-actions">
-            <button type="button" className="action action-secondary" data-part="action benchmark-action" onClick={() => state.runBenchmark()}>
+            <button
+              type="button"
+              className="action action-secondary"
+              data-part="action benchmark-action"
+              onClick={() => state.runBenchmark()}
+            >
               Benchmark
             </button>
             {csvExportFeature && (
-              <button type="button" className="action action-secondary" data-part="action export-action" onClick={() => state.exportCsv()}>
+              <button
+                type="button"
+                className="action action-secondary"
+                data-part="action export-action"
+                onClick={() => state.exportCsv()}
+              >
                 Export CSV
               </button>
             )}
@@ -237,7 +280,11 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
           </div>
         </header>
 
-        <section className="metrics-strip" data-part="metrics" aria-label="Grid performance metrics">
+        <section
+          className="metrics-strip"
+          data-part="metrics"
+          aria-label="Grid performance metrics"
+        >
           <article data-part="metric-card">
             <strong>{pipelineMs.toFixed(2)} ms</strong>
             <span>pipeline</span>
@@ -256,15 +303,22 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
           </article>
         </section>
 
-        <section className="grid-frame ui-grid" data-part="grid-frame" role="grid" aria-label={options.title ?? 'Data grid'}>
+        <section
+          className="grid-frame ui-grid"
+          data-part="grid-frame"
+          role="grid"
+          aria-label={options.title ?? 'Data grid'}
+        >
           <div className="grid-toolbar" data-part="grid-toolbar">
             <div>
               <strong>{visibleRowCount}</strong>
-              <span>{labels.toolbarOf} {totalRows} {labels.toolbarRows}</span>
+              <span>
+                {labels.toolbarOf} {totalRows} {labels.toolbarRows}
+              </span>
             </div>
             <p>
-              `gridOptions` compatibility layer: sorting, filtering, grouping, column moving, templating,
-              and virtualized rendering.
+              `gridOptions` compatibility layer: sorting, filtering, grouping, column moving,
+              templating, and virtualized rendering.
             </p>
           </div>
 
@@ -279,10 +333,22 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
               {visibleColumns.map((column) => (
                 <div
                   key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}`}
+                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${state.isPinned(column) ? ' is-pinned' : ''}`}
                   data-part="header-cell"
                   role="columnheader"
-                  aria-sort={sortingFeature ? state.sortAriaSort(column) as any : undefined}
+                  aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
+                  style={{
+                    position: state.isPinned(column) ? 'sticky' : undefined,
+                    left:
+                      state.pinnedOffset(column)?.side === 'left'
+                        ? state.pinnedOffset(column)!.offset
+                        : undefined,
+                    right:
+                      state.pinnedOffset(column)?.side === 'right'
+                        ? state.pinnedOffset(column)!.offset
+                        : undefined,
+                    zIndex: state.isPinned(column) ? 2 : undefined,
+                  }}
                 >
                   <span className="header-label">{state.headerLabel(column)}</span>
 
@@ -297,25 +363,53 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
                         onClick={() => state.toggleSort(column)}
                       >
                         {renderSortIcon(column)}
-                        <span className="sr-only ui-grid-sr-only">{state.sortButtonLabel(column)}</span>
+                        <span className="sr-only ui-grid-sr-only">
+                          {state.sortButtonLabel(column)}
+                        </span>
                       </button>
                     )}
 
-                    {groupingFeature && state.isGroupingEnabled() && column.enableGrouping !== false && (
-                      <button
-                        type="button"
-                        className={`chip-action${state.isGrouped(column) ? ' chip-action-active' : ''}`}
-                        data-part="group-toggle"
-                        aria-label={state.groupingButtonLabel(column)}
-                        title={state.groupingButtonLabel(column)}
-                        onClick={(e) => state.toggleGrouping(column, e)}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                          <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z" />
-                        </svg>
-                        <span className="sr-only ui-grid-sr-only">{state.groupingButtonLabel(column)}</span>
-                      </button>
-                    )}
+                    {groupingFeature &&
+                      state.isGroupingEnabled() &&
+                      column.enableGrouping !== false && (
+                        <button
+                          type="button"
+                          className={`chip-action${state.isGrouped(column) ? ' chip-action-active' : ''}`}
+                          data-part="group-toggle"
+                          aria-label={state.groupingButtonLabel(column)}
+                          title={state.groupingButtonLabel(column)}
+                          onClick={(e) => state.toggleGrouping(column, e)}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                            <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z" />
+                          </svg>
+                          <span className="sr-only ui-grid-sr-only">
+                            {state.groupingButtonLabel(column)}
+                          </span>
+                        </button>
+                      )}
+                    {state.pinningFeature &&
+                      (column.pinnedLeft === true ||
+                        column.pinnedRight === true ||
+                        column.enablePinning === true) &&
+                      state.isPinningEnabled() &&
+                      state.isColumnPinnable(column) && (
+                        <button
+                          type="button"
+                          className={`chip-action${state.isPinned(column) ? ' chip-action-active' : ''}`}
+                          data-part="pin-toggle"
+                          aria-label={state.isPinned(column) ? labels.unpin : labels.pinLeft}
+                          title={state.isPinned(column) ? labels.unpin : labels.pinLeft}
+                          onClick={() => state.togglePin(column)}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                            <path d="M12 2L3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5z" />
+                          </svg>
+                          <span className="sr-only ui-grid-sr-only">
+                            {state.isPinned(column) ? labels.unpin : labels.pinLeft}
+                          </span>
+                        </button>
+                      )}
                   </div>
                 </div>
               ))}
@@ -323,10 +417,32 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
 
             {/* Filter row */}
             {filteringFeature && state.isFilteringEnabled() && (
-              <div className="filter-grid ui-grid-header" data-part="filters" style={{ gridTemplateColumns }}>
+              <div
+                className="filter-grid ui-grid-header"
+                data-part="filters"
+                style={{ gridTemplateColumns }}
+              >
                 {visibleColumns.map((column) => (
-                  <label key={column.name} className="filter-cell ui-grid-filter-container" data-part="filter-cell">
-                    <span className="sr-only ui-grid-sr-only">{labels.filterColumn} {state.headerLabel(column)}</span>
+                  <label
+                    key={column.name}
+                    className={`filter-cell ui-grid-filter-container${state.isPinned(column) ? ' is-pinned' : ''}`}
+                    data-part="filter-cell"
+                    style={{
+                      position: state.isPinned(column) ? 'sticky' : undefined,
+                      left:
+                        state.pinnedOffset(column)?.side === 'left'
+                          ? state.pinnedOffset(column)!.offset
+                          : undefined,
+                      right:
+                        state.pinnedOffset(column)?.side === 'right'
+                          ? state.pinnedOffset(column)!.offset
+                          : undefined,
+                      zIndex: state.isPinned(column) ? 2 : undefined,
+                    }}
+                  >
+                    <span className="sr-only ui-grid-sr-only">
+                      {labels.filterColumn} {state.headerLabel(column)}
+                    </span>
                     <input
                       className="ui-grid-filter-input"
                       type="text"
@@ -387,7 +503,12 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
 
             {/* Pagination footer */}
             {paginationFeature && state.showPaginationControls() && (
-              <footer className="pagination-bar ui-grid-pagination" data-part="pagination" role="navigation" aria-label={labels.paginationPage}>
+              <footer
+                className="pagination-bar ui-grid-pagination"
+                data-part="pagination"
+                role="navigation"
+                aria-label={labels.paginationPage}
+              >
                 <p>{state.paginationSummary()}</p>
                 <div className="pagination-controls">
                   <button
@@ -397,12 +518,20 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
                     disabled={paginationCurrentPage <= 1}
                     onClick={() => state.previousPage()}
                   >
-                    <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                    <svg
+                      className="pagination-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable={false}
+                    >
                       <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                     </svg>
                     <span className="sr-only">{labels.paginationPrevious}</span>
                   </button>
-                  <span>{labels.paginationPage} {paginationCurrentPage} {labels.paginationOf} {paginationTotalPages}</span>
+                  <span>
+                    {labels.paginationPage} {paginationCurrentPage} {labels.paginationOf}{' '}
+                    {paginationTotalPages}
+                  </span>
                   <button
                     type="button"
                     className="action action-secondary pagination-button"
@@ -410,7 +539,12 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
                     disabled={paginationCurrentPage >= paginationTotalPages}
                     onClick={() => state.nextPage()}
                   >
-                    <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                    <svg
+                      className="pagination-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable={false}
+                    >
                       <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
                     </svg>
                     <span className="sr-only">{labels.paginationNext}</span>
@@ -424,7 +558,9 @@ export function UiGrid({ options, onRegisterApi, cellRenderer, expandableRendere
                         onChange={(e) => state.onPageSizeChange(e.target.value)}
                       >
                         {state.pageSizeOptions().map((size) => (
-                          <option key={size} value={size}>{size}</option>
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
                         ))}
                       </select>
                     </label>

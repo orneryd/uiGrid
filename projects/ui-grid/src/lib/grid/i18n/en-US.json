@@ -24,4 +24,8 @@
   "toolbarRows": "rows",
   "statsVisibleRows": "visible rows",
   "groupRowsSuffix": "rows"
+  ,
+  "pinLeft": "Pin left",
+  "pinRight": "Pin right",
+  "unpin": "Unpin"
 }

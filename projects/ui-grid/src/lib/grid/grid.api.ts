@@ -1,5 +1,6 @@
 import { SortDirection } from './grid.constants';
 import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridSavedState } from './grid.models';
+import { PinDirection } from './grid.core';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
 
@@ -27,6 +28,7 @@ export interface GridApiBindings {
   clearAllFilters: () => void;
   sortColumn: (columnName: string, direction?: SortDirection) => void;
   moveColumn: (fromIndex: number, toIndex: number) => void;
+  pinColumn?: (columnName: string, direction: PinDirection) => void;
   toggleGrouping: (columnName: string) => void;
   clearGrouping: () => void;
   benchmark: (iterations?: number) => GridBenchmarkResult;
@@ -159,6 +161,15 @@ export interface UiGridApi {
     getTreeView: () => Record<string, boolean>;
     setTreeView: (state: Record<string, boolean>) => void;
   };
+  pinning: {
+    on: {
+      columnPinned: (listener: Listener<[string, PinDirection]>) => () => void;
+    };
+    raise: {
+      columnPinned: (columnName: string, direction: PinDirection) => void;
+    };
+    pinColumn: (columnName: string, direction: PinDirection) => void;
+  };
   infiniteScroll: {
     on: {
       needLoadMoreData: (listener: Listener<[]>) => () => void;
@@ -219,6 +230,7 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const beginCellEditEvent = new GridEvent<[GridRecord, GridColumnDef, Event | KeyboardEvent | null | undefined]>();
   const afterCellEditEvent = new GridEvent<[GridRecord, GridColumnDef, unknown, unknown]>();
   const cancelCellEditEvent = new GridEvent<[GridRecord, GridColumnDef]>();
+  const columnPinnedEvent = new GridEvent<[string, PinDirection]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -256,6 +268,7 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const endCellEdit = bindings.endCellEdit ?? noop;
   const cancelCellEdit = bindings.cancelCellEdit ?? noop;
   const getEditingCell = bindings.getEditingCell ?? (() => null);
+  const pinColumnBinding = bindings.pinColumn ?? (() => {});
 
   const api: UiGridApi = {
     core: {
@@ -351,6 +364,15 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
     treeView: {
       getTreeView: treeGetState,
       setTreeView: treeSetState
+    },
+    pinning: {
+      on: {
+        columnPinned: (listener) => columnPinnedEvent.subscribe(listener)
+      },
+      raise: {
+        columnPinned: (columnName, direction) => columnPinnedEvent.emit(columnName, direction)
+      },
+      pinColumn: pinColumnBinding
     },
     infiniteScroll: {
       on: {

@@ -11,6 +11,7 @@ export function buildGridSavedState(context: {
   totalItems: number;
   expandedRows: Readonly<Record<string, boolean>>;
   expandedTreeRows: Readonly<Record<string, boolean>>;
+  pinnedColumns?: Readonly<Record<string, 'left' | 'right'>>;
 }): GridSavedState {
   return {
     columnOrder: [...context.columnOrder],
@@ -19,10 +20,11 @@ export function buildGridSavedState(context: {
     grouping: [...context.groupByColumns],
     pagination: {
       paginationCurrentPage: currentPageValue(context.currentPage),
-      paginationPageSize: effectivePageSize(context.pageSize, context.totalItems)
+      paginationPageSize: effectivePageSize(context.pageSize, context.totalItems),
     },
     expandable: { ...context.expandedRows },
-    treeView: { ...context.expandedTreeRows }
+    treeView: { ...context.expandedTreeRows },
+    pinning: context.pinnedColumns ? { ...context.pinnedColumns } : undefined,
   };
 }
 
@@ -31,34 +33,42 @@ export function normalizeGridSavedState(state: GridSavedState): GridSavedState {
 
   if (Array.isArray(state.columnOrder)) {
     normalized.columnOrder = state.columnOrder.filter(
-      (columnName): columnName is string => typeof columnName === 'string' && isSafeStateKey(columnName)
+      (columnName): columnName is string =>
+        typeof columnName === 'string' && isSafeStateKey(columnName),
     );
   }
 
   if (state.filters && typeof state.filters === 'object') {
-    normalized.filters = Object.entries(state.filters).reduce<Record<string, string>>((accumulator, [key, value]) => {
-      if (typeof key === 'string' && isSafeStateKey(key) && typeof value === 'string') {
-        accumulator[key] = value;
-      }
+    normalized.filters = Object.entries(state.filters).reduce<Record<string, string>>(
+      (accumulator, [key, value]) => {
+        if (typeof key === 'string' && isSafeStateKey(key) && typeof value === 'string') {
+          accumulator[key] = value;
+        }
 
-      return accumulator;
-    }, {});
+        return accumulator;
+      },
+      {},
+    );
   }
 
   if (state.sort && typeof state.sort === 'object') {
     normalized.sort = {
-      columnName: typeof state.sort.columnName === 'string' && isSafeStateKey(state.sort.columnName)
-        ? state.sort.columnName
-        : null,
-      direction: state.sort.direction === SORT_DIRECTIONS.asc || state.sort.direction === SORT_DIRECTIONS.desc
-        ? state.sort.direction
-        : SORT_DIRECTIONS.none
+      columnName:
+        typeof state.sort.columnName === 'string' && isSafeStateKey(state.sort.columnName)
+          ? state.sort.columnName
+          : null,
+      direction:
+        state.sort.direction === SORT_DIRECTIONS.asc ||
+        state.sort.direction === SORT_DIRECTIONS.desc
+          ? state.sort.direction
+          : SORT_DIRECTIONS.none,
     };
   }
 
   if (Array.isArray(state.grouping)) {
     normalized.grouping = state.grouping.filter(
-      (columnName): columnName is string => typeof columnName === 'string' && isSafeStateKey(columnName)
+      (columnName): columnName is string =>
+        typeof columnName === 'string' && isSafeStateKey(columnName),
     );
   }
 
@@ -67,12 +77,14 @@ export function normalizeGridSavedState(state: GridSavedState): GridSavedState {
     const paginationPageSize = Number(state.pagination.paginationPageSize);
 
     normalized.pagination = {
-      paginationCurrentPage: Number.isFinite(paginationCurrentPage) && paginationCurrentPage > 0
-        ? Math.floor(paginationCurrentPage)
-        : 1,
-      paginationPageSize: Number.isFinite(paginationPageSize) && paginationPageSize >= 0
-        ? Math.floor(paginationPageSize)
-        : 0
+      paginationCurrentPage:
+        Number.isFinite(paginationCurrentPage) && paginationCurrentPage > 0
+          ? Math.floor(paginationCurrentPage)
+          : 1,
+      paginationPageSize:
+        Number.isFinite(paginationPageSize) && paginationPageSize >= 0
+          ? Math.floor(paginationPageSize)
+          : 0,
     };
   }
 
@@ -82,6 +94,22 @@ export function normalizeGridSavedState(state: GridSavedState): GridSavedState {
 
   if (state.treeView && typeof state.treeView === 'object') {
     normalized.treeView = normalizeBooleanMap(state.treeView);
+  }
+
+  if (state.pinning && typeof state.pinning === 'object') {
+    normalized.pinning = Object.entries(state.pinning).reduce<Record<string, 'left' | 'right'>>(
+      (acc, [key, value]) => {
+        if (
+          typeof key === 'string' &&
+          isSafeStateKey(key) &&
+          (value === 'left' || value === 'right')
+        ) {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {},
+    );
   }
 
   return normalized;

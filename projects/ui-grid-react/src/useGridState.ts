@@ -87,6 +87,7 @@ import {
   FEATURE_CSV_EXPORT,
   FEATURE_AUTO_RESIZE,
   FEATURE_SAVE_STATE,
+  FEATURE_PINNING,
 } from '@ornery/ui-grid';
 import type {
   DisplayItem,
@@ -125,7 +126,16 @@ import {
   saveGridInfiniteScrollPercentageCommand,
   setGridInfiniteScrollDirectionsCommand,
   restoreGridStateCommand,
+  pinGridColumnCommand,
 } from '../../ui-grid/src/lib/grid/ui-grid.commands';
+import {
+  buildInitialPinnedState,
+  computePinnedOffset,
+  isColumnPinnable,
+  isPinningEnabled,
+  PinDirection,
+  PinnedColumnState,
+} from '../../ui-grid/src/lib/grid/grid.core';
 import {
   raiseGridRenderingComplete,
   raiseGridRowsRendered,
@@ -136,10 +146,7 @@ import {
   raiseGridScrollEnd,
   raiseGridBenchmarkComplete,
 } from '../../ui-grid/src/lib/grid/ui-grid.events';
-import {
-  downloadGridCsvFile,
-  observeGridHostSize,
-} from '../../ui-grid/src/lib/grid/ui-grid.host';
+import { downloadGridCsvFile, observeGridHostSize } from '../../ui-grid/src/lib/grid/ui-grid.host';
 
 export interface UseGridStateResult {
   pipeline: PipelineResult;
@@ -209,8 +216,20 @@ export interface UseGridStateResult {
   showPaginationControls: () => boolean;
   paginationSummary: () => string;
   pageSizeOptions: () => number[];
-  isCellEditable: (row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null) => boolean;
+  isCellEditable: (
+    row: GridRow,
+    column: GridColumnDef,
+    triggerEvent?: Event | KeyboardEvent | null,
+  ) => boolean;
   shouldEditOnFocus: (column: GridColumnDef) => boolean;
+
+  // Pinning
+  isPinned: (column: GridColumnDef) => boolean;
+  pinnedOffset: (column: GridColumnDef) => { side: 'left' | 'right'; offset: string } | null;
+  isPinningEnabled: () => boolean;
+  isColumnPinnable: (column: GridColumnDef) => boolean;
+  togglePin: (column: GridColumnDef) => void;
+  pinningFeature: boolean;
 
   // Feature flags
   sortingFeature: boolean;
@@ -234,7 +253,11 @@ export interface UseGridStateResult {
   clearAllFilters: () => void;
   toggleGrouping: (column: GridColumnDef, event?: React.MouseEvent) => void;
   toggleGroup: (item: GroupItem) => void;
-  focusCell: (row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null) => void;
+  focusCell: (
+    row: GridRow,
+    column: GridColumnDef,
+    triggerEvent?: Event | KeyboardEvent | null,
+  ) => void;
   handleCellKeyDown: (row: GridRow, column: GridColumnDef, event: React.KeyboardEvent) => void;
   handleCellDoubleClick: (row: GridRow, column: GridColumnDef, event: React.MouseEvent) => void;
   updateEditingValue: (value: string) => void;
@@ -251,13 +274,19 @@ export interface UseGridStateResult {
   onViewportScroll: (startIndex: number) => void;
 }
 
-export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridApi) => void): UseGridStateResult {
+export function useGridState(
+  options: GridOptions,
+  onRegisterApi?: (api: UiGridApi) => void,
+): UseGridStateResult {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [groupByColumns, setGroupByColumns] = useState<string[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [hiddenRowReasons, setHiddenRowReasons] = useState<Record<string, string[]>>({});
-  const [sortState, setSortState] = useState<SortState>({ columnName: null, direction: SORT_DIRECTIONS.none });
+  const [sortState, setSortState] = useState<SortState>({
+    columnName: null,
+    direction: SORT_DIRECTIONS.none,
+  });
   const [focusedCell, setFocusedCell] = useState<GridCellPosition | null>(null);
   const [editingCell, setEditingCell] = useState<GridCellPosition | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -273,6 +302,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     previousVisibleRows: 0,
   });
   const [autoViewportHeight, setAutoViewportHeight] = useState<number | null>(null);
+  const [pinnedColumns, setPinnedColumns] = useState<PinnedColumnState>({});
 
   const gridContainerRef = useRef<HTMLDivElement | null>(null);
   const initializedGridIdRef = useRef<string | null>(null);
@@ -307,6 +337,8 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   expandedRowsRef.current = expandedRows;
   const expandedTreeRowsRef = useRef(expandedTreeRows);
   expandedTreeRowsRef.current = expandedTreeRows;
+  const pinnedColumnsRef = useRef(pinnedColumns);
+  pinnedColumnsRef.current = pinnedColumns;
   const currentPageRef = useRef(currentPage);
   currentPageRef.current = currentPage;
   const pageSizeRef = useRef(pageSize);
@@ -340,7 +372,20 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       pageSize,
       rowSize,
     });
-  }, [options, visibleColumns, activeFilters, sortState, groupByColumns, collapsedGroups, hiddenRowReasons, expandedRows, expandedTreeRows, currentPage, pageSize, rowSize]);
+  }, [
+    options,
+    visibleColumns,
+    activeFilters,
+    sortState,
+    groupByColumns,
+    collapsedGroups,
+    hiddenRowReasons,
+    expandedRows,
+    expandedTreeRows,
+    currentPage,
+    pageSize,
+    rowSize,
+  ]);
 
   const pipelineRef = useRef(pipeline);
   pipelineRef.current = pipeline;
@@ -349,8 +394,24 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
 
   const gridTemplateColumns = useMemo(
     () => buildGridTemplateColumns(visibleColumns),
-    [visibleColumns]
+    [visibleColumns],
   );
+
+  const isPinningEnabledFn = useCallback((): boolean => {
+    return isPinningEnabled(optionsRef.current);
+  }, []);
+
+  const isColumnPinnableFn = useCallback((column: GridColumnDef): boolean => {
+    return isColumnPinnable(optionsRef.current, column);
+  }, []);
+
+  const isPinnedFn = useCallback((column: GridColumnDef): boolean => {
+    return pinnedColumnsRef.current[column.name] !== undefined;
+  }, []);
+
+  const pinnedOffsetFn = useCallback((column: GridColumnDef) => {
+    return computePinnedOffset(visibleColumnsRef.current, pinnedColumnsRef.current, column);
+  }, []);
 
   // --- Helper functions (all pure, no state closures needed beyond refs) ---
 
@@ -363,13 +424,16 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       { ...optionsRef.current, data },
       optionsRef.current.rowHeight ?? 44,
       hiddenRowReasonsRef.current,
-      expandedRowsRef.current
+      expandedRowsRef.current,
     );
   }, []);
 
-  const findRowById = useCallback((rowId: string): GridRow | null => {
-    return coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId);
-  }, [buildRowsFromData]);
+  const findRowById = useCallback(
+    (rowId: string): GridRow | null => {
+      return coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId);
+    },
+    [buildRowsFromData],
+  );
 
   const canExpandRowsFn = useCallback((): boolean => {
     return FEATURE_EXPANDABLE && canGridExpandRows(optionsRef.current);
@@ -381,7 +445,12 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
 
   const getCurrentPageValueFn = useCallback((totalItems?: number): number => {
     const ti = totalItems ?? pipelineRef.current.totalItems;
-    return coreGetCurrentPageValue(optionsRef.current, currentPageRef.current, ti, pageSizeRef.current);
+    return coreGetCurrentPageValue(
+      optionsRef.current,
+      currentPageRef.current,
+      ti,
+      pageSizeRef.current,
+    );
   }, []);
 
   const getTotalPagesValueFn = useCallback((totalItems?: number): number => {
@@ -391,30 +460,44 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
 
   const getFirstRowIndexValueFn = useCallback((totalItems?: number): number => {
     const ti = totalItems ?? pipelineRef.current.totalItems;
-    return coreGetFirstRowIndexValue(optionsRef.current, currentPageRef.current, ti, pageSizeRef.current);
+    return coreGetFirstRowIndexValue(
+      optionsRef.current,
+      currentPageRef.current,
+      ti,
+      pageSizeRef.current,
+    );
   }, []);
 
   const getLastRowIndexValueFn = useCallback((totalItems?: number): number => {
     const ti = totalItems ?? pipelineRef.current.totalItems;
-    return coreGetLastRowIndexValue(optionsRef.current, currentPageRef.current, ti, pageSizeRef.current);
+    return coreGetLastRowIndexValue(
+      optionsRef.current,
+      currentPageRef.current,
+      ti,
+      pageSizeRef.current,
+    );
   }, []);
 
-  const isCellEditable = useCallback((row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean => {
-    if (!FEATURE_CELL_EDIT) return false;
-    const editable = column.enableCellEdit ?? optionsRef.current.enableCellEdit ?? false;
-    if (!editable) return false;
+  const isCellEditable = useCallback(
+    (row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean => {
+      if (!FEATURE_CELL_EDIT) return false;
+      const editable = column.enableCellEdit ?? optionsRef.current.enableCellEdit ?? false;
+      if (!editable) return false;
 
-    const condition = column.cellEditableCondition ?? optionsRef.current.cellEditableCondition ?? true;
-    if (typeof condition === 'boolean') return condition;
+      const condition =
+        column.cellEditableCondition ?? optionsRef.current.cellEditableCondition ?? true;
+      if (typeof condition === 'boolean') return condition;
 
-    const context: GridCellEditableContext = {
-      row: row.entity,
-      column,
-      rowIndex: row.index,
-      triggerEvent,
-    };
-    return condition(context);
-  }, []);
+      const context: GridCellEditableContext = {
+        row: row.entity,
+        column,
+        rowIndex: row.index,
+        triggerEvent,
+      };
+      return condition(context);
+    },
+    [],
+  );
 
   const shouldEditOnFocusFn = useCallback((column: GridColumnDef): boolean => {
     return column.enableCellEditOnFocus ?? optionsRef.current.enableCellEditOnFocus ?? false;
@@ -454,7 +537,8 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     const doFocus = (retry = true): void => {
       if (focusToken !== editorFocusTokenRef.current) return;
       const currentEc = editingCellRef.current;
-      if (!currentEc || currentEc.rowId !== ec.rowId || currentEc.columnName !== ec.columnName) return;
+      if (!currentEc || currentEc.rowId !== ec.rowId || currentEc.columnName !== ec.columnName)
+        return;
 
       const container = gridContainerRef.current;
       if (!container) return;
@@ -505,10 +589,10 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       moveColumn: (fromIndex, toIndex) => {
         moveGridColumnCommand(
           gridApiRef.current!,
-          FEATURE_COLUMN_MOVING && (optionsRef.current.enableColumnMoving === true),
+          FEATURE_COLUMN_MOVING && optionsRef.current.enableColumnMoving === true,
           (updater) => setColumnOrder((current) => updater(current)),
           fromIndex,
-          toIndex
+          toIndex,
         );
       },
       toggleGrouping: (columnName) => {
@@ -522,7 +606,11 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
         gridApiRef.current!.core.raise.groupingChanged(next);
       },
       clearGrouping: () => {
-        clearGridGroupingCommand(gridApiRef.current!, (grouping) => setGroupByColumns(grouping), false);
+        clearGridGroupingCommand(
+          gridApiRef.current!,
+          (grouping) => setGroupByColumns(grouping),
+          false,
+        );
       },
       benchmark: (iterations) => {
         return runBenchmarkFn(iterations);
@@ -548,7 +636,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
         expandAllGridTreeRowsCommand(
           (data) => buildRowsFromData(data),
           optionsRef.current.data,
-          (e) => setExpandedTreeRows(e)
+          (e) => setExpandedTreeRows(e),
         );
       },
       treeCollapseAllRows: () => {
@@ -568,35 +656,35 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
           infiniteScrollStateRef.current,
           (s) => setInfiniteScrollState(s),
           scrollUp ?? infiniteScrollStateRef.current.scrollUp,
-          scrollDown ?? infiniteScrollStateRef.current.scrollDown
+          scrollDown ?? infiniteScrollStateRef.current.scrollDown,
         );
       },
       infiniteScrollReset: (scrollUp, scrollDown) => {
         resetGridInfiniteScrollCommand(
           (s) => setInfiniteScrollState(s),
           scrollUp ?? infiniteScrollStateRef.current.scrollUp,
-          scrollDown ?? infiniteScrollStateRef.current.scrollDown
+          scrollDown ?? infiniteScrollStateRef.current.scrollDown,
         );
       },
       infiniteScrollSaveScrollPercentage: () => {
         saveGridInfiniteScrollPercentageCommand(
           infiniteScrollStateRef.current,
           pipelineRef.current.visibleRows.length,
-          (s) => setInfiniteScrollState(s)
+          (s) => setInfiniteScrollState(s),
         );
       },
       infiniteScrollDataRemovedTop: (scrollUp, scrollDown) => {
         resetGridInfiniteScrollCommand(
           (s) => setInfiniteScrollState(s),
           scrollUp ?? infiniteScrollStateRef.current.scrollUp,
-          scrollDown ?? infiniteScrollStateRef.current.scrollDown
+          scrollDown ?? infiniteScrollStateRef.current.scrollDown,
         );
       },
       infiniteScrollDataRemovedBottom: (scrollUp, scrollDown) => {
         resetGridInfiniteScrollCommand(
           (s) => setInfiniteScrollState(s),
           scrollUp ?? infiniteScrollStateRef.current.scrollUp,
-          scrollDown ?? infiniteScrollStateRef.current.scrollDown
+          scrollDown ?? infiniteScrollStateRef.current.scrollDown,
         );
       },
       infiniteScrollSetDirections: (scrollUp, scrollDown) => {
@@ -604,7 +692,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
           infiniteScrollStateRef.current,
           (s) => setInfiniteScrollState(s),
           scrollUp,
-          scrollDown
+          scrollDown,
         );
       },
       saveState: () => {
@@ -618,6 +706,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
           totalItems: pipelineRef.current.totalItems,
           expandedRows: expandedRowsRef.current,
           expandedTreeRows: expandedTreeRowsRef.current,
+          pinnedColumns: pinnedColumnsRef.current,
         });
       },
       restoreState: (state) => {
@@ -630,6 +719,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
           setPageSize: (ps) => setPageSize(ps),
           setExpandedRows: (e) => setExpandedRows(e),
           setExpandedTreeRows: (e) => setExpandedTreeRows(e),
+          setPinnedColumns: (p) => setPinnedColumns(p),
           getEffectivePageSize: () => effectivePageSizeFn(pipelineRef.current.totalItems),
         });
       },
@@ -643,6 +733,16 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       endCellEdit: () => commitCellEditFn(),
       cancelCellEdit: () => cancelCellEditFn(),
       getEditingCell: () => editingCellRef.current,
+      pinColumn: (columnName: string, direction: PinDirection) => {
+        pinGridColumnCommand(
+          gridApiRef.current!,
+          isPinningEnabledFn(),
+          (v) => setPinnedColumns(v),
+          () => pinnedColumnsRef.current,
+          columnName,
+          direction,
+        );
+      },
     };
 
     gridApiRef.current = createGridApi(bindings);
@@ -652,48 +752,71 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
 
   // --- Memoized action functions ---
 
-  const seekPageFn = useCallback((page: number): void => {
-    seekGridPaginationCommand(
+  const seekPageFn = useCallback(
+    (page: number): void => {
+      seekGridPaginationCommand(
+        gridApiRef.current!,
+        (nextPage) => setCurrentPage(nextPage),
+        () => getTotalPagesValueFn(),
+        () => effectivePageSizeFn(pipelineRef.current.totalItems),
+        page,
+      );
+    },
+    [getTotalPagesValueFn, effectivePageSizeFn],
+  );
+
+  const togglePinFn = useCallback((column: GridColumnDef): void => {
+    const current = pinnedColumnsRef.current[column.name];
+    const next: PinDirection = current === 'left' ? 'right' : current === 'right' ? 'none' : 'left';
+    pinGridColumnCommand(
       gridApiRef.current!,
-      (nextPage) => setCurrentPage(nextPage),
-      () => getTotalPagesValueFn(),
-      () => effectivePageSizeFn(pipelineRef.current.totalItems),
-      page
+      isPinningEnabledFn(),
+      (v) => setPinnedColumns(v),
+      () => pinnedColumnsRef.current,
+      column.name,
+      next,
     );
-  }, [getTotalPagesValueFn, effectivePageSizeFn]);
+  }, []);
 
   const setPaginationPageSizeFn = useCallback((ps: number): void => {
     setGridPaginationPageSizeCommand(
       gridApiRef.current!,
       (nextPageSize) => setPageSize(nextPageSize),
       (nextPage) => setCurrentPage(nextPage),
-      ps
+      ps,
     );
   }, []);
 
-  const toggleRowExpansionByRefFn = useCallback((row: GridRow | GridRecord | string): void => {
-    const rowId = coreResolveGridRowId(optionsRef.current, row);
-    toggleGridRowExpansionCommand(
-      gridApiRef.current!,
-      FEATURE_EXPANDABLE && canGridExpandRows(optionsRef.current),
-      expandedRowsRef.current,
-      rowId,
-      (e) => setExpandedRows(e),
-      (resolvedRowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId)
-    );
-  }, [buildRowsFromData]);
+  const toggleRowExpansionByRefFn = useCallback(
+    (row: GridRow | GridRecord | string): void => {
+      const rowId = coreResolveGridRowId(optionsRef.current, row);
+      toggleGridRowExpansionCommand(
+        gridApiRef.current!,
+        FEATURE_EXPANDABLE && canGridExpandRows(optionsRef.current),
+        expandedRowsRef.current,
+        rowId,
+        (e) => setExpandedRows(e),
+        (resolvedRowId) =>
+          coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId),
+      );
+    },
+    [buildRowsFromData],
+  );
 
   const expandAllRowsFn = useCallback((): void => {
     if (!canGridExpandRows(optionsRef.current)) return;
     expandAllGridRowsCommand(
       (data) => buildRowsFromData(data),
       optionsRef.current.data,
-      (e) => setExpandedRows(e)
+      (e) => setExpandedRows(e),
     );
   }, [buildRowsFromData]);
 
   const toggleAllRowsFn = useCallback((): void => {
-    const allExpanded = areAllGridRowsExpanded(buildRowsFromData(optionsRef.current.data), expandedRowsRef.current);
+    const allExpanded = areAllGridRowsExpanded(
+      buildRowsFromData(optionsRef.current.data),
+      expandedRowsRef.current,
+    );
     if (allExpanded) {
       collapseAllGridRowsCommand((e) => setExpandedRows(e));
     } else {
@@ -701,89 +824,115 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     }
   }, [buildRowsFromData, expandAllRowsFn]);
 
-  const toggleTreeRowByRefFn = useCallback((row: GridRow | GridRecord | string): void => {
-    const rowId = coreResolveGridRowId(optionsRef.current, row);
-    toggleGridTreeRowCommand(
-      gridApiRef.current!,
-      expandedTreeRowsRef.current,
-      rowId,
-      (e) => setExpandedTreeRows(e),
-      (resolvedRowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId)
-    );
-  }, [buildRowsFromData]);
+  const toggleTreeRowByRefFn = useCallback(
+    (row: GridRow | GridRecord | string): void => {
+      const rowId = coreResolveGridRowId(optionsRef.current, row);
+      toggleGridTreeRowCommand(
+        gridApiRef.current!,
+        expandedTreeRowsRef.current,
+        rowId,
+        (e) => setExpandedTreeRows(e),
+        (resolvedRowId) =>
+          coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId),
+      );
+    },
+    [buildRowsFromData],
+  );
 
-  const expandTreeRowByRefFn = useCallback((row: GridRow | GridRecord | string): void => {
-    const rowId = coreResolveGridRowId(optionsRef.current, row);
-    setGridTreeRowExpandedCommand(
-      gridApiRef.current!,
-      expandedTreeRowsRef.current,
-      rowId,
-      true,
-      (e) => setExpandedTreeRows(e),
-      (resolvedRowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId)
-    );
-  }, [buildRowsFromData]);
+  const expandTreeRowByRefFn = useCallback(
+    (row: GridRow | GridRecord | string): void => {
+      const rowId = coreResolveGridRowId(optionsRef.current, row);
+      setGridTreeRowExpandedCommand(
+        gridApiRef.current!,
+        expandedTreeRowsRef.current,
+        rowId,
+        true,
+        (e) => setExpandedTreeRows(e),
+        (resolvedRowId) =>
+          coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId),
+      );
+    },
+    [buildRowsFromData],
+  );
 
-  const collapseTreeRowByRefFn = useCallback((row: GridRow | GridRecord | string): void => {
-    const rowId = coreResolveGridRowId(optionsRef.current, row);
-    setGridTreeRowExpandedCommand(
-      gridApiRef.current!,
-      expandedTreeRowsRef.current,
-      rowId,
-      false,
-      (e) => setExpandedTreeRows(e),
-      (resolvedRowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId)
-    );
-  }, [buildRowsFromData]);
+  const collapseTreeRowByRefFn = useCallback(
+    (row: GridRow | GridRecord | string): void => {
+      const rowId = coreResolveGridRowId(optionsRef.current, row);
+      setGridTreeRowExpandedCommand(
+        gridApiRef.current!,
+        expandedTreeRowsRef.current,
+        rowId,
+        false,
+        (e) => setExpandedTreeRows(e),
+        (resolvedRowId) =>
+          coreFindGridRowById(buildRowsFromData(optionsRef.current.data), resolvedRowId),
+      );
+    },
+    [buildRowsFromData],
+  );
 
-  const startCellEditFn = useCallback((row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null, initialValue?: string): void => {
-    const currentValue = getCellValue(row.entity, column);
-    const focusToken = ++editorFocusTokenRef.current;
-    const ec = beginGridCellEditCommand(
-      gridApiRef.current!,
-      {
-        setFocusedCell: (fc) => setFocusedCell(fc),
-        setEditingCell: (ec2) => setEditingCell(ec2),
+  const startCellEditFn = useCallback(
+    (
+      row: GridRow,
+      column: GridColumnDef,
+      triggerEvent?: Event | KeyboardEvent | null,
+      initialValue?: string,
+    ): void => {
+      const currentValue = getCellValue(row.entity, column);
+      const focusToken = ++editorFocusTokenRef.current;
+      const ec = beginGridCellEditCommand(
+        gridApiRef.current!,
+        {
+          setFocusedCell: (fc) => setFocusedCell(fc),
+          setEditingCell: (ec2) => setEditingCell(ec2),
+          setEditingValue: (ev) => setEditingValue(ev),
+        },
+        row,
+        column,
+        currentValue,
+        triggerEvent,
+        initialValue,
+      );
+
+      if (ec) {
+        queueMicrotask(() => focusEditorInput(focusToken));
+      }
+    },
+    [focusEditorInput],
+  );
+
+  const commitCellEditFn = useCallback(
+    (direction?: GridMoveDirection, restoreFocus = true): void => {
+      const result = commitGridCellEditCommand(gridApiRef.current!, {
+        getEditingCell: () => editingCellRef.current,
+        getEditingValue: () => editingValueRef.current,
+        setEditingCell: (ec) => setEditingCell(ec),
         setEditingValue: (ev) => setEditingValue(ev),
-      },
-      row,
-      column,
-      currentValue,
-      triggerEvent,
-      initialValue
-    );
+        findRowById: (rowId) =>
+          coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
+        findColumnByName: (columnName) =>
+          visibleColumnsRef.current.find((c) => c.name === columnName),
+        parseEditedValue: (column, value, oldValue) =>
+          parseGridEditedValue(column, value, oldValue),
+        setCellValue: (rowEntity, column, value) => {
+          const fieldPath = column.editModelField ?? column.field ?? column.name;
+          setPathValue(rowEntity, fieldPath, value);
+        },
+      });
 
-    if (ec) {
-      queueMicrotask(() => focusEditorInput(focusToken));
-    }
-  }, [focusEditorInput]);
+      if (!result.committed || !result.row || !result.column || !result.focusTarget) return;
 
-  const commitCellEditFn = useCallback((direction?: GridMoveDirection, restoreFocus = true): void => {
-    const result = commitGridCellEditCommand(gridApiRef.current!, {
-      getEditingCell: () => editingCellRef.current,
-      getEditingValue: () => editingValueRef.current,
-      setEditingCell: (ec) => setEditingCell(ec),
-      setEditingValue: (ev) => setEditingValue(ev),
-      findRowById: (rowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
-      findColumnByName: (columnName) => visibleColumnsRef.current.find((c) => c.name === columnName),
-      parseEditedValue: (column, value, oldValue) => parseGridEditedValue(column, value, oldValue),
-      setCellValue: (rowEntity, column, value) => {
-        const fieldPath = column.editModelField ?? column.field ?? column.name;
-        setPathValue(rowEntity, fieldPath, value);
-      },
-    });
+      editorFocusTokenRef.current += 1;
 
-    if (!result.committed || !result.row || !result.column || !result.focusTarget) return;
-
-    editorFocusTokenRef.current += 1;
-
-    if (direction) {
-      const moved = moveFocusFn(result.row, result.column, direction);
-      if (!moved) focusRenderedCell(result.focusTarget);
-    } else if (restoreFocus) {
-      focusRenderedCell(result.focusTarget);
-    }
-  }, [buildRowsFromData, focusRenderedCell]);
+      if (direction) {
+        const moved = moveFocusFn(result.row, result.column, direction);
+        if (!moved) focusRenderedCell(result.focusTarget);
+      } else if (restoreFocus) {
+        focusRenderedCell(result.focusTarget);
+      }
+    },
+    [buildRowsFromData, focusRenderedCell],
+  );
 
   const cancelCellEditFn = useCallback((): void => {
     const hadEditingCell = editingCellRef.current !== null;
@@ -791,8 +940,10 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       getEditingCell: () => editingCellRef.current,
       setEditingCell: (ec) => setEditingCell(ec),
       setEditingValue: (ev) => setEditingValue(ev),
-      findRowById: (rowId) => coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
-      findColumnByName: (columnName) => visibleColumnsRef.current.find((c) => c.name === columnName),
+      findRowById: (rowId) =>
+        coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
+      findColumnByName: (columnName) =>
+        visibleColumnsRef.current.find((c) => c.name === columnName),
     });
 
     if (!hadEditingCell) return;
@@ -800,28 +951,42 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     if (result.focusTarget) focusRenderedCell(result.focusTarget);
   }, [buildRowsFromData, focusRenderedCell]);
 
-  const moveFocusFn = useCallback((row: GridRow, column: GridColumnDef, direction: GridMoveDirection, triggerEvent?: Event | KeyboardEvent | null): boolean => {
-    const nextCell = findNextGridCell({
-      rows: pipelineRef.current.visibleRows,
-      columns: visibleColumnsRef.current,
-      rowId: row.id,
-      columnName: column.name,
-      direction,
-    });
-    if (!nextCell) return false;
+  const moveFocusFn = useCallback(
+    (
+      row: GridRow,
+      column: GridColumnDef,
+      direction: GridMoveDirection,
+      triggerEvent?: Event | KeyboardEvent | null,
+    ): boolean => {
+      const nextCell = findNextGridCell({
+        rows: pipelineRef.current.visibleRows,
+        columns: visibleColumnsRef.current,
+        rowId: row.id,
+        columnName: column.name,
+        direction,
+      });
+      if (!nextCell) return false;
 
-    setFocusedCell({ rowId: nextCell.row.id, columnName: nextCell.column.name });
-    focusRenderedCell({ rowId: nextCell.row.id, columnName: nextCell.column.name });
+      setFocusedCell({ rowId: nextCell.row.id, columnName: nextCell.column.name });
+      focusRenderedCell({ rowId: nextCell.row.id, columnName: nextCell.column.name });
 
-    if (shouldEditOnFocusFn(nextCell.column) && isCellEditable(nextCell.row, nextCell.column, triggerEvent)) {
-      startCellEditFn(nextCell.row, nextCell.column, triggerEvent);
-    }
+      if (
+        shouldEditOnFocusFn(nextCell.column) &&
+        isCellEditable(nextCell.row, nextCell.column, triggerEvent)
+      ) {
+        startCellEditFn(nextCell.row, nextCell.column, triggerEvent);
+      }
 
-    return true;
-  }, [focusRenderedCell, isCellEditable, shouldEditOnFocusFn, startCellEditFn]);
+      return true;
+    },
+    [focusRenderedCell, isCellEditable, shouldEditOnFocusFn, startCellEditFn],
+  );
 
   const runBenchmarkFn = useCallback((iterations?: number): GridBenchmarkResult => {
-    const safeIterations = resolveBenchmarkIterations(iterations, optionsRef.current.benchmark?.iterations);
+    const safeIterations = resolveBenchmarkIterations(
+      iterations,
+      optionsRef.current.benchmark?.iterations,
+    );
     const startedAt = performance.now();
     let lastResult = defaultGridEngine.buildPipeline({
       options: optionsRef.current,
@@ -892,6 +1057,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     setExpandedTreeRows({});
     setColumnOrder(options.columnDefs.map((column) => column.name));
     setGroupByColumns(options.grouping?.groupBy ?? []);
+    setPinnedColumns(buildInitialPinnedState(options.columnDefs));
     setCurrentPage(options.paginationCurrentPage ?? 1);
     setPageSize(coreGetEffectivePageSize(options, 0, options.data.length));
 
@@ -903,7 +1069,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     });
 
     const initialSort = options.columnDefs.find(
-      (column) => column.sort?.direction && !column.sort.ignoreSort
+      (column) => column.sort?.direction && !column.sort.ignoreSort,
     );
     setSortState({
       columnName: initialSort?.name ?? null,
@@ -936,9 +1102,16 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     if (!container) return;
 
     const observer = observeGridHostSize(container, ({ height: nextHeight, width: nextWidth }) => {
-      if (nextHeight === lastGridHeightRef.current && nextWidth === lastGridWidthRef.current) return;
+      if (nextHeight === lastGridHeightRef.current && nextWidth === lastGridWidthRef.current)
+        return;
 
-      raiseGridDimensionChanged(gridApi, lastGridHeightRef.current, lastGridWidthRef.current, nextHeight, nextWidth);
+      raiseGridDimensionChanged(
+        gridApi,
+        lastGridHeightRef.current,
+        lastGridWidthRef.current,
+        nextHeight,
+        nextWidth,
+      );
       lastGridHeightRef.current = nextHeight;
       lastGridWidthRef.current = nextWidth;
 
@@ -966,50 +1139,85 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   // --- Display helper functions ---
 
   const headerLabelFn = useCallback((column: GridColumnDef): string => coreHeaderLabel(column), []);
-  const isGroupItemFn = useCallback((item: DisplayItem): item is GroupItem => item.kind === 'group', []);
-  const isExpandableItemFn = useCallback((item: DisplayItem): item is ExpandableItem => item.kind === 'expandable', []);
+  const isGroupItemFn = useCallback(
+    (item: DisplayItem): item is GroupItem => item.kind === 'group',
+    [],
+  );
+  const isExpandableItemFn = useCallback(
+    (item: DisplayItem): item is ExpandableItem => item.kind === 'expandable',
+    [],
+  );
   const isRowItemFn = useCallback((item: DisplayItem): item is RowItem => item.kind === 'row', []);
-  const isOddStripedRowFn = useCallback((item: DisplayItem): boolean => item.kind === 'row' && item.visibleIndex % 2 === 0, []);
+  const isOddStripedRowFn = useCallback(
+    (item: DisplayItem): boolean => item.kind === 'row' && item.visibleIndex % 2 === 0,
+    [],
+  );
 
   const sortDirectionFn = useCallback((column: GridColumnDef): string => {
-    return sortStateRef.current.columnName === column.name ? sortStateRef.current.direction : SORT_DIRECTIONS.none;
+    return sortStateRef.current.columnName === column.name
+      ? sortStateRef.current.direction
+      : SORT_DIRECTIONS.none;
   }, []);
 
-  const sortButtonLabelFn = useCallback((column: GridColumnDef): string => {
-    return gridSortButtonLabel(sortDirectionFn(column) as any, labels);
-  }, [labels, sortDirectionFn]);
+  const sortButtonLabelFn = useCallback(
+    (column: GridColumnDef): string => {
+      return gridSortButtonLabel(sortDirectionFn(column) as any, labels);
+    },
+    [labels, sortDirectionFn],
+  );
 
-  const sortAriaSortFn = useCallback((column: GridColumnDef): string => {
-    return gridSortAriaSort(sortDirectionFn(column) as any);
-  }, [sortDirectionFn]);
+  const sortAriaSortFn = useCallback(
+    (column: GridColumnDef): string => {
+      return gridSortAriaSort(sortDirectionFn(column) as any);
+    },
+    [sortDirectionFn],
+  );
 
-  const groupingButtonLabelFn = useCallback((column: GridColumnDef): string => {
-    return gridGroupingButtonLabel(isGridColumnGrouped(groupByColumnsRef.current, column), labels);
-  }, [labels]);
+  const groupingButtonLabelFn = useCallback(
+    (column: GridColumnDef): string => {
+      return gridGroupingButtonLabel(
+        isGridColumnGrouped(groupByColumnsRef.current, column),
+        labels,
+      );
+    },
+    [labels],
+  );
 
   const filterValueFn = useCallback((columnName: string): string => {
     return activeFiltersRef.current[columnName] ?? '';
   }, []);
 
-  const filterPlaceholderFn = useCallback((column: GridColumnDef): string => {
-    return gridFilterPlaceholder(isGridColumnFilterable(optionsRef.current, column), labels);
-  }, [labels]);
+  const filterPlaceholderFn = useCallback(
+    (column: GridColumnDef): string => {
+      return gridFilterPlaceholder(isGridColumnFilterable(optionsRef.current, column), labels);
+    },
+    [labels],
+  );
 
   const isFilterInputDisabledFn = useCallback((column: GridColumnDef): boolean => {
     return !isGridColumnFilterable(optionsRef.current, column);
   }, []);
 
-  const groupDisclosureLabelFn = useCallback((item: GroupItem): string => {
-    return gridGroupDisclosureLabel(item.collapsed, labels);
-  }, [labels]);
+  const groupDisclosureLabelFn = useCallback(
+    (item: GroupItem): string => {
+      return gridGroupDisclosureLabel(item.collapsed, labels);
+    },
+    [labels],
+  );
 
-  const cellContextFn = useCallback((row: GridRow, column: GridColumnDef): GridCellTemplateContext => {
-    return buildGridCellContext(row, column);
-  }, []);
+  const cellContextFn = useCallback(
+    (row: GridRow, column: GridColumnDef): GridCellTemplateContext => {
+      return buildGridCellContext(row, column);
+    },
+    [],
+  );
 
-  const displayValueFn = useCallback((row: GridRow, column: GridColumnDef): string => {
-    return formatGridCellDisplayValue(cellContextFn(row, column));
-  }, [cellContextFn]);
+  const displayValueFn = useCallback(
+    (row: GridRow, column: GridColumnDef): string => {
+      return formatGridCellDisplayValue(cellContextFn(row, column));
+    },
+    [cellContextFn],
+  );
 
   const isFocusedCellFn = useCallback((row: GridRow, column: GridColumnDef): boolean => {
     return isGridCellPosition(focusedCellRef.current, row.id, column.name);
@@ -1023,15 +1231,18 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     return gridEditorInputType(column);
   }, []);
 
-  const expandedContextFn = useCallback((row: GridRow): GridExpandableTemplateContext & Record<string, unknown> => {
-    return {
-      $implicit: row.entity,
-      row: row.entity,
-      rowIndex: row.index,
-      expanded: true,
-      ...(optionsRef.current.expandableRowScope ?? {}),
-    };
-  }, []);
+  const expandedContextFn = useCallback(
+    (row: GridRow): GridExpandableTemplateContext & Record<string, unknown> => {
+      return {
+        $implicit: row.entity,
+        row: row.entity,
+        rowIndex: row.index,
+        expanded: true,
+        ...(optionsRef.current.expandableRowScope ?? {}),
+      };
+    },
+    [],
+  );
 
   const columnWidthFn = useCallback((column: GridColumnDef): string => gridColumnWidth(column), []);
 
@@ -1047,17 +1258,23 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     return gridCellIndent(optionsRef.current, visibleColumnsRef.current, row, column);
   }, []);
 
-  const treeToggleLabelFn = useCallback((row: GridRow): string => {
-    return gridTreeToggleLabelForRow(expandedTreeRowsRef.current, row, labels);
-  }, [labels]);
+  const treeToggleLabelFn = useCallback(
+    (row: GridRow): string => {
+      return gridTreeToggleLabelForRow(expandedTreeRowsRef.current, row, labels);
+    },
+    [labels],
+  );
 
   const isTreeRowExpandedFn = useCallback((row: GridRow): boolean => {
     return isGridTreeRowExpanded(expandedTreeRowsRef.current, row);
   }, []);
 
-  const expandToggleLabelFn = useCallback((row: GridRow): string => {
-    return gridExpandToggleLabelForRow(row, labels);
-  }, [labels]);
+  const expandToggleLabelFn = useCallback(
+    (row: GridRow): string => {
+      return gridExpandToggleLabelForRow(row, labels);
+    },
+    [labels],
+  );
 
   const isGroupedFn = useCallback((column: GridColumnDef): boolean => {
     return isGridColumnGrouped(groupByColumnsRef.current, column);
@@ -1097,7 +1314,10 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
   const toggleSortFn = useCallback((column: GridColumnDef): void => {
     if (!FEATURE_SORTING || !isGridColumnSortable(optionsRef.current, column)) return;
 
-    const currentDirection = sortStateRef.current.columnName === column.name ? sortStateRef.current.direction : SORT_DIRECTIONS.none;
+    const currentDirection =
+      sortStateRef.current.columnName === column.name
+        ? sortStateRef.current.direction
+        : SORT_DIRECTIONS.none;
     const nextDirection =
       currentDirection === SORT_DIRECTIONS.none
         ? SORT_DIRECTIONS.asc
@@ -1117,7 +1337,7 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       (updater) => setActiveFilters((current) => updater(current)),
       () => activeFiltersRef.current,
       columnName,
-      value
+      value,
     );
   }, []);
 
@@ -1144,126 +1364,151 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     }));
   }, []);
 
-  const focusCellFn = useCallback((row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): void => {
-    const nextFocusResult = buildGridFocusCellResult({
-      currentFocusedCell: focusedCellRef.current,
-      currentEditingCell: editingCellRef.current,
-      rowId: row.id,
-      columnName: column.name,
-      shouldEditOnFocus: shouldEditOnFocusFn(column),
-      isCellEditable: isCellEditable(row, column, triggerEvent),
-    });
-    setFocusedCell(nextFocusResult.focusedCell);
+  const focusCellFn = useCallback(
+    (row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): void => {
+      const nextFocusResult = buildGridFocusCellResult({
+        currentFocusedCell: focusedCellRef.current,
+        currentEditingCell: editingCellRef.current,
+        rowId: row.id,
+        columnName: column.name,
+        shouldEditOnFocus: shouldEditOnFocusFn(column),
+        isCellEditable: isCellEditable(row, column, triggerEvent),
+      });
+      setFocusedCell(nextFocusResult.focusedCell);
 
-    if (nextFocusResult.shouldBeginEdit) {
-      startCellEditFn(row, column, triggerEvent);
-    }
-  }, [isCellEditable, shouldEditOnFocusFn, startCellEditFn]);
+      if (nextFocusResult.shouldBeginEdit) {
+        startCellEditFn(row, column, triggerEvent);
+      }
+    },
+    [isCellEditable, shouldEditOnFocusFn, startCellEditFn],
+  );
 
-  const handleCellKeyDownFn = useCallback((row: GridRow, column: GridColumnDef, event: React.KeyboardEvent): void => {
-    focusCellFn(row, column, event.nativeEvent);
+  const handleCellKeyDownFn = useCallback(
+    (row: GridRow, column: GridColumnDef, event: React.KeyboardEvent): void => {
+      focusCellFn(row, column, event.nativeEvent);
 
-    switch (event.key) {
-      case 'ArrowLeft':
-        event.preventDefault();
-        moveFocusFn(row, column, 'left', event.nativeEvent);
-        return;
-      case 'ArrowRight':
-        event.preventDefault();
-        moveFocusFn(row, column, 'right', event.nativeEvent);
-        return;
-      case 'ArrowUp':
-        event.preventDefault();
-        moveFocusFn(row, column, 'up', event.nativeEvent);
-        return;
-      case 'ArrowDown':
-        event.preventDefault();
-        moveFocusFn(row, column, 'down', event.nativeEvent);
-        return;
-      case 'Tab':
-        event.preventDefault();
-        moveFocusFn(row, column, event.shiftKey ? 'left' : 'right', event.nativeEvent);
-        return;
-      case 'Enter':
-        event.preventDefault();
-        moveFocusFn(row, column, event.shiftKey ? 'up' : 'down', event.nativeEvent);
-        return;
-      case 'F2':
-        event.preventDefault();
-        if (isCellEditable(row, column, event.nativeEvent)) {
-          startCellEditFn(row, column, event.nativeEvent);
-        }
-        return;
-      case 'Backspace':
-      case 'Delete':
-        if (isCellEditable(row, column, event.nativeEvent)) {
+      switch (event.key) {
+        case 'ArrowLeft':
           event.preventDefault();
-          startCellEditFn(row, column, event.nativeEvent, '');
-        }
-        return;
-      default:
-        break;
-    }
+          moveFocusFn(row, column, 'left', event.nativeEvent);
+          return;
+        case 'ArrowRight':
+          event.preventDefault();
+          moveFocusFn(row, column, 'right', event.nativeEvent);
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          moveFocusFn(row, column, 'up', event.nativeEvent);
+          return;
+        case 'ArrowDown':
+          event.preventDefault();
+          moveFocusFn(row, column, 'down', event.nativeEvent);
+          return;
+        case 'Tab':
+          event.preventDefault();
+          moveFocusFn(row, column, event.shiftKey ? 'left' : 'right', event.nativeEvent);
+          return;
+        case 'Enter':
+          event.preventDefault();
+          moveFocusFn(row, column, event.shiftKey ? 'up' : 'down', event.nativeEvent);
+          return;
+        case 'F2':
+          event.preventDefault();
+          if (isCellEditable(row, column, event.nativeEvent)) {
+            startCellEditFn(row, column, event.nativeEvent);
+          }
+          return;
+        case 'Backspace':
+        case 'Delete':
+          if (isCellEditable(row, column, event.nativeEvent)) {
+            event.preventDefault();
+            startCellEditFn(row, column, event.nativeEvent, '');
+          }
+          return;
+        default:
+          break;
+      }
 
-    if (isPrintableGridKey(event.key, event.ctrlKey, event.metaKey, event.altKey) && isCellEditable(row, column, event.nativeEvent)) {
-      event.preventDefault();
-      startCellEditFn(row, column, event.nativeEvent, event.key);
-    }
-  }, [focusCellFn, moveFocusFn, isCellEditable, startCellEditFn]);
+      if (
+        isPrintableGridKey(event.key, event.ctrlKey, event.metaKey, event.altKey) &&
+        isCellEditable(row, column, event.nativeEvent)
+      ) {
+        event.preventDefault();
+        startCellEditFn(row, column, event.nativeEvent, event.key);
+      }
+    },
+    [focusCellFn, moveFocusFn, isCellEditable, startCellEditFn],
+  );
 
-  const handleCellDoubleClickFn = useCallback((row: GridRow, column: GridColumnDef, event: React.MouseEvent): void => {
-    focusCellFn(row, column, event.nativeEvent);
-    if (isCellEditable(row, column, event.nativeEvent)) {
-      startCellEditFn(row, column, event.nativeEvent);
-    }
-  }, [focusCellFn, isCellEditable, startCellEditFn]);
+  const handleCellDoubleClickFn = useCallback(
+    (row: GridRow, column: GridColumnDef, event: React.MouseEvent): void => {
+      focusCellFn(row, column, event.nativeEvent);
+      if (isCellEditable(row, column, event.nativeEvent)) {
+        startCellEditFn(row, column, event.nativeEvent);
+      }
+    },
+    [focusCellFn, isCellEditable, startCellEditFn],
+  );
 
   const updateEditingValueFn = useCallback((value: string): void => {
     setEditingValue(value);
   }, []);
 
-  const handleEditorKeyDownFn = useCallback((event: React.KeyboardEvent): void => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelCellEditFn();
-      return;
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      commitCellEditFn(event.shiftKey ? 'up' : 'down');
-      return;
-    }
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      commitCellEditFn(event.shiftKey ? 'left' : 'right');
-    }
-  }, [cancelCellEditFn, commitCellEditFn]);
+  const handleEditorKeyDownFn = useCallback(
+    (event: React.KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelCellEditFn();
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitCellEditFn(event.shiftKey ? 'up' : 'down');
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        commitCellEditFn(event.shiftKey ? 'left' : 'right');
+      }
+    },
+    [cancelCellEditFn, commitCellEditFn],
+  );
 
-  const handleEditorBlurFn = useCallback((event: React.FocusEvent): void => {
-    const ec = editingCellRef.current;
-    const target = event.target as HTMLElement | null;
-    if (!ec || !target) return;
-    if (target.dataset['rowId'] !== ec.rowId || target.dataset['colName'] !== ec.columnName) return;
-    commitCellEditFn(undefined, false);
-  }, [commitCellEditFn]);
+  const handleEditorBlurFn = useCallback(
+    (event: React.FocusEvent): void => {
+      const ec = editingCellRef.current;
+      const target = event.target as HTMLElement | null;
+      if (!ec || !target) return;
+      if (target.dataset['rowId'] !== ec.rowId || target.dataset['colName'] !== ec.columnName)
+        return;
+      commitCellEditFn(undefined, false);
+    },
+    [commitCellEditFn],
+  );
 
-  const toggleRowExpansionFn = useCallback((row: GridRow, event?: React.MouseEvent): void => {
-    event?.stopPropagation();
-    toggleRowExpansionByRefFn(row);
-  }, [toggleRowExpansionByRefFn]);
+  const toggleRowExpansionFn = useCallback(
+    (row: GridRow, event?: React.MouseEvent): void => {
+      event?.stopPropagation();
+      toggleRowExpansionByRefFn(row);
+    },
+    [toggleRowExpansionByRefFn],
+  );
 
-  const toggleTreeRowFn = useCallback((row: GridRow, event?: React.MouseEvent): void => {
-    event?.stopPropagation();
-    toggleTreeRowByRefFn(row);
-  }, [toggleTreeRowByRefFn]);
+  const toggleTreeRowFn = useCallback(
+    (row: GridRow, event?: React.MouseEvent): void => {
+      event?.stopPropagation();
+      toggleTreeRowByRefFn(row);
+    },
+    [toggleTreeRowByRefFn],
+  );
 
   const moveColumnFn = useCallback((fromIndex: number, toIndex: number): void => {
     moveGridColumnCommand(
       gridApiRef.current!,
-      FEATURE_COLUMN_MOVING && (optionsRef.current.enableColumnMoving === true),
+      FEATURE_COLUMN_MOVING && optionsRef.current.enableColumnMoving === true,
       (updater) => setColumnOrder((current) => updater(current)),
       fromIndex,
-      toIndex
+      toIndex,
     );
   }, []);
 
@@ -1275,9 +1520,12 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     seekPageFn(getCurrentPageValueFn() - 1);
   }, [seekPageFn, getCurrentPageValueFn]);
 
-  const onPageSizeChangeFn = useCallback((value: string): void => {
-    setPaginationPageSizeFn(Number(value));
-  }, [setPaginationPageSizeFn]);
+  const onPageSizeChangeFn = useCallback(
+    (value: string): void => {
+      setPaginationPageSizeFn(Number(value));
+    },
+    [setPaginationPageSizeFn],
+  );
 
   const onViewportScrollFn = useCallback((startIndex: number): void => {
     if (!scrollingRef.current) {
@@ -1294,11 +1542,11 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       raiseGridScrollEnd(gridApiRef.current!);
     }, 120);
 
-    const isInfiniteScrollEnabled = FEATURE_INFINITE_SCROLL && (
-      optionsRef.current.infiniteScrollRowsFromEnd !== undefined
-      || optionsRef.current.infiniteScrollUp === true
-      || optionsRef.current.infiniteScrollDown !== undefined
-    );
+    const isInfiniteScrollEnabled =
+      FEATURE_INFINITE_SCROLL &&
+      (optionsRef.current.infiniteScrollRowsFromEnd !== undefined ||
+        optionsRef.current.infiniteScrollUp === true ||
+        optionsRef.current.infiniteScrollDown !== undefined);
 
     maybeRequestInfiniteScrollCommand(gridApiRef.current!, {
       enabled: isInfiniteScrollEnabled,
@@ -1306,7 +1554,10 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
       state: infiniteScrollStateRef.current,
       startIndex,
       visibleRows: pipelineRef.current.visibleRows.length,
-      viewportRows: computeViewportRows(optionsRef.current.viewportHeight, optionsRef.current.rowHeight),
+      viewportRows: computeViewportRows(
+        optionsRef.current.viewportHeight,
+        optionsRef.current.rowHeight,
+      ),
       threshold: optionsRef.current.infiniteScrollRowsFromEnd ?? 20,
       setState: (state) => setInfiniteScrollState(state),
     });
@@ -1414,5 +1665,12 @@ export function useGridState(options: GridOptions, onRegisterApi?: (api: UiGridA
     runBenchmark: runBenchmarkFn,
     exportCsv: exportCsvFn,
     onViewportScroll: onViewportScrollFn,
+    // Pinning
+    isPinned: isPinnedFn,
+    pinnedOffset: pinnedOffsetFn,
+    isPinningEnabled: isPinningEnabledFn,
+    isColumnPinnable: isColumnPinnableFn,
+    togglePin: togglePinFn,
+    pinningFeature: FEATURE_PINNING,
   };
 }

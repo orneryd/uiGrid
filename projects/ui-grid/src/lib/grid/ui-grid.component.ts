@@ -3,7 +3,7 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import {
   CdkFixedSizeVirtualScroll,
   CdkVirtualForOf,
-  CdkVirtualScrollViewport
+  CdkVirtualScrollViewport,
 } from '@angular/cdk/scrolling';
 import {
   ChangeDetectionStrategy,
@@ -16,7 +16,7 @@ import {
   effect,
   inject,
   input,
-  signal
+  signal,
 } from '@angular/core';
 import { createGridApi, UiGridApi } from './grid.api';
 import {
@@ -30,8 +30,9 @@ import {
   FEATURE_INFINITE_SCROLL,
   FEATURE_PAGINATION,
   FEATURE_SAVE_STATE,
+  FEATURE_PINNING,
   FEATURE_SORTING,
-  FEATURE_TREE_VIEW
+  FEATURE_TREE_VIEW,
 } from './grid.features';
 import { FILTER_CONDITIONS, SORT_DIRECTIONS, SortDirection } from './grid.constants';
 import {
@@ -46,7 +47,7 @@ import {
   GridRecord,
   GridRow,
   GridSavedState,
-  SortState
+  SortState,
 } from './grid.models';
 import { runColumnFilter, setupFilters } from './row-searcher';
 import { getSortFn } from './row-sorter';
@@ -107,7 +108,15 @@ import {
   stringifyGridEditorValue,
   headerLabel as coreHeaderLabel,
   normalizeBooleanMap,
-  sanitizeDownloadFilename
+  sanitizeDownloadFilename,
+} from './grid.core';
+import {
+  PinDirection,
+  PinnedColumnState,
+  buildInitialPinnedState,
+  computePinnedOffset,
+  isColumnPinnable,
+  isPinningEnabled,
 } from './grid.core';
 import type { DisplayItem, ExpandableItem, GroupItem, PipelineResult } from './grid.core';
 import { defaultGridEngine } from './ui-grid.engine';
@@ -137,9 +146,15 @@ import {
   toggleGridRowExpansionCommand,
   toggleGridGroupingCommand,
   toggleGridTreeRowCommand,
-  updateGridFilterCommand
+  updateGridFilterCommand,
 } from './ui-grid.commands';
-import { downloadGridCsvFile, focusGridEditor, focusGridRenderedCell, observeGridHostSize } from './ui-grid.host';
+import { pinGridColumnCommand } from './ui-grid.commands';
+import {
+  downloadGridCsvFile,
+  focusGridEditor,
+  focusGridRenderedCell,
+  observeGridHostSize,
+} from './ui-grid.host';
 import {
   raiseGridBenchmarkComplete,
   raiseGridCanvasHeightChanged,
@@ -148,7 +163,7 @@ import {
   raiseGridRowsRendered,
   raiseGridRowsVisibleChanged,
   raiseGridScrollBegin,
-  raiseGridScrollEnd
+  raiseGridScrollEnd,
 } from './ui-grid.events';
 
 @Component({
@@ -159,21 +174,21 @@ import {
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,
     CdkDropList,
-    CdkDrag
+    CdkDrag,
   ],
   templateUrl: './ui-grid.component.html',
   styleUrl: './ui-grid.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.ShadowDom,
   host: {
-    class: 'ui-grid-host'
-  }
+    class: 'ui-grid-host',
+  },
 })
 export class UiGridComponent {
   readonly options = input<GridOptions>({
     id: '__ui-grid-pending__',
     data: [],
-    columnDefs: []
+    columnDefs: [],
   });
 
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -189,6 +204,7 @@ export class UiGridComponent {
   protected readonly editingValue = signal('');
   protected readonly expandedRows = signal<Record<string, boolean>>({});
   protected readonly expandedTreeRows = signal<Record<string, boolean>>({});
+  protected readonly pinnedColumns = signal<PinnedColumnState>({});
   protected readonly currentPage = signal(1);
   protected readonly pageSize = signal(0);
   protected readonly autoViewportHeight = signal<number | null>(null);
@@ -196,11 +212,11 @@ export class UiGridComponent {
     scrollUp: false,
     scrollDown: true,
     dataLoading: false,
-    previousVisibleRows: 0
+    previousVisibleRows: 0,
   });
   protected readonly sortState = signal<SortState>({
     columnName: null,
-    direction: SORT_DIRECTIONS.none
+    direction: SORT_DIRECTIONS.none,
   });
   protected readonly gridApi: UiGridApi;
 
@@ -247,18 +263,25 @@ export class UiGridComponent {
       treeGetRowChildren: (row) => this.getTreeRowChildren(row),
       treeGetState: () => this.expandedTreeRows(),
       treeSetState: (state) => this.expandedTreeRows.set({ ...state }),
-      infiniteScrollDataLoaded: (scrollUp, scrollDown) => this.infiniteScrollDataLoaded(scrollUp, scrollDown),
+      infiniteScrollDataLoaded: (scrollUp, scrollDown) =>
+        this.infiniteScrollDataLoaded(scrollUp, scrollDown),
       infiniteScrollReset: (scrollUp, scrollDown) => this.resetInfiniteScroll(scrollUp, scrollDown),
       infiniteScrollSaveScrollPercentage: () => this.saveScrollPercentage(),
-      infiniteScrollDataRemovedTop: (scrollUp, scrollDown) => this.handleInfiniteDataRemovedTop(scrollUp, scrollDown),
-      infiniteScrollDataRemovedBottom: (scrollUp, scrollDown) => this.handleInfiniteDataRemovedBottom(scrollUp, scrollDown),
-      infiniteScrollSetDirections: (scrollUp, scrollDown) => this.setInfiniteScrollDirections(scrollUp, scrollDown),
+      infiniteScrollDataRemovedTop: (scrollUp, scrollDown) =>
+        this.handleInfiniteDataRemovedTop(scrollUp, scrollDown),
+      infiniteScrollDataRemovedBottom: (scrollUp, scrollDown) =>
+        this.handleInfiniteDataRemovedBottom(scrollUp, scrollDown),
+      infiniteScrollSetDirections: (scrollUp, scrollDown) =>
+        this.setInfiniteScrollDirections(scrollUp, scrollDown),
       saveState: () => this.saveState(),
       restoreState: (state) => this.restoreState(state),
-      beginCellEdit: (row, columnName, triggerEvent) => this.beginCellEditByRef(row, columnName, triggerEvent),
+      beginCellEdit: (row, columnName, triggerEvent) =>
+        this.beginCellEditByRef(row, columnName, triggerEvent),
       endCellEdit: () => this.commitCellEdit(),
       cancelCellEdit: () => this.cancelCellEdit(),
-      getEditingCell: () => this.editingCell()
+      getEditingCell: () => this.editingCell(),
+      pinColumn: (columnName: string, direction: PinDirection) =>
+        this.pinColumn(columnName, direction),
     });
 
     effect(() => {
@@ -278,20 +301,21 @@ export class UiGridComponent {
       this.expandedTreeRows.set({});
       this.columnOrder.set(options.columnDefs.map((column) => column.name));
       this.groupByColumns.set(options.grouping?.groupBy ?? []);
+      this.pinnedColumns.set(buildInitialPinnedState(options.columnDefs));
       this.currentPage.set(options.paginationCurrentPage ?? 1);
       this.pageSize.set(this.initialPageSize(options));
       this.infiniteScrollState.set({
         scrollUp: options.infiniteScrollUp === true,
         scrollDown: options.infiniteScrollDown !== false,
         dataLoading: false,
-        previousVisibleRows: 0
+        previousVisibleRows: 0,
       });
       const initialSort = options.columnDefs.find(
-        (column) => column.sort?.direction && !column.sort.ignoreSort
+        (column) => column.sort?.direction && !column.sort.ignoreSort,
       );
       this.sortState.set({
         columnName: initialSort?.name ?? null,
-        direction: initialSort?.sort?.direction ?? SORT_DIRECTIONS.none
+        direction: initialSort?.sort?.direction ?? SORT_DIRECTIONS.none,
       });
       options.onRegisterApi?.(this.gridApi);
       raiseGridRenderingComplete(this.gridApi);
@@ -314,25 +338,28 @@ export class UiGridComponent {
         return;
       }
 
-      const observer = observeGridHostSize(this.hostElement.nativeElement, ({ height: nextHeight, width: nextWidth }) => {
-        if (nextHeight === this.lastGridHeight && nextWidth === this.lastGridWidth) {
-          return;
-        }
+      const observer = observeGridHostSize(
+        this.hostElement.nativeElement,
+        ({ height: nextHeight, width: nextWidth }) => {
+          if (nextHeight === this.lastGridHeight && nextWidth === this.lastGridWidth) {
+            return;
+          }
 
-        raiseGridDimensionChanged(
-          this.gridApi,
-          this.lastGridHeight,
-          this.lastGridWidth,
-          nextHeight,
-          nextWidth
-        );
-        this.lastGridHeight = nextHeight;
-        this.lastGridWidth = nextWidth;
+          raiseGridDimensionChanged(
+            this.gridApi,
+            this.lastGridHeight,
+            this.lastGridWidth,
+            nextHeight,
+            nextWidth,
+          );
+          this.lastGridHeight = nextHeight;
+          this.lastGridWidth = nextWidth;
 
-        if (!this.options().viewportHeight && nextHeight > 0) {
-          this.autoViewportHeight.set(nextHeight);
-        }
-      });
+          if (!this.options().viewportHeight && nextHeight > 0) {
+            this.autoViewportHeight.set(nextHeight);
+          }
+        },
+      );
 
       if (!observer) {
         return;
@@ -352,12 +379,16 @@ export class UiGridComponent {
   private readonly pipeline = computed<PipelineResult>(() => this.buildPipeline());
 
   protected readonly gridTemplateColumns = computed(() =>
-    this.visibleColumns().map((column) => this.columnWidth(column)).join(' ')
+    this.visibleColumns()
+      .map((column) => this.columnWidth(column))
+      .join(' '),
   );
   protected readonly totalRows = computed(() => this.pipeline().totalItems);
   protected readonly visibleRowCount = computed(() => this.pipeline().visibleRows.length);
   protected readonly displayItems = computed(() => this.pipeline().displayItems);
-  protected readonly renderVirtualViewport = computed(() => this.virtualizationEnabled() && !isPlatformServer(this.platformId));
+  protected readonly renderVirtualViewport = computed(
+    () => this.virtualizationEnabled() && !isPlatformServer(this.platformId),
+  );
   protected readonly renderedDisplayItems = computed(() => {
     const items = this.displayItems();
     if (!this.virtualizationEnabled() || !isPlatformServer(this.platformId)) {
@@ -371,7 +402,9 @@ export class UiGridComponent {
   protected readonly labels = computed<GridLabels>(() => resolveGridLabels(this.options().labels));
   protected readonly paginationCurrentPage = computed(() => this.getCurrentPageValue());
   protected readonly paginationTotalPages = computed(() => this.getTotalPagesValue());
-  protected readonly paginationSelectedPageSize = computed(() => this.effectivePageSize(this.pipeline().totalItems));
+  protected readonly paginationSelectedPageSize = computed(() =>
+    this.effectivePageSize(this.pipeline().totalItems),
+  );
 
   private isVirtualizationEnabled(itemCount = this.pipeline().totalItems): boolean {
     return coreIsVirtualizationEnabled(this.options(), itemCount);
@@ -390,7 +423,7 @@ export class UiGridComponent {
       expandedTreeRows: this.expandedTreeRows(),
       currentPage: this.currentPage(),
       pageSize: this.pageSize(),
-      rowSize: this.rowSize()
+      rowSize: this.rowSize(),
     });
   }
 
@@ -486,7 +519,7 @@ export class UiGridComponent {
 
     applyGridSortStateCommand(this.gridApi, (state) => this.sortState.set(state), {
       columnName: nextDirection === SORT_DIRECTIONS.none ? null : column.name,
-      direction: nextDirection
+      direction: nextDirection,
     });
   }
 
@@ -496,7 +529,7 @@ export class UiGridComponent {
       (updater) => this.activeFilters.update(updater),
       () => this.activeFilters(),
       columnName,
-      value
+      value,
     );
   }
 
@@ -510,7 +543,7 @@ export class UiGridComponent {
       row: row.entity,
       rowIndex: row.index,
       expanded: true,
-      ...(this.options().expandableRowScope ?? {})
+      ...(this.options().expandableRowScope ?? {}),
     };
   }
 
@@ -526,7 +559,11 @@ export class UiGridComponent {
     return isGridColumnFilterable(this.options(), column);
   }
 
-  protected isCellEditable(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): boolean {
+  protected isCellEditable(
+    row: GridRow,
+    column: GridColumnDef,
+    triggerEvent?: Event | KeyboardEvent | null,
+  ): boolean {
     if (!FEATURE_CELL_EDIT) return false;
     const editable = column.enableCellEdit ?? this.options().enableCellEdit ?? false;
     if (!editable) {
@@ -542,7 +579,7 @@ export class UiGridComponent {
       row: row.entity,
       column,
       rowIndex: row.index,
-      triggerEvent
+      triggerEvent,
     };
     return condition(context);
   }
@@ -564,6 +601,7 @@ export class UiGridComponent {
   protected readonly columnMovingFeature = FEATURE_COLUMN_MOVING;
   protected readonly csvExportFeature = FEATURE_CSV_EXPORT;
   protected readonly autoResizeFeature = FEATURE_AUTO_RESIZE;
+  protected readonly pinningFeature = FEATURE_PINNING;
 
   protected isGroupingEnabled(): boolean {
     return FEATURE_GROUPING && isGridGroupingEnabled(this.options());
@@ -638,13 +676,46 @@ export class UiGridComponent {
     this.toggleGroupingByName(column.name);
   }
 
+  protected isPinningEnabled(): boolean {
+    return FEATURE_PINNING && isPinningEnabled(this.options());
+  }
+
+  protected isColumnPinnable(column: GridColumnDef): boolean {
+    return FEATURE_PINNING && isColumnPinnable(this.options(), column);
+  }
+
+  protected isPinned(column: GridColumnDef): boolean {
+    return this.pinnedColumns()[column.name] !== undefined;
+  }
+
+  protected pinnedOffset(column: GridColumnDef): { side: 'left' | 'right'; offset: string } | null {
+    return computePinnedOffset(this.visibleColumns(), this.pinnedColumns(), column);
+  }
+
+  protected pinColumn(columnName: string, direction: PinDirection): void {
+    pinGridColumnCommand(
+      this.gridApi,
+      this.isPinningEnabled(),
+      (v) => this.pinnedColumns.set(v),
+      () => this.pinnedColumns(),
+      columnName,
+      direction,
+    );
+  }
+
+  protected togglePin(column: GridColumnDef): void {
+    const current = this.pinnedColumns()[column.name];
+    const next: PinDirection = current === 'left' ? 'right' : current === 'right' ? 'none' : 'left';
+    this.pinColumn(column.name, next);
+  }
+
   private toggleGroupingByName(columnName: string): void {
     toggleGridGroupingCommand(
       this.gridApi,
       this.isGroupingEnabled(),
       (updater) => this.groupByColumns.update(updater),
       () => this.groupByColumns(),
-      columnName
+      columnName,
     );
   }
 
@@ -655,7 +726,7 @@ export class UiGridComponent {
   protected toggleGroup(item: GroupItem): void {
     this.collapsedGroups.update((current) => ({
       ...current,
-      [item.id]: !current[item.id]
+      [item.id]: !current[item.id],
     }));
   }
 
@@ -697,7 +768,9 @@ export class UiGridComponent {
     this.seekPage(this.getCurrentPageValue() - 1);
   }
 
-  protected onColumnDrop(event: CdkDragDrop<GridColumnDef[], GridColumnDef[], GridColumnDef>): void {
+  protected onColumnDrop(
+    event: CdkDragDrop<GridColumnDef[], GridColumnDef[], GridColumnDef>,
+  ): void {
     if (!this.canMoveColumns()) {
       return;
     }
@@ -719,7 +792,7 @@ export class UiGridComponent {
       this.canMoveColumns(),
       (updater) => this.columnOrder.update(updater),
       fromIndex,
-      toIndex
+      toIndex,
     );
   }
 
@@ -731,20 +804,24 @@ export class UiGridComponent {
       this.visibleColumns().map((column) => column.name),
       columnName,
       targetColumnName,
-      (order) => this.columnOrder.set(order)
+      (order) => this.columnOrder.set(order),
     );
   }
 
   protected trackDisplayItem = (_index: number, item: DisplayItem): string => item.id;
 
-  protected focusCell(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null): void {
+  protected focusCell(
+    row: GridRow,
+    column: GridColumnDef,
+    triggerEvent?: Event | KeyboardEvent | null,
+  ): void {
     const nextFocusResult = buildGridFocusCellResult({
       currentFocusedCell: this.focusedCell(),
       currentEditingCell: this.editingCell(),
       rowId: row.id,
       columnName: column.name,
       shouldEditOnFocus: this.shouldEditOnFocus(column),
-      isCellEditable: this.isCellEditable(row, column, triggerEvent)
+      isCellEditable: this.isCellEditable(row, column, triggerEvent),
     });
     this.focusedCell.set(nextFocusResult.focusedCell);
 
@@ -841,7 +918,10 @@ export class UiGridComponent {
       return;
     }
 
-    if (target.dataset['rowId'] !== editingCell.rowId || target.dataset['colName'] !== editingCell.columnName) {
+    if (
+      target.dataset['rowId'] !== editingCell.rowId ||
+      target.dataset['colName'] !== editingCell.columnName
+    ) {
       return;
     }
 
@@ -866,7 +946,9 @@ export class UiGridComponent {
     this.maybeRequestMoreData(startIndex);
   }
 
-  protected runBenchmark(iterations = this.options().benchmark?.iterations ?? 25): GridBenchmarkResult {
+  protected runBenchmark(
+    iterations = this.options().benchmark?.iterations ?? 25,
+  ): GridBenchmarkResult {
     const safeIterations = Math.max(1, iterations);
     const startedAt = performance.now();
     let lastResult = this.buildPipeline();
@@ -881,7 +963,7 @@ export class UiGridComponent {
       totalMs,
       averageMs: totalMs / safeIterations,
       visibleRows: lastResult.visibleRows.length,
-      renderedItems: lastResult.displayItems.length
+      renderedItems: lastResult.displayItems.length,
     };
 
     this.benchmarkResult.set(result);
@@ -912,7 +994,11 @@ export class UiGridComponent {
     return isPrintableGridKey(event.key, event.ctrlKey, event.metaKey, event.altKey);
   }
 
-  private beginCellEditByRef(row: GridRow | GridRecord | string, columnName: string, triggerEvent?: Event | KeyboardEvent | null): void {
+  private beginCellEditByRef(
+    row: GridRow | GridRecord | string,
+    columnName: string,
+    triggerEvent?: Event | KeyboardEvent | null,
+  ): void {
     const rowId = this.resolveRowId(row);
     const gridRow = this.findRowById(rowId);
     const column = this.visibleColumns().find((candidate) => candidate.name === columnName);
@@ -923,7 +1009,12 @@ export class UiGridComponent {
     this.startCellEdit(gridRow, column, triggerEvent);
   }
 
-  private startCellEdit(row: GridRow, column: GridColumnDef, triggerEvent?: Event | KeyboardEvent | null, initialValue?: string): void {
+  private startCellEdit(
+    row: GridRow,
+    column: GridColumnDef,
+    triggerEvent?: Event | KeyboardEvent | null,
+    initialValue?: string,
+  ): void {
     const currentValue = getCellValue(row.entity, column);
     const focusToken = ++this.editorFocusToken;
     const editingCell = beginGridCellEditCommand(
@@ -931,13 +1022,13 @@ export class UiGridComponent {
       {
         setFocusedCell: (focusedCell) => this.focusedCell.set(focusedCell),
         setEditingCell: (editingCellState) => this.editingCell.set(editingCellState),
-        setEditingValue: (editingValue) => this.editingValue.set(editingValue)
+        setEditingValue: (editingValue) => this.editingValue.set(editingValue),
       },
       row,
       column,
       currentValue,
       triggerEvent,
-      initialValue
+      initialValue,
     );
 
     if (editingCell) {
@@ -952,9 +1043,10 @@ export class UiGridComponent {
       setEditingCell: (editingCell) => this.editingCell.set(editingCell),
       setEditingValue: (editingValue) => this.editingValue.set(editingValue),
       findRowById: (rowId) => this.findRowById(rowId),
-      findColumnByName: (columnName) => this.visibleColumns().find((candidate) => candidate.name === columnName),
+      findColumnByName: (columnName) =>
+        this.visibleColumns().find((candidate) => candidate.name === columnName),
       parseEditedValue: (column, value, oldValue) => this.parseEditedValue(column, value, oldValue),
-      setCellValue: (rowEntity, column, value) => this.setCellValue(rowEntity, column, value)
+      setCellValue: (rowEntity, column, value) => this.setCellValue(rowEntity, column, value),
     });
 
     if (!result.committed || !result.row || !result.column || !result.focusTarget) {
@@ -980,7 +1072,8 @@ export class UiGridComponent {
       setEditingCell: (editingCell) => this.editingCell.set(editingCell),
       setEditingValue: (editingValue) => this.editingValue.set(editingValue),
       findRowById: (rowId) => this.findRowById(rowId),
-      findColumnByName: (columnName) => this.visibleColumns().find((candidate) => candidate.name === columnName)
+      findColumnByName: (columnName) =>
+        this.visibleColumns().find((candidate) => candidate.name === columnName),
     });
 
     if (!hadEditingCell) {
@@ -1015,7 +1108,7 @@ export class UiGridComponent {
     column: GridColumnDef,
     direction: 'left' | 'right' | 'up' | 'down',
     triggerEvent?: Event | KeyboardEvent | null,
-    editableOnly = false
+    editableOnly = false,
   ): boolean {
     const nextCell = findNextGridCell({
       rows: this.pipeline().visibleRows,
@@ -1025,7 +1118,7 @@ export class UiGridComponent {
       direction,
       isCellAllowed: editableOnly
         ? (nextRow, nextColumn) => this.isCellEditable(nextRow, nextColumn, triggerEvent)
-        : undefined
+        : undefined,
     });
     if (!nextCell) {
       return false;
@@ -1034,7 +1127,10 @@ export class UiGridComponent {
     this.focusedCell.set({ rowId: nextCell.row.id, columnName: nextCell.column.name });
     this.focusRenderedCell({ rowId: nextCell.row.id, columnName: nextCell.column.name });
 
-    if (this.shouldEditOnFocus(nextCell.column) && this.isCellEditable(nextCell.row, nextCell.column, triggerEvent)) {
+    if (
+      this.shouldEditOnFocus(nextCell.column) &&
+      this.isCellEditable(nextCell.row, nextCell.column, triggerEvent)
+    ) {
       this.startCellEdit(nextCell.row, nextCell.column, triggerEvent);
     }
 
@@ -1043,7 +1139,11 @@ export class UiGridComponent {
 
   private focusRenderedCell(position: GridCellPosition): void {
     const focusToken = ++this.renderedCellFocusToken;
-    focusGridRenderedCell(this.hostElement.nativeElement, position, () => focusToken === this.renderedCellFocusToken);
+    focusGridRenderedCell(
+      this.hostElement.nativeElement,
+      position,
+      () => focusToken === this.renderedCellFocusToken,
+    );
   }
 
   private focusEditorInput(focusToken: number, retry = true): void {
@@ -1063,7 +1163,10 @@ export class UiGridComponent {
     focusGridEditor(
       this.hostElement.nativeElement,
       editingCell,
-      () => focusToken === this.editorFocusToken && this.editingCell()?.rowId === editingCell.rowId && this.editingCell()?.columnName === editingCell.columnName
+      () =>
+        focusToken === this.editorFocusToken &&
+        this.editingCell()?.rowId === editingCell.rowId &&
+        this.editingCell()?.columnName === editingCell.columnName,
     );
   }
 
@@ -1084,11 +1187,21 @@ export class UiGridComponent {
   }
 
   private getFirstRowIndexValue(totalItems = this.pipeline().totalItems): number {
-    return coreGetFirstRowIndexValue(this.options(), this.currentPage(), totalItems, this.pageSize());
+    return coreGetFirstRowIndexValue(
+      this.options(),
+      this.currentPage(),
+      totalItems,
+      this.pageSize(),
+    );
   }
 
   private getLastRowIndexValue(totalItems = this.pipeline().totalItems): number {
-    return coreGetLastRowIndexValue(this.options(), this.currentPage(), totalItems, this.pageSize());
+    return coreGetLastRowIndexValue(
+      this.options(),
+      this.currentPage(),
+      totalItems,
+      this.pageSize(),
+    );
   }
 
   private seekPage(page: number): void {
@@ -1097,7 +1210,7 @@ export class UiGridComponent {
       (nextPage) => this.currentPage.set(nextPage),
       () => this.getTotalPagesValue(),
       () => this.effectivePageSize(this.pipeline().totalItems),
-      page
+      page,
     );
   }
 
@@ -1106,7 +1219,7 @@ export class UiGridComponent {
       this.gridApi,
       (nextPageSize) => this.pageSize.set(nextPageSize),
       (nextPage) => this.currentPage.set(nextPage),
-      pageSize
+      pageSize,
     );
   }
 
@@ -1115,7 +1228,7 @@ export class UiGridComponent {
       { ...this.options(), data },
       this.rowSize(),
       this.hiddenRowReasons(),
-      this.expandedRows()
+      this.expandedRows(),
     );
   }
 
@@ -1135,7 +1248,7 @@ export class UiGridComponent {
       this.expandedRows(),
       rowId,
       (expandedRows) => this.expandedRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId)
+      (resolvedRowId) => this.findRowById(resolvedRowId),
     );
   }
 
@@ -1152,7 +1265,7 @@ export class UiGridComponent {
     expandAllGridRowsCommand(
       (data) => this.buildRows(data),
       this.options().data,
-      (expandedRows) => this.expandedRows.set(expandedRows)
+      (expandedRows) => this.expandedRows.set(expandedRows),
     );
   }
 
@@ -1161,7 +1274,10 @@ export class UiGridComponent {
   }
 
   private toggleAllRows(): void {
-    const allExpanded = areAllGridRowsExpanded(this.buildRows(this.options().data), this.expandedRows());
+    const allExpanded = areAllGridRowsExpanded(
+      this.buildRows(this.options().data),
+      this.expandedRows(),
+    );
     if (allExpanded) {
       this.collapseAllRows();
     } else {
@@ -1181,7 +1297,7 @@ export class UiGridComponent {
       this.expandedTreeRows(),
       rowId,
       (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId)
+      (resolvedRowId) => this.findRowById(resolvedRowId),
     );
   }
 
@@ -1193,7 +1309,7 @@ export class UiGridComponent {
       rowId,
       true,
       (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId)
+      (resolvedRowId) => this.findRowById(resolvedRowId),
     );
   }
 
@@ -1205,7 +1321,7 @@ export class UiGridComponent {
       rowId,
       false,
       (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId)
+      (resolvedRowId) => this.findRowById(resolvedRowId),
     );
   }
 
@@ -1213,7 +1329,7 @@ export class UiGridComponent {
     expandAllGridTreeRowsCommand(
       (data) => this.buildRows(data),
       this.options().data,
-      (expandedRows) => this.expandedTreeRows.set(expandedRows)
+      (expandedRows) => this.expandedTreeRows.set(expandedRows),
     );
   }
 
@@ -1237,7 +1353,12 @@ export class UiGridComponent {
   }
 
   private sortColumn(columnName: string, direction?: SortDirection): void {
-    sortGridColumnCommand(this.gridApi, (sortState) => this.sortState.set(sortState), columnName, direction);
+    sortGridColumnCommand(
+      this.gridApi,
+      (sortState) => this.sortState.set(sortState),
+      columnName,
+      direction,
+    );
   }
 
   private maybeRequestMoreData(startIndex: number): void {
@@ -1247,38 +1368,59 @@ export class UiGridComponent {
       state: this.infiniteScrollState(),
       startIndex,
       visibleRows: this.pipeline().visibleRows.length,
-      viewportRows: Math.max(1, Math.ceil((this.options().viewportHeight ?? this.autoViewportHeight() ?? 560) / this.rowSize())),
+      viewportRows: Math.max(
+        1,
+        Math.ceil(
+          (this.options().viewportHeight ?? this.autoViewportHeight() ?? 560) / this.rowSize(),
+        ),
+      ),
       threshold: this.options().infiniteScrollRowsFromEnd ?? 20,
-      setState: (state) => this.infiniteScrollState.set(state)
+      setState: (state) => this.infiniteScrollState.set(state),
     });
   }
 
-  private infiniteScrollDataLoaded(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): Promise<void> {
+  private infiniteScrollDataLoaded(
+    scrollUp = this.infiniteScrollState().scrollUp,
+    scrollDown = this.infiniteScrollState().scrollDown,
+  ): Promise<void> {
     return completeGridInfiniteScrollDataLoadCommand(
       this.infiniteScrollState(),
       (state) => this.infiniteScrollState.set(state),
       scrollUp,
-      scrollDown
+      scrollDown,
     );
   }
 
-  private resetInfiniteScroll(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): void {
-    resetGridInfiniteScrollCommand((state) => this.infiniteScrollState.set(state), scrollUp, scrollDown);
+  private resetInfiniteScroll(
+    scrollUp = this.infiniteScrollState().scrollUp,
+    scrollDown = this.infiniteScrollState().scrollDown,
+  ): void {
+    resetGridInfiniteScrollCommand(
+      (state) => this.infiniteScrollState.set(state),
+      scrollUp,
+      scrollDown,
+    );
   }
 
   private saveScrollPercentage(): void {
     saveGridInfiniteScrollPercentageCommand(
       this.infiniteScrollState(),
       this.pipeline().visibleRows.length,
-      (state) => this.infiniteScrollState.set(state)
+      (state) => this.infiniteScrollState.set(state),
     );
   }
 
-  private handleInfiniteDataRemovedTop(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): void {
+  private handleInfiniteDataRemovedTop(
+    scrollUp = this.infiniteScrollState().scrollUp,
+    scrollDown = this.infiniteScrollState().scrollDown,
+  ): void {
     this.resetInfiniteScroll(scrollUp, scrollDown);
   }
 
-  private handleInfiniteDataRemovedBottom(scrollUp = this.infiniteScrollState().scrollUp, scrollDown = this.infiniteScrollState().scrollDown): void {
+  private handleInfiniteDataRemovedBottom(
+    scrollUp = this.infiniteScrollState().scrollUp,
+    scrollDown = this.infiniteScrollState().scrollDown,
+  ): void {
     this.resetInfiniteScroll(scrollUp, scrollDown);
   }
 
@@ -1287,7 +1429,7 @@ export class UiGridComponent {
       this.infiniteScrollState(),
       (state) => this.infiniteScrollState.set(state),
       scrollUp,
-      scrollDown
+      scrollDown,
     );
   }
 
@@ -1301,7 +1443,8 @@ export class UiGridComponent {
       pageSize: this.pageSize(),
       totalItems: this.pipeline().totalItems,
       expandedRows: this.expandedRows(),
-      expandedTreeRows: this.expandedTreeRows()
+      expandedTreeRows: this.expandedTreeRows(),
+      pinnedColumns: this.pinnedColumns(),
     });
   }
 
@@ -1315,8 +1458,8 @@ export class UiGridComponent {
       setPageSize: (pageSize) => this.pageSize.set(pageSize),
       setExpandedRows: (expandedRows) => this.expandedRows.set(expandedRows),
       setExpandedTreeRows: (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      getEffectivePageSize: () => this.effectivePageSize(this.pipeline().totalItems)
+      setPinnedColumns: (pinned) => this.pinnedColumns.set(pinned),
+      getEffectivePageSize: () => this.effectivePageSize(this.pipeline().totalItems),
     });
   }
-
 }

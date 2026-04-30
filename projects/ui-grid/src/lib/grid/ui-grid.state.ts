@@ -18,7 +18,11 @@ export function toggleGridGroupingState(current: readonly string[], columnName: 
     : [...current, columnName];
 }
 
-export function moveGridColumnOrderState(current: readonly string[], fromIndex: number, toIndex: number): string[] {
+export function moveGridColumnOrderState(
+  current: readonly string[],
+  fromIndex: number,
+  toIndex: number,
+): string[] {
   return moveArrayItem(current, fromIndex, toIndex);
 }
 
@@ -26,7 +30,7 @@ export function moveGridVisibleColumnOrderState(
   currentOrder: readonly string[],
   visibleColumnNames: readonly string[],
   columnName: string,
-  targetColumnName: string
+  targetColumnName: string,
 ): string[] | null {
   const visibleNames = new Set(visibleColumnNames);
   const visibleOrder = currentOrder.filter((name) => visibleNames.has(name));
@@ -63,6 +67,7 @@ export interface GridRestoreMutationPlan {
   };
   expandable?: Record<string, boolean>;
   treeView?: Record<string, boolean>;
+  pinning?: GridSavedState['pinning'];
 }
 
 export function createGridRestoreMutationPlan(state: GridSavedState): GridRestoreMutationPlan {
@@ -88,7 +93,7 @@ export function createGridRestoreMutationPlan(state: GridSavedState): GridRestor
   if (normalizedState.pagination) {
     plan.pagination = {
       currentPage: normalizedState.pagination.paginationCurrentPage,
-      pageSize: normalizedState.pagination.paginationPageSize
+      pageSize: normalizedState.pagination.paginationPageSize,
     };
   }
 
@@ -98,6 +103,10 @@ export function createGridRestoreMutationPlan(state: GridSavedState): GridRestor
 
   if (normalizedState.treeView) {
     plan.treeView = normalizedState.treeView;
+  }
+
+  if (normalizedState.pinning) {
+    plan.pinning = normalizedState.pinning;
   }
 
   return plan;

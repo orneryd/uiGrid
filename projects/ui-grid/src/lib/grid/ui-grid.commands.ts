@@ -2,6 +2,7 @@ import { UiGridApi } from './grid.api';
 import { SortDirection } from './grid.constants';
 import {
   beginGridEditSession,
+  pinColumnState,
   buildGridSortState,
   clearGridEditSession,
   completeInfiniteScrollDataLoad,
@@ -18,9 +19,17 @@ import {
   setInfiniteScrollDirectionsState,
   stringifyGridEditorValue,
   toggleGridRowExpanded,
-  toggleGridTreeRowExpanded
+  toggleGridTreeRowExpanded,
 } from './grid.core';
-import { GridCellPosition, GridColumnDef, GridRecord, GridRow, GridSavedState, SortState } from './grid.models';
+import { PinDirection, PinnedColumnState } from './grid.core';
+import {
+  GridCellPosition,
+  GridColumnDef,
+  GridRecord,
+  GridRow,
+  GridSavedState,
+  SortState,
+} from './grid.models';
 import { getCellValue } from './grid.utils';
 import {
   raiseGridAfterCellEdit,
@@ -33,19 +42,24 @@ import {
   raiseGridNeedMoreData,
   raiseGridPaginationChanged,
   raiseGridSortChanged,
-  raiseGridTreeRowStateChanged
+  raiseGridTreeRowStateChanged,
+  raiseGridColumnPinned,
 } from './ui-grid.events';
 import {
   createGridRestoreMutationPlan,
   moveGridColumnOrderState,
   moveGridVisibleColumnOrderState,
-  toggleGridGroupingState
+  toggleGridGroupingState,
 } from './ui-grid.state';
 
 type SetState<T> = (value: T) => void;
 type UpdateState<T> = (updater: (current: T) => T) => void;
 
-export function applyGridSortStateCommand(gridApi: UiGridApi, setSortState: SetState<SortState>, sortState: SortState): void {
+export function applyGridSortStateCommand(
+  gridApi: UiGridApi,
+  setSortState: SetState<SortState>,
+  sortState: SortState,
+): void {
   setSortState(sortState);
   raiseGridSortChanged(gridApi, sortState);
 }
@@ -54,7 +68,7 @@ export function sortGridColumnCommand(
   gridApi: UiGridApi,
   setSortState: SetState<SortState>,
   columnName: string,
-  direction?: SortDirection
+  direction?: SortDirection,
 ): void {
   applyGridSortStateCommand(gridApi, setSortState, buildGridSortState(columnName, direction));
 }
@@ -64,18 +78,18 @@ export function updateGridFilterCommand(
   updateFilters: UpdateState<Record<string, string>>,
   getFilters: () => Record<string, string>,
   columnName: string,
-  value: string
+  value: string,
 ): void {
   updateFilters((current) => ({
     ...current,
-    [columnName]: value
+    [columnName]: value,
   }));
   raiseGridFilterChanged(gridApi, getFilters());
 }
 
 export function clearGridFiltersCommand(
   gridApi: UiGridApi,
-  setFilters: SetState<Record<string, string>>
+  setFilters: SetState<Record<string, string>>,
 ): void {
   const nextFilters: Record<string, string> = {};
   setFilters(nextFilters);
@@ -87,7 +101,7 @@ export function toggleGridGroupingCommand(
   isGroupingEnabled: boolean,
   updateGroupByColumns: UpdateState<string[]>,
   getGroupByColumns: () => string[],
-  columnName: string
+  columnName: string,
 ): void {
   if (!isGroupingEnabled) {
     return;
@@ -100,7 +114,7 @@ export function toggleGridGroupingCommand(
 export function clearGridGroupingCommand(
   gridApi: UiGridApi,
   setGroupByColumns: SetState<string[]>,
-  shouldRaise = true
+  shouldRaise = true,
 ): void {
   const nextGrouping: string[] = [];
   setGroupByColumns(nextGrouping);
@@ -115,7 +129,7 @@ export function moveGridColumnCommand(
   canMoveColumns: boolean,
   updateColumnOrder: UpdateState<string[]>,
   fromIndex: number,
-  toIndex: number
+  toIndex: number,
 ): void {
   if (!canMoveColumns) {
     return;
@@ -135,13 +149,18 @@ export function moveGridVisibleColumnCommand(
   visibleColumnNames: string[],
   columnName: string,
   targetColumnName: string,
-  setColumnOrder: SetState<string[]>
+  setColumnOrder: SetState<string[]>,
 ): void {
   if (!canMoveColumns) {
     return;
   }
 
-  const nextOrder = moveGridVisibleColumnOrderState(currentOrder, visibleColumnNames, columnName, targetColumnName);
+  const nextOrder = moveGridVisibleColumnOrderState(
+    currentOrder,
+    visibleColumnNames,
+    columnName,
+    targetColumnName,
+  );
   if (!nextOrder) {
     return;
   }
@@ -150,12 +169,26 @@ export function moveGridVisibleColumnCommand(
   raiseGridColumnOrderChanged(gridApi, nextOrder);
 }
 
+export function pinGridColumnCommand(
+  gridApi: UiGridApi,
+  isPinningEnabled: boolean,
+  setPinnedColumns: SetState<PinnedColumnState>,
+  getCurrentPinnedColumns: () => PinnedColumnState,
+  columnName: string,
+  direction: PinDirection,
+): void {
+  if (!isPinningEnabled) return;
+  const next = pinColumnState(getCurrentPinnedColumns(), columnName, direction);
+  setPinnedColumns(next);
+  raiseGridColumnPinned(gridApi, columnName, direction);
+}
+
 export function seekGridPaginationCommand(
   gridApi: UiGridApi,
   setCurrentPage: SetState<number>,
   getTotalPages: () => number,
   getEffectivePageSize: () => number,
-  page: number
+  page: number,
 ): void {
   const nextPage = seekGridPage(page, getTotalPages());
   setCurrentPage(nextPage);
@@ -166,7 +199,7 @@ export function setGridPaginationPageSizeCommand(
   gridApi: UiGridApi,
   setPageSize: SetState<number>,
   setCurrentPage: SetState<number>,
-  pageSize: number
+  pageSize: number,
 ): void {
   const nextPageSize = resolveGridPageSize(pageSize);
   if (nextPageSize === null) {
@@ -187,13 +220,14 @@ export interface GridRestoreCommandAccess {
   setPageSize: SetState<number>;
   setExpandedRows: SetState<Record<string, boolean>>;
   setExpandedTreeRows: SetState<Record<string, boolean>>;
+  setPinnedColumns?: SetState<PinnedColumnState>;
   getEffectivePageSize: () => number;
 }
 
 export function restoreGridStateCommand(
   gridApi: UiGridApi,
   state: GridSavedState,
-  access: GridRestoreCommandAccess
+  access: GridRestoreCommandAccess,
 ): void {
   const restorePlan = createGridRestoreMutationPlan(state);
 
@@ -218,7 +252,11 @@ export function restoreGridStateCommand(
   if (restorePlan.pagination) {
     access.setCurrentPage(restorePlan.pagination.currentPage);
     access.setPageSize(restorePlan.pagination.pageSize);
-    raiseGridPaginationChanged(gridApi, restorePlan.pagination.currentPage, access.getEffectivePageSize());
+    raiseGridPaginationChanged(
+      gridApi,
+      restorePlan.pagination.currentPage,
+      access.getEffectivePageSize(),
+    );
   }
 
   if (restorePlan.expandable) {
@@ -228,6 +266,14 @@ export function restoreGridStateCommand(
   if (restorePlan.treeView) {
     access.setExpandedTreeRows(restorePlan.treeView);
   }
+
+  if (restorePlan.pinning && typeof access.setPinnedColumns === 'function') {
+    access.setPinnedColumns(restorePlan.pinning as PinnedColumnState);
+    // raise events for each pinned column so consumers can react
+    for (const [col, dir] of Object.entries(restorePlan.pinning)) {
+      raiseGridColumnPinned(gridApi, col, dir as PinDirection);
+    }
+  }
 }
 
 export function toggleGridRowExpansionCommand(
@@ -236,7 +282,7 @@ export function toggleGridRowExpansionCommand(
   currentExpandedRows: Record<string, boolean>,
   rowId: string,
   setExpandedRows: SetState<Record<string, boolean>>,
-  findRowById: (rowId: string) => GridRow | null | undefined
+  findRowById: (rowId: string) => GridRow | null | undefined,
 ): void {
   if (!canExpandRows) {
     return;
@@ -257,12 +303,14 @@ export function toggleGridRowExpansionCommand(
 export function expandAllGridRowsCommand(
   buildRows: (data: readonly GridRecord[]) => GridRow[],
   data: readonly GridRecord[],
-  setExpandedRows: SetState<Record<string, boolean>>
+  setExpandedRows: SetState<Record<string, boolean>>,
 ): void {
   setExpandedRows(expandAllGridRows(buildRows(data)));
 }
 
-export function collapseAllGridRowsCommand(setExpandedRows: SetState<Record<string, boolean>>): void {
+export function collapseAllGridRowsCommand(
+  setExpandedRows: SetState<Record<string, boolean>>,
+): void {
   setExpandedRows({});
 }
 
@@ -271,9 +319,12 @@ export function toggleGridTreeRowCommand(
   currentExpandedTreeRows: Record<string, boolean>,
   rowId: string,
   setExpandedTreeRows: SetState<Record<string, boolean>>,
-  findRowById: (rowId: string) => GridRow | null | undefined
+  findRowById: (rowId: string) => GridRow | null | undefined,
 ): void {
-  const { expanded, nextExpandedTreeRows } = toggleGridTreeRowExpanded(currentExpandedTreeRows, rowId);
+  const { expanded, nextExpandedTreeRows } = toggleGridTreeRowExpanded(
+    currentExpandedTreeRows,
+    rowId,
+  );
   setExpandedTreeRows(nextExpandedTreeRows);
 
   const gridRow = findRowById(rowId);
@@ -288,7 +339,7 @@ export function setGridTreeRowExpandedCommand(
   rowId: string,
   expanded: boolean,
   setExpandedTreeRows: SetState<Record<string, boolean>>,
-  findRowById: (rowId: string) => GridRow | null | undefined
+  findRowById: (rowId: string) => GridRow | null | undefined,
 ): void {
   setExpandedTreeRows(setGridTreeRowExpanded(currentExpandedTreeRows, rowId, expanded));
 
@@ -301,12 +352,14 @@ export function setGridTreeRowExpandedCommand(
 export function expandAllGridTreeRowsCommand(
   buildRows: (data: readonly GridRecord[]) => GridRow[],
   data: readonly GridRecord[],
-  setExpandedTreeRows: SetState<Record<string, boolean>>
+  setExpandedTreeRows: SetState<Record<string, boolean>>,
 ): void {
   setExpandedTreeRows(expandAllGridTreeRows(buildRows(data)));
 }
 
-export function collapseAllGridTreeRowsCommand(setExpandedTreeRows: SetState<Record<string, boolean>>): void {
+export function collapseAllGridTreeRowsCommand(
+  setExpandedTreeRows: SetState<Record<string, boolean>>,
+): void {
   setExpandedTreeRows({});
 }
 
@@ -323,12 +376,12 @@ export function beginGridCellEditCommand(
   column: GridColumnDef,
   currentValue: unknown,
   triggerEvent?: Event | KeyboardEvent | null,
-  initialValue?: string
+  initialValue?: string,
 ): GridCellPosition | null {
   const nextEditSession = beginGridEditSession(
     row.id,
     column.name,
-    initialValue ?? stringifyGridEditorValue(currentValue)
+    initialValue ?? stringifyGridEditorValue(currentValue),
   );
 
   access.setFocusedCell(nextEditSession.focusedCell);
@@ -358,7 +411,7 @@ export interface CommitGridCellEditCommandResult {
 
 export function commitGridCellEditCommand(
   gridApi: UiGridApi,
-  access: CommitGridCellEditCommandAccess
+  access: CommitGridCellEditCommandAccess,
 ): CommitGridCellEditCommandResult {
   const editingCell = access.getEditingCell();
   if (!editingCell) {
@@ -385,7 +438,7 @@ export function commitGridCellEditCommand(
     committed: true,
     focusTarget: { rowId: row.id, columnName: column.name },
     row,
-    column
+    column,
   };
 }
 
@@ -403,7 +456,7 @@ export interface CancelGridCellEditCommandResult {
 
 export function cancelGridCellEditCommand(
   gridApi: UiGridApi,
-  access: CancelGridCellEditCommandAccess
+  access: CancelGridCellEditCommandAccess,
 ): CancelGridCellEditCommandResult {
   const editingCell = access.getEditingCell();
   if (!editingCell) {
@@ -437,7 +490,7 @@ export interface MaybeRequestInfiniteScrollCommandAccess {
 
 export function maybeRequestInfiniteScrollCommand(
   gridApi: UiGridApi,
-  access: MaybeRequestInfiniteScrollCommandAccess
+  access: MaybeRequestInfiniteScrollCommandAccess,
 ): void {
   if (!access.enabled || !access.virtualizationEnabled) {
     return;
@@ -448,7 +501,7 @@ export function maybeRequestInfiniteScrollCommand(
     startIndex: access.startIndex,
     visibleRows: access.visibleRows,
     viewportRows: access.viewportRows,
-    threshold: access.threshold
+    threshold: access.threshold,
   });
 
   if (request === 'top' || request === 'bottom') {
@@ -461,7 +514,7 @@ export function completeGridInfiniteScrollDataLoadCommand(
   currentState: GridInfiniteScrollState,
   setState: SetState<GridInfiniteScrollState>,
   scrollUp: boolean,
-  scrollDown: boolean
+  scrollDown: boolean,
 ): Promise<void> {
   setState(completeInfiniteScrollDataLoad(currentState, scrollUp, scrollDown));
   return Promise.resolve();
@@ -470,7 +523,7 @@ export function completeGridInfiniteScrollDataLoadCommand(
 export function resetGridInfiniteScrollCommand(
   setState: SetState<GridInfiniteScrollState>,
   scrollUp: boolean,
-  scrollDown: boolean
+  scrollDown: boolean,
 ): void {
   setState(resetInfiniteScrollState(scrollUp, scrollDown));
 }
@@ -478,7 +531,7 @@ export function resetGridInfiniteScrollCommand(
 export function saveGridInfiniteScrollPercentageCommand(
   currentState: GridInfiniteScrollState,
   visibleRows: number,
-  setState: SetState<GridInfiniteScrollState>
+  setState: SetState<GridInfiniteScrollState>,
 ): void {
   setState(saveInfiniteScrollPercentage(currentState, visibleRows));
 }
@@ -487,7 +540,7 @@ export function setGridInfiniteScrollDirectionsCommand(
   currentState: GridInfiniteScrollState,
   setState: SetState<GridInfiniteScrollState>,
   scrollUp: boolean,
-  scrollDown: boolean
+  scrollDown: boolean,
 ): void {
   setState(setInfiniteScrollDirectionsState(currentState, scrollUp, scrollDown));
 }

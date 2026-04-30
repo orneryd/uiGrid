@@ -1,5 +1,6 @@
 import { UiGridApi } from './grid.api';
 import { GridBenchmarkResult, GridColumnDef, GridRecord, GridRow, SortState } from './grid.models';
+import { PinDirection } from './grid.core';
 
 export function raiseGridRenderingComplete(gridApi: UiGridApi): void {
   gridApi.core.raise.renderingComplete(gridApi);
@@ -102,4 +103,8 @@ export function raiseGridAfterCellEdit(
 
 export function raiseGridCancelCellEdit(gridApi: UiGridApi, rowEntity: GridRecord, column: GridColumnDef): void {
   gridApi.edit.raise.cancelCellEdit(rowEntity, column);
+}
+
+export function raiseGridColumnPinned(gridApi: UiGridApi, columnName: string, direction: PinDirection): void {
+  gridApi.pinning.raise.columnPinned(columnName, direction);
 }
