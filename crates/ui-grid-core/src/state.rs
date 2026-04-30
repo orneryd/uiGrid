@@ -20,6 +20,8 @@ pub struct BuildGridSavedStateContext {
     pub total_items: usize,
     pub expanded_rows: BTreeMap<String, bool>,
     pub expanded_tree_rows: BTreeMap<String, bool>,
+    #[serde(default)]
+    pub pinned_columns: BTreeMap<String, String>,
 }
 
 pub fn build_grid_saved_state(context: BuildGridSavedStateContext) -> GridSavedState {
@@ -34,6 +36,7 @@ pub fn build_grid_saved_state(context: BuildGridSavedStateContext) -> GridSavedS
         }),
         expandable: context.expanded_rows,
         tree_view: context.expanded_tree_rows,
+        pinning: context.pinned_columns,
     }
 }
 
@@ -107,6 +110,18 @@ pub fn normalize_grid_saved_state(value: &Value) -> GridSavedState {
 
     if let Some(Value::Object(tree_view)) = state.get("treeView") {
         normalized.tree_view = normalize_boolean_map(tree_view);
+    }
+
+    if let Some(Value::Object(pinning)) = state.get("pinning") {
+        normalized.pinning = pinning
+            .iter()
+            .filter_map(|(key, value)| match value.as_str() {
+                Some("left") | Some("right") if is_safe_state_key(key) => {
+                    Some((key.clone(), value.as_str().unwrap().to_string()))
+                }
+                _ => None,
+            })
+            .collect();
     }
 
     normalized

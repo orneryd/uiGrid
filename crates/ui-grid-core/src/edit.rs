@@ -12,14 +12,16 @@ pub enum GridMoveDirection {
     Down,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GridEditSession {
     pub focused_cell: GridCellPosition,
     pub editing_cell: GridCellPosition,
     pub editing_value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GridFocusCellResult {
     pub focused_cell: GridCellPosition,
     pub should_begin_edit: bool,
@@ -176,4 +178,8 @@ pub fn parse_grid_edited_value(column: &GridColumnDef, value: &str, old_value: &
             Value::String(value.to_string())
         }
     }
+}
+
+pub fn is_printable_grid_key(key: &str, ctrl_key: bool, meta_key: bool, alt_key: bool) -> bool {
+    key.chars().count() == 1 && !ctrl_key && !meta_key && !alt_key
 }

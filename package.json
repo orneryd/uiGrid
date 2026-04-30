@@ -3,11 +3,11 @@
   "version": "0.1.5",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "npm run build:rust:web && ng serve",
     "build": "ng build",
     "build:rust:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target bundler --out-dir ../../dist/ui-grid-wasm --release",
     "build:rust:web": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target web --out-dir ../../dist/ui-grid-wasm-web --release",
-    "build:pages": "ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
+    "build:pages": "npm run build:rust:web && ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
     "build:library": "ng build uiGridPackage",
     "build:library:preset": "node scripts/build-library-preset.mjs",
     "build:element": "ng run uiGrid:build-element",

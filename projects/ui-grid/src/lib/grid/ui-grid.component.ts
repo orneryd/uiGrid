@@ -89,6 +89,7 @@ import {
   isGridTreeEnabled,
   isPrintableGridKey,
   isGridCellPosition,
+  calculateVirtualWindow as coreCalculateVirtualWindow,
   isVirtualizationEnabled as coreIsVirtualizationEnabled,
   getCurrentPageValue as coreGetCurrentPageValue,
   getEffectivePageSize as coreGetEffectivePageSize,
@@ -115,6 +116,7 @@ import {
   isPinningEnabled,
 } from './grid.core';
 import type { DisplayItem, ExpandableItem, GroupItem, PipelineResult } from './grid.core';
+import { buildGridPipeline as buildTypescriptGridPipeline } from './grid.core.pipeline';
 import { defaultGridEngine } from './ui-grid.engine';
 import {
   applyGridSortStateCommand,
@@ -216,6 +218,7 @@ export class UiGridComponent {
     direction: SORT_DIRECTIONS.none,
   });
   protected readonly gridApi: UiGridApi;
+  private readonly preferTypescriptPipeline = signal(false);
 
   private initializedGridId: string | null = null;
   private lastCanvasHeight = 0;
@@ -421,6 +424,14 @@ export class UiGridComponent {
   );
   private readonly virtualMetrics = computed(() => {
     const items = this.displayItems();
+
+    if (!this.variableVirtualHeights()) {
+      return {
+        offsets: [],
+        totalHeight: items.length * this.rowSize(),
+      };
+    }
+
     const offsets = new Array<number>(items.length);
     let totalHeight = 0;
 
@@ -433,6 +444,9 @@ export class UiGridComponent {
   });
   private readonly virtualBodyScrollTop = computed(() =>
     Math.max(0, this.scrollTop() - this.stickyChromeHeight()),
+  );
+  private readonly variableVirtualHeights = computed(() =>
+    this.displayItems().some((item) => item.kind === 'expandable'),
   );
   private readonly virtualWindow = computed(() => {
     const items = this.displayItems();
@@ -448,6 +462,22 @@ export class UiGridComponent {
     const bodyScrollTop = this.virtualBodyScrollTop();
     const viewportHeight = this.viewportHeightValue();
     const overscan = 4;
+
+    if (!this.variableVirtualHeights()) {
+      const window = coreCalculateVirtualWindow({
+        itemCount: items.length,
+        itemSize: this.rowSize(),
+        viewportHeight,
+        overscan,
+        scrollTop: bodyScrollTop,
+      });
+
+      return {
+        start: window.visibleRange.start,
+        end: Math.min(items.length, Math.max(window.visibleRange.end, window.visibleRange.start + 1)),
+        offsetTop: window.offsetY,
+      };
+    }
 
     const visibleStart = this.resolveVirtualStartIndex(bodyScrollTop);
     let visibleEnd = visibleStart;
@@ -500,6 +530,23 @@ export class UiGridComponent {
   }
 
   private buildPipeline(): PipelineResult {
+    if (this.preferTypescriptPipeline()) {
+      return buildTypescriptGridPipeline({
+        options: this.options(),
+        columns: this.visibleColumns(),
+        activeFilters: this.activeFilters(),
+        sortState: this.sortState(),
+        groupByColumns: this.groupByColumns(),
+        collapsedGroups: this.collapsedGroups(),
+        hiddenRowReasons: this.hiddenRowReasons(),
+        expandedRows: this.expandedRows(),
+        expandedTreeRows: this.expandedTreeRows(),
+        currentPage: this.currentPage(),
+        pageSize: this.pageSize(),
+        rowSize: this.rowSize(),
+      });
+    }
+
     return defaultGridEngine.buildPipeline({
       options: this.options(),
       columns: this.visibleColumns(),
@@ -613,17 +660,21 @@ export class UiGridComponent {
   }
 
   protected updateFilter(columnName: string, value: string): void {
-    updateGridFilterCommand(
-      this.gridApi,
-      (updater) => this.activeFilters.update(updater),
-      () => this.activeFilters(),
-      columnName,
-      value,
-    );
+    this.withTransientTypescriptPipeline(() => {
+      updateGridFilterCommand(
+        this.gridApi,
+        (updater) => this.activeFilters.update(updater),
+        () => this.activeFilters(),
+        columnName,
+        value,
+      );
+    });
   }
 
   protected clearAllFilters(): void {
-    clearGridFiltersCommand(this.gridApi, (filters) => this.activeFilters.set(filters));
+    this.withTransientTypescriptPipeline(() => {
+      clearGridFiltersCommand(this.gridApi, (filters) => this.activeFilters.set(filters));
+    });
   }
 
   protected expandedContext(row: GridRow): GridExpandableTemplateContext & Record<string, unknown> {
@@ -935,25 +986,44 @@ export class UiGridComponent {
   }
 
   private moveColumn(fromIndex: number, toIndex: number): void {
-    moveGridColumnCommand(
-      this.gridApi,
-      this.canMoveColumns(),
-      (updater) => this.columnOrder.update(updater),
-      fromIndex,
-      toIndex,
-    );
+    this.withTransientTypescriptPipeline(() => {
+      moveGridColumnCommand(
+        this.gridApi,
+        this.canMoveColumns(),
+        (updater) => this.columnOrder.update(updater),
+        fromIndex,
+        toIndex,
+      );
+    });
   }
 
   private moveVisibleColumn(columnName: string, targetColumnName: string): void {
-    moveGridVisibleColumnCommand(
-      this.gridApi,
-      this.canMoveColumns(),
-      this.columnOrder(),
-      this.visibleColumns().map((column) => column.name),
-      columnName,
-      targetColumnName,
-      (order) => this.columnOrder.set(order),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      moveGridVisibleColumnCommand(
+        this.gridApi,
+        this.canMoveColumns(),
+        this.columnOrder(),
+        this.visibleColumns().map((column) => column.name),
+        columnName,
+        targetColumnName,
+        (order) => this.columnOrder.set(order),
+      );
+    });
+  }
+
+  private withTransientTypescriptPipeline(work: () => void): void {
+    this.preferTypescriptPipeline.set(true);
+
+    try {
+      work();
+    } finally {
+      if (isPlatformServer(this.platformId)) {
+        this.preferTypescriptPipeline.set(false);
+        return;
+      }
+
+      window.setTimeout(() => this.preferTypescriptPipeline.set(false), 0);
+    }
   }
 
   protected trackDisplayItem = (_index: number, item: DisplayItem): string => item.id;
@@ -1390,14 +1460,16 @@ export class UiGridComponent {
 
   private toggleRowExpansionByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    toggleGridRowExpansionCommand(
-      this.gridApi,
-      this.canExpandRows(),
-      this.expandedRows(),
-      rowId,
-      (expandedRows) => this.expandedRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      toggleGridRowExpansionCommand(
+        this.gridApi,
+        this.canExpandRows(),
+        this.expandedRows(),
+        rowId,
+        (expandedRows) => this.expandedRows.set(expandedRows),
+        (resolvedRowId) => this.findRowById(resolvedRowId),
+      );
+    });
   }
 
   protected toggleRowExpansion(row: GridRow, event?: Event): void {
@@ -1410,15 +1482,19 @@ export class UiGridComponent {
       return;
     }
 
-    expandAllGridRowsCommand(
-      (data) => this.buildRows(data),
-      this.options().data,
-      (expandedRows) => this.expandedRows.set(expandedRows),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      expandAllGridRowsCommand(
+        (data) => this.buildRows(data),
+        this.options().data,
+        (expandedRows) => this.expandedRows.set(expandedRows),
+      );
+    });
   }
 
   private collapseAllRows(): void {
-    collapseAllGridRowsCommand((expandedRows) => this.expandedRows.set(expandedRows));
+    this.withTransientTypescriptPipeline(() => {
+      collapseAllGridRowsCommand((expandedRows) => this.expandedRows.set(expandedRows));
+    });
   }
 
   private toggleAllRows(): void {
@@ -1440,49 +1516,59 @@ export class UiGridComponent {
 
   private toggleTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    toggleGridTreeRowCommand(
-      this.gridApi,
-      this.expandedTreeRows(),
-      rowId,
-      (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      toggleGridTreeRowCommand(
+        this.gridApi,
+        this.expandedTreeRows(),
+        rowId,
+        (expandedRows) => this.expandedTreeRows.set(expandedRows),
+        (resolvedRowId) => this.findRowById(resolvedRowId),
+      );
+    });
   }
 
   private expandTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    setGridTreeRowExpandedCommand(
-      this.gridApi,
-      this.expandedTreeRows(),
-      rowId,
-      true,
-      (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      setGridTreeRowExpandedCommand(
+        this.gridApi,
+        this.expandedTreeRows(),
+        rowId,
+        true,
+        (expandedRows) => this.expandedTreeRows.set(expandedRows),
+        (resolvedRowId) => this.findRowById(resolvedRowId),
+      );
+    });
   }
 
   private collapseTreeRowByRef(row: GridRow | GridRecord | string): void {
     const rowId = this.resolveRowId(row);
-    setGridTreeRowExpandedCommand(
-      this.gridApi,
-      this.expandedTreeRows(),
-      rowId,
-      false,
-      (expandedRows) => this.expandedTreeRows.set(expandedRows),
-      (resolvedRowId) => this.findRowById(resolvedRowId),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      setGridTreeRowExpandedCommand(
+        this.gridApi,
+        this.expandedTreeRows(),
+        rowId,
+        false,
+        (expandedRows) => this.expandedTreeRows.set(expandedRows),
+        (resolvedRowId) => this.findRowById(resolvedRowId),
+      );
+    });
   }
 
   private expandAllTreeRows(): void {
-    expandAllGridTreeRowsCommand(
-      (data) => this.buildRows(data),
-      this.options().data,
-      (expandedRows) => this.expandedTreeRows.set(expandedRows),
-    );
+    this.withTransientTypescriptPipeline(() => {
+      expandAllGridTreeRowsCommand(
+        (data) => this.buildRows(data),
+        this.options().data,
+        (expandedRows) => this.expandedTreeRows.set(expandedRows),
+      );
+    });
   }
 
   private collapseAllTreeRows(): void {
-    collapseAllGridTreeRowsCommand((expandedRows) => this.expandedTreeRows.set(expandedRows));
+    this.withTransientTypescriptPipeline(() => {
+      collapseAllGridTreeRowsCommand((expandedRows) => this.expandedTreeRows.set(expandedRows));
+    });
   }
 
   private getTreeRowChildren(row: GridRow | GridRecord | string): GridRow[] {
@@ -1625,6 +1711,16 @@ export class UiGridComponent {
     const items = this.displayItems();
     if (!items.length) {
       return 0;
+    }
+
+    if (!this.variableVirtualHeights()) {
+      return coreCalculateVirtualWindow({
+        itemCount: items.length,
+        itemSize: this.rowSize(),
+        viewportHeight: this.viewportHeightValue(),
+        overscan: 0,
+        scrollTop: bodyScrollTop,
+      }).visibleRange.start;
     }
 
     const offsets = this.virtualMetrics().offsets;

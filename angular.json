@@ -27,6 +27,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "dist/ui-grid-wasm-web",
+                "output": "/dist/ui-grid-wasm-web"
               }
             ],
             "styles": [
@@ -68,6 +73,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "dist/ui-grid-wasm-web",
+                "output": "/dist/ui-grid-wasm-web"
               }
             ],
             "styles": [

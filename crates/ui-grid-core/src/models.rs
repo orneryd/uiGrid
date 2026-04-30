@@ -80,6 +80,16 @@ pub struct GridColumnDef {
     #[serde(default)]
     pub enable_cell_edit_on_focus: bool,
     #[serde(default)]
+    pub pinned_left: bool,
+    #[serde(default)]
+    pub pinned_right: bool,
+    #[serde(default = "default_true")]
+    pub enable_pinning: bool,
+    #[serde(default)]
+    pub width: Option<String>,
+    #[serde(default)]
+    pub align: Option<String>,
+    #[serde(default)]
     pub sort: Option<GridSortDescriptor>,
     #[serde(default)]
     pub filter: Option<GridFilterDescriptor>,
@@ -98,6 +108,89 @@ pub struct GridGroupingOptions {
     pub start_collapsed: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridLabels {
+    pub sort_default: String,
+    pub sort_asc: String,
+    pub sort_desc: String,
+    pub group_column: String,
+    pub ungroup_column: String,
+    pub group_collapse: String,
+    pub group_expand: String,
+    pub tree_collapse: String,
+    pub tree_expand: String,
+    pub expand_detail: String,
+    pub collapse_detail: String,
+    pub filter_placeholder: String,
+    pub filter_disabled: String,
+    pub filter_column: String,
+    pub pagination_previous: String,
+    pub pagination_next: String,
+    pub pagination_page: String,
+    pub pagination_of: String,
+    pub pagination_rows: String,
+    pub empty_heading: String,
+    pub empty_description: String,
+    pub toolbar_of: String,
+    pub toolbar_rows: String,
+    pub stats_visible_rows: String,
+    pub group_rows_suffix: String,
+    pub pin_column: String,
+    pub pin_left: String,
+    pub pin_right: String,
+    pub unpin: String,
+}
+
+impl Default for GridLabels {
+    fn default() -> Self {
+        Self {
+            sort_default: "Sort".to_string(),
+            sort_asc: "Sort ascending".to_string(),
+            sort_desc: "Sort descending".to_string(),
+            group_column: "Group by this column".to_string(),
+            ungroup_column: "Remove grouping".to_string(),
+            group_collapse: "Collapse group".to_string(),
+            group_expand: "Expand group".to_string(),
+            tree_collapse: "Collapse row".to_string(),
+            tree_expand: "Expand row".to_string(),
+            expand_detail: "Expand details".to_string(),
+            collapse_detail: "Collapse details".to_string(),
+            filter_placeholder: "Filter…".to_string(),
+            filter_disabled: "Filter disabled".to_string(),
+            filter_column: "Filter".to_string(),
+            pagination_previous: "Previous page".to_string(),
+            pagination_next: "Next page".to_string(),
+            pagination_page: "Page".to_string(),
+            pagination_of: "of".to_string(),
+            pagination_rows: "Rows per page".to_string(),
+            empty_heading: "No matching rows".to_string(),
+            empty_description: "Adjust the active filters, grouping, or sort order.".to_string(),
+            toolbar_of: "of".to_string(),
+            toolbar_rows: "rows".to_string(),
+            stats_visible_rows: "visible rows".to_string(),
+            group_rows_suffix: "rows".to_string(),
+            pin_column: "Pin column".to_string(),
+            pin_left: "Pin left".to_string(),
+            pin_right: "Pin right".to_string(),
+            unpin: "Unpin".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GridInfiniteScrollState {
+    #[serde(default)]
+    pub scroll_up: bool,
+    #[serde(default)]
+    pub scroll_down: bool,
+    #[serde(default)]
+    pub data_loading: bool,
+    #[serde(default)]
+    pub previous_visible_rows: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridOptions {
@@ -108,12 +201,16 @@ pub struct GridOptions {
     pub data: Vec<GridRecord>,
     #[serde(default)]
     pub column_defs: Vec<GridColumnDef>,
+    #[serde(default)]
+    pub labels: GridLabels,
     #[serde(default = "default_true")]
     pub enable_sorting: bool,
     #[serde(default = "default_true")]
     pub enable_filtering: bool,
     #[serde(default)]
     pub enable_grouping: bool,
+    #[serde(default)]
+    pub enable_column_moving: bool,
     #[serde(default)]
     pub enable_cell_edit: bool,
     #[serde(default)]
@@ -122,6 +219,8 @@ pub struct GridOptions {
     pub enable_virtualization: bool,
     #[serde(default)]
     pub enable_pagination: bool,
+    #[serde(default = "default_true")]
+    pub enable_pagination_controls: bool,
     #[serde(default)]
     pub use_external_pagination: bool,
     #[serde(default)]
@@ -137,13 +236,33 @@ pub struct GridOptions {
     #[serde(default)]
     pub expandable_row_height: Option<usize>,
     #[serde(default)]
+    pub expandable_row_header_width: Option<usize>,
+    #[serde(default)]
     pub enable_tree_view: bool,
     #[serde(default)]
     pub tree_children_field: Option<String>,
     #[serde(default)]
+    pub tree_indent: Option<usize>,
+    #[serde(default = "default_true")]
+    pub show_tree_expand_no_children: bool,
+    #[serde(default)]
+    pub tree_row_header_always_visible: bool,
+    #[serde(default)]
+    pub enable_auto_resize: bool,
+    #[serde(default)]
+    pub infinite_scroll_rows_from_end: Option<usize>,
+    #[serde(default)]
+    pub infinite_scroll_up: bool,
+    #[serde(default)]
+    pub infinite_scroll_down: Option<bool>,
+    #[serde(default)]
     pub virtualization_threshold: Option<usize>,
     #[serde(default)]
+    pub viewport_height: Option<usize>,
+    #[serde(default)]
     pub grouping: Option<GridGroupingOptions>,
+    #[serde(default)]
+    pub enable_pinning: bool,
     #[serde(default)]
     pub row_id_field: Option<String>,
 }
@@ -155,13 +274,16 @@ impl Default for GridOptions {
             title: None,
             data: Vec::new(),
             column_defs: Vec::new(),
+            labels: GridLabels::default(),
             enable_sorting: true,
             enable_filtering: true,
             enable_grouping: false,
+            enable_column_moving: false,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
             enable_virtualization: true,
             enable_pagination: false,
+            enable_pagination_controls: true,
             use_external_pagination: false,
             pagination_page_sizes: Vec::new(),
             pagination_page_size: None,
@@ -169,10 +291,20 @@ impl Default for GridOptions {
             total_items: None,
             enable_expandable: false,
             expandable_row_height: None,
+            expandable_row_header_width: None,
             enable_tree_view: false,
             tree_children_field: None,
+            tree_indent: None,
+            show_tree_expand_no_children: true,
+            tree_row_header_always_visible: false,
+            enable_auto_resize: false,
+            infinite_scroll_rows_from_end: None,
+            infinite_scroll_up: false,
+            infinite_scroll_down: None,
             virtualization_threshold: Some(40),
+            viewport_height: None,
             grouping: None,
+            enable_pinning: false,
             row_id_field: Some("id".to_string()),
         }
     }
@@ -218,6 +350,8 @@ pub struct GridSavedState {
     pub expandable: BTreeMap<String, bool>,
     #[serde(default)]
     pub tree_view: BTreeMap<String, bool>,
+    #[serde(default)]
+    pub pinning: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

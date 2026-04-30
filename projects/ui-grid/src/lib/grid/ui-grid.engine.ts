@@ -1,4 +1,4 @@
-import { buildGridPipeline } from './grid.core';
+import { buildGridPipeline, initWasmCore } from './grid.core';
 import type { BuildGridPipelineContext, PipelineResult } from './grid.core';
 
 export interface GridEngine {
@@ -10,6 +10,8 @@ export interface RustWasmGridEngineBindings {
 }
 
 let registeredRustWasmBindings: RustWasmGridEngineBindings | null = null;
+
+void initWasmCore();
 
 export function registerRustWasmGridEngine(bindings: RustWasmGridEngineBindings): void {
   registeredRustWasmBindings = bindings;

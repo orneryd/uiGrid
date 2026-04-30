@@ -42,6 +42,11 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_grouping: true,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
+            pinned_left: false,
+            pinned_right: false,
+            enable_pinning: true,
+            width: None,
+            align: None,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -62,6 +67,11 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_grouping: true,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
+            pinned_left: false,
+            pinned_right: false,
+            enable_pinning: true,
+            width: None,
+            align: None,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -82,6 +92,11 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_grouping: true,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
+            pinned_left: false,
+            pinned_right: false,
+            enable_pinning: true,
+            width: None,
+            align: None,
             sort: None,
             filter: Some(ui_grid_core::models::GridFilterDescriptor {
                 term: None,
@@ -235,6 +250,7 @@ fn save_state_and_normalization_deeply_assert_results() {
         total_items: 42,
         expanded_rows: BTreeMap::from([("row-1".to_string(), true)]),
         expanded_tree_rows: BTreeMap::from([("acct-1".to_string(), true)]),
+        pinned_columns: BTreeMap::new(),
     });
 
     assert_eq!(saved.column_order, vec!["owner", "status"]);

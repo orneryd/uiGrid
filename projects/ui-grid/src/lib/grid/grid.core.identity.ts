@@ -6,12 +6,13 @@ export function resolveGridRowId(options: GridOptions, row: GridRow | GridRecord
     return row;
   }
 
-  if (row instanceof GridRow) {
-    return row.id;
+  if (typeof row === 'object' && row !== null && 'id' in row && 'entity' in row) {
+    return (row as GridRow).id;
   }
 
-  const rowIndex = options.data.indexOf(row);
-  return options.rowIdentity?.(row, rowIndex) ?? `${options.id}-${rowIndex}`;
+  const record = row as GridRecord;
+  const rowIndex = options.data.indexOf(record);
+  return options.rowIdentity?.(record, rowIndex) ?? `${options.id}-${rowIndex}`;
 }
 
 export function findGridRowById(rows: readonly GridRow[], rowId: string): GridRow | null {
