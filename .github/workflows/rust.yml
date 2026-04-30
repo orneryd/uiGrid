@@ -16,6 +16,8 @@ jobs:
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
