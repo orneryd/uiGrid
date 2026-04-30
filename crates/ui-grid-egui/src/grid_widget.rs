@@ -9,8 +9,8 @@ use ui_grid_core::{
     constants::SortDirection,
     display::format_grid_cell_display_value,
     edit::{
-        begin_grid_edit_session, find_next_grid_cell, parse_grid_edited_value,
-        stringify_grid_editor_value, GridEditSession, GridMoveDirection,
+        GridEditSession, GridMoveDirection, begin_grid_edit_session, find_next_grid_cell,
+        parse_grid_edited_value, stringify_grid_editor_value,
     },
     models::{
         BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef,
@@ -21,8 +21,8 @@ use ui_grid_core::{
     utils::get_cell_value,
 };
 
+use crate::column_ext::{EguiColumnExt, GridCellContext, find_column_ext, find_column_ext_mut};
 use crate::grid_theme::GridTheme;
-use crate::column_ext::{find_column_ext, find_column_ext_mut, EguiColumnExt, GridCellContext};
 
 fn paint_triangle(painter: &egui::Painter, center: Pos2, half: f32, dir: TriDir, color: Color32) {
     let points = match dir {
@@ -42,7 +42,11 @@ fn paint_triangle(painter: &egui::Painter, center: Pos2, half: f32, dir: TriDir,
             Pos2::new(center.x, center.y - half * 0.7),
         ],
     };
-    painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+    painter.add(egui::Shape::convex_polygon(
+        points,
+        color,
+        egui::Stroke::NONE,
+    ));
 }
 
 fn paint_hamburger(painter: &egui::Painter, center: Pos2, half: f32, color: Color32) {
@@ -86,7 +90,11 @@ fn icon_button(ui: &mut Ui, icon: IconKind, color: Color32) -> egui::Response {
     response
 }
 
-enum TriDir { Right, Down, Up }
+enum TriDir {
+    Right,
+    Down,
+    Up,
+}
 
 enum IconKind {
     SortNone,
@@ -104,15 +112,42 @@ pub struct EguiGridEvent {
 
 #[derive(Debug, Clone)]
 pub enum EguiGridEventKind {
-    SortChanged { column: String, direction: SortDirection },
-    FilterChanged { column: String, term: String },
-    PageChanged { page: usize },
-    GroupToggled { group_id: String, collapsed: bool },
-    RowExpanded { row_id: String, expanded: bool },
-    TreeNodeToggled { row_id: String, expanded: bool },
-    CellEdited { row_id: String, column: String, old_value: Value, new_value: Value },
-    SelectionChanged { selected_ids: Vec<String> },
-    RenderingComplete { pipeline_ms: f64, total_items: usize },
+    SortChanged {
+        column: String,
+        direction: SortDirection,
+    },
+    FilterChanged {
+        column: String,
+        term: String,
+    },
+    PageChanged {
+        page: usize,
+    },
+    GroupToggled {
+        group_id: String,
+        collapsed: bool,
+    },
+    RowExpanded {
+        row_id: String,
+        expanded: bool,
+    },
+    TreeNodeToggled {
+        row_id: String,
+        expanded: bool,
+    },
+    CellEdited {
+        row_id: String,
+        column: String,
+        old_value: Value,
+        new_value: Value,
+    },
+    SelectionChanged {
+        selected_ids: Vec<String>,
+    },
+    RenderingComplete {
+        pipeline_ms: f64,
+        total_items: usize,
+    },
 }
 
 pub struct EguiGrid {
@@ -352,8 +387,7 @@ impl EguiGrid {
         columns: &[GridColumnDef],
     ) {
         let column = columns.iter().find(|c| c.name == position.column_name);
-        let is_editable = column
-            .is_some_and(|c| c.enable_cell_edit || options.enable_cell_edit);
+        let is_editable = column.is_some_and(|c| c.enable_cell_edit || options.enable_cell_edit);
         if !is_editable {
             self.focused_cell = Some(position.clone());
             self.selected_row_ids = vec![position.row_id.clone()];
@@ -405,8 +439,7 @@ impl EguiGrid {
             .and_then(|r| r.get(field).cloned())
             .unwrap_or(Value::Null);
 
-        let new_value =
-            parse_grid_edited_value(column, &session.editing_value, &old_value);
+        let new_value = parse_grid_edited_value(column, &session.editing_value, &old_value);
 
         if new_value != old_value {
             if let Some(row) = options.data.iter_mut().find(|r| {
@@ -468,9 +501,9 @@ impl EguiGrid {
                         let rect = ui.max_rect();
                         ui.painter().rect_filled(rect, 0.0, theme.header_background);
 
-                        let is_sort_active =
-                            self.sort_state.column_name.as_ref() == Some(&col.name)
-                                && self.sort_state.direction != SortDirection::None;
+                        let is_sort_active = self.sort_state.column_name.as_ref()
+                            == Some(&col.name)
+                            && self.sort_state.direction != SortDirection::None;
                         if is_sort_active {
                             ui.painter()
                                 .rect_filled(rect, 0.0, theme.header_sort_active_bg());
@@ -508,8 +541,8 @@ impl EguiGrid {
                             for col_index in 0..columns.len() {
                                 row.col(|ui| {
                                     self.draw_display_item(
-                                        ui, options, columns, column_ext,
-                                        item, col_index, row_index, theme,
+                                        ui, options, columns, column_ext, item, col_index,
+                                        row_index, theme,
                                     );
                                 });
                             }
@@ -522,8 +555,8 @@ impl EguiGrid {
                             for col_index in 0..columns.len() {
                                 row.col(|ui| {
                                     self.draw_display_item(
-                                        ui, options, columns, column_ext,
-                                        item, col_index, row_index, theme,
+                                        ui, options, columns, column_ext, item, col_index,
+                                        row_index, theme,
                                     );
                                 });
                             }
@@ -595,7 +628,11 @@ impl EguiGrid {
                 // Group toggle button
                 if options.enable_grouping && column.enable_grouping {
                     let is_grouped = self.group_by_columns.contains(&column.name);
-                    let group_color = if is_grouped { theme.accent } else { theme.muted_color };
+                    let group_color = if is_grouped {
+                        theme.accent
+                    } else {
+                        theme.muted_color
+                    };
                     let group_response = icon_button(ui, IconKind::Group, group_color);
                     if group_response.clicked() {
                         if is_grouped {
@@ -614,8 +651,7 @@ impl EguiGrid {
 
                 // Sort button
                 if options.enable_sorting && column.sortable && column.enable_sorting {
-                    let is_active =
-                        self.sort_state.column_name.as_ref() == Some(&column.name);
+                    let is_active = self.sort_state.column_name.as_ref() == Some(&column.name);
                     let (icon, color) = if is_active {
                         match self.sort_state.direction {
                             SortDirection::Asc => (IconKind::SortAsc, theme.accent),
@@ -743,15 +779,13 @@ impl EguiGrid {
             }
             DisplayItem::Expandable(expandable) => {
                 let rect = ui.max_rect();
-                ui.painter()
-                    .rect_filled(rect, 0.0, theme.expandable_bg());
+                ui.painter().rect_filled(rect, 0.0, theme.expandable_bg());
 
                 let bottom = egui::Rect::from_min_size(
                     egui::pos2(rect.min.x, rect.max.y - 1.0),
                     Vec2::new(rect.width(), 1.0),
                 );
-                ui.painter()
-                    .rect_filled(bottom, 0.0, theme.border_color);
+                ui.painter().rect_filled(bottom, 0.0, theme.border_color);
 
                 if col_index == 0 {
                     ui.add_space(theme.cell_padding_x);
@@ -763,8 +797,7 @@ impl EguiGrid {
                                 .color(theme.accent),
                         );
                         for col in columns {
-                            let value =
-                                format_grid_cell_display_value(&expandable.row, col);
+                            let value = format_grid_cell_display_value(&expandable.row, col);
                             let label = col.display_name.as_deref().unwrap_or(&col.name);
                             ui.label(
                                 egui::RichText::new(format!("{}: {}", label, value))
@@ -787,19 +820,16 @@ impl EguiGrid {
         col_index: usize,
     ) {
         let rect = ui.max_rect();
-        ui.painter()
-            .rect_filled(rect, 0.0, theme.group_background);
+        ui.painter().rect_filled(rect, 0.0, theme.group_background);
 
         let bottom = egui::Rect::from_min_size(
             egui::pos2(rect.min.x, rect.max.y - 1.0),
             Vec2::new(rect.width(), 1.0),
         );
-        ui.painter()
-            .rect_filled(bottom, 0.0, theme.border_color);
+        ui.painter().rect_filled(bottom, 0.0, theme.border_color);
 
         if col_index == 0 {
-            let indent =
-                group.depth as f32 * theme.group_indent_per_depth + theme.cell_padding_x;
+            let indent = group.depth as f32 * theme.group_indent_per_depth + theme.cell_padding_x;
             ui.add_space(indent);
 
             let expand_icon = if group.collapsed {
@@ -810,9 +840,7 @@ impl EguiGrid {
             let tri_response = icon_button(ui, expand_icon, theme.cell_color);
 
             let label = format!("{}: {} ({})", group.field, group.label, group.count);
-            let rich = egui::RichText::new(&label)
-                .color(theme.cell_color)
-                .strong();
+            let rich = egui::RichText::new(&label).color(theme.cell_color).strong();
             let text_response = ui.add(egui::Label::new(rich).sense(egui::Sense::click()));
             let response = tri_response | text_response;
             if response.clicked() {
@@ -861,20 +889,19 @@ impl EguiGrid {
             egui::pos2(rect.min.x, rect.max.y - 1.0),
             Vec2::new(rect.width(), 1.0),
         );
-        ui.painter()
-            .rect_filled(bottom, 0.0, theme.border_color);
+        ui.painter().rect_filled(bottom, 0.0, theme.border_color);
 
         // Hover highlight (paint before content so content draws on top)
-        let pointer_hovering = ui.input(|i| {
-            i.pointer.hover_pos().is_some_and(|pos| rect.contains(pos))
-        });
+        let pointer_hovering =
+            ui.input(|i| i.pointer.hover_pos().is_some_and(|pos| rect.contains(pos)));
         if !is_selected && pointer_hovering {
             ui.painter().rect_filled(rect, 0.0, theme.row_hover);
         }
 
-        let is_focused = self.focused_cell.as_ref().is_some_and(|f| {
-            f.row_id == row_item.row.id && f.column_name == column.name
-        });
+        let is_focused = self
+            .focused_cell
+            .as_ref()
+            .is_some_and(|f| f.row_id == row_item.row.id && f.column_name == column.name);
 
         if is_focused {
             ui.painter().rect_stroke(
@@ -893,8 +920,7 @@ impl EguiGrid {
         }
 
         let is_editing = self.edit_session.as_ref().is_some_and(|s| {
-            s.editing_cell.row_id == row_item.row.id
-                && s.editing_cell.column_name == column.name
+            s.editing_cell.row_id == row_item.row.id && s.editing_cell.column_name == column.name
         });
 
         if is_editing {
@@ -933,8 +959,7 @@ impl EguiGrid {
                     self.commit_edit(options, columns);
                 }
 
-                let is_editable =
-                    column.enable_cell_edit || options.enable_cell_edit;
+                let is_editable = column.enable_cell_edit || options.enable_cell_edit;
                 if is_editable {
                     self.focused_cell = Some(GridCellPosition {
                         row_id: row_item.row.id.clone(),
@@ -970,7 +995,11 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            let icon = if expanded { IconKind::ExpandDown } else { IconKind::ExpandRight };
+            let icon = if expanded {
+                IconKind::ExpandDown
+            } else {
+                IconKind::ExpandRight
+            };
             if icon_button(ui, icon, theme.accent).clicked() {
                 let next = !expanded;
                 self.expanded_tree_rows
@@ -993,7 +1022,11 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            let icon = if expanded { IconKind::ExpandDown } else { IconKind::ExpandRight };
+            let icon = if expanded {
+                IconKind::ExpandDown
+            } else {
+                IconKind::ExpandRight
+            };
             if icon_button(ui, icon, theme.accent).clicked() {
                 let next = !expanded;
                 self.expanded_rows.insert(row_item.row.id.clone(), next);
@@ -1075,10 +1108,7 @@ impl EguiGrid {
                 let end = rows.iter().position(|r| r.id == row_id);
                 if let (Some(s), Some(e)) = (start, end) {
                     let (from, to) = if s <= e { (s, e) } else { (e, s) };
-                    self.selected_row_ids = rows[from..=to]
-                        .iter()
-                        .map(|r| r.id.clone())
-                        .collect();
+                    self.selected_row_ids = rows[from..=to].iter().map(|r| r.id.clone()).collect();
                     self.events.push(EguiGridEvent {
                         kind: EguiGridEventKind::SelectionChanged {
                             selected_ids: self.selected_row_ids.clone(),
@@ -1111,8 +1141,7 @@ impl EguiGrid {
         theme: &GridTheme,
     ) {
         let rect = ui.max_rect();
-        ui.painter()
-            .rect_filled(rect, 0.0, theme.header_background);
+        ui.painter().rect_filled(rect, 0.0, theme.header_background);
 
         let top = egui::Rect::from_min_size(rect.min, Vec2::new(rect.width(), 1.0));
         ui.painter().rect_filled(top, 0.0, theme.border_color);

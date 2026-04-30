@@ -85,18 +85,12 @@ fn build_column_extensions() -> Vec<EguiColumnExt> {
         EguiColumnExt::new("status").with_cell_renderer(|ui, ctx| {
             let status = ctx.value.as_str().unwrap_or("Unknown");
             let (bg, fg) = match status {
-                "Active" => (
-                    Color32::from_rgb(0x10, 0xB9, 0x81),
-                    Color32::WHITE,
-                ),
+                "Active" => (Color32::from_rgb(0x10, 0xB9, 0x81), Color32::WHITE),
                 "Trial" => (
                     Color32::from_rgb(0x38, 0xBD, 0xF8),
                     Color32::from_rgb(0x0B, 0x18, 0x24),
                 ),
-                "Churned" => (
-                    Color32::from_rgb(0xEF, 0x44, 0x44),
-                    Color32::WHITE,
-                ),
+                "Churned" => (Color32::from_rgb(0xEF, 0x44, 0x44), Color32::WHITE),
                 "Suspended" => (
                     Color32::from_rgb(0xF5, 0x9E, 0x0B),
                     Color32::from_rgb(0x0B, 0x18, 0x24),
@@ -127,7 +121,11 @@ fn build_column_extensions() -> Vec<EguiColumnExt> {
         EguiColumnExt::new("enabled").with_cell_renderer(|ui, ctx| {
             let enabled = ctx.value.as_bool().unwrap_or(false);
             let icon = if enabled { "\u{2611}" } else { "\u{2610}" };
-            ui.label(egui::RichText::new(icon).color(ctx.theme.cell_color).size(16.0));
+            ui.label(
+                egui::RichText::new(icon)
+                    .color(ctx.theme.cell_color)
+                    .size(16.0),
+            );
         }),
         EguiColumnExt::new("renewal").with_cell_editor(|ui, value, _theme| {
             let mut date: jiff::civil::Date = value
@@ -172,12 +170,7 @@ impl eframe::App for DemoApp {
                 egui::ComboBox::from_id_salt("dataset")
                     .selected_text(self.dataset.label())
                     .show_ui(ui, |ui| {
-                        for ds in &[
-                            Dataset::Flat,
-                            Dataset::Tree,
-                            Dataset::Large,
-                            Dataset::Huge,
-                        ] {
+                        for ds in &[Dataset::Flat, Dataset::Tree, Dataset::Large, Dataset::Huge] {
                             ui.selectable_value(&mut self.dataset, *ds, ds.label());
                         }
                     });
@@ -187,8 +180,7 @@ impl eframe::App for DemoApp {
 
                 ui.separator();
 
-                let grouping_changed =
-                    ui.checkbox(&mut self.enable_grouping, "Group").changed();
+                let grouping_changed = ui.checkbox(&mut self.enable_grouping, "Group").changed();
                 if grouping_changed && self.enable_grouping {
                     self.enable_tree_view = false;
                     options_changed = true;
@@ -196,8 +188,7 @@ impl eframe::App for DemoApp {
                     options_changed = true;
                 }
 
-                let tree_changed =
-                    ui.checkbox(&mut self.enable_tree_view, "Tree").changed();
+                let tree_changed = ui.checkbox(&mut self.enable_tree_view, "Tree").changed();
                 if tree_changed && self.enable_tree_view {
                     self.enable_grouping = false;
                     if self.dataset != Dataset::Tree {
@@ -263,7 +254,11 @@ impl eframe::App for DemoApp {
 
                 ui.separator();
                 let r = self.grid.result();
-                let virt = if r.virtualization_enabled { "on" } else { "off" };
+                let virt = if r.virtualization_enabled {
+                    "on"
+                } else {
+                    "off"
+                };
                 ui.label(format!(
                     "{:.2}ms | {} rows | virt: {}",
                     r.pipeline_ms, r.total_items, virt
@@ -276,8 +271,13 @@ impl eframe::App for DemoApp {
         });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            self.grid
-                .show(ui, &mut self.options, &self.columns, &mut self.column_ext, &self.theme);
+            self.grid.show(
+                ui,
+                &mut self.options,
+                &self.columns,
+                &mut self.column_ext,
+                &self.theme,
+            );
         });
     }
 }

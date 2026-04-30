@@ -29,8 +29,8 @@ impl Dataset {
 }
 
 const OWNERS: &[&str] = &[
-    "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank",
-    "Ivy", "Jack", "Karen", "Leo", "Mona", "Nick", "Olivia", "Pat",
+    "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Ivy", "Jack", "Karen",
+    "Leo", "Mona", "Nick", "Olivia", "Pat",
 ];
 const STATUSES: &[&str] = &["Active", "Trial", "Churned", "Suspended"];
 const TIERS: &[&str] = &["Enterprise", "Starter", "Legacy", "Pro"];

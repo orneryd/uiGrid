@@ -145,12 +145,7 @@ impl GridTheme {
     }
 
     pub fn accent_tint(&self, alpha: u8) -> Color32 {
-        Color32::from_rgba_unmultiplied(
-            self.accent.r(),
-            self.accent.g(),
-            self.accent.b(),
-            alpha,
-        )
+        Color32::from_rgba_unmultiplied(self.accent.r(), self.accent.g(), self.accent.b(), alpha)
     }
 
     pub fn header_sort_active_bg(&self) -> Color32 {
