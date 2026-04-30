@@ -56,7 +56,10 @@
       </p>
     </div>
 
-    <div class="grid-table ui-grid-contents-wrapper" part="grid-table">
+    <div class="grid-table ui-grid-contents-wrapper" part="grid-table"
+      [style.height]="renderVirtualViewport() ? scrollContainerHeight() : null"
+      [style.--ui-grid-header-sticky-top.px]="headerStickyHeight()"
+      (scroll)="renderVirtualViewport() ? onGridTableScroll($event) : null">
       <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" role="row"
         [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal"
         [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
@@ -211,15 +214,14 @@
 
       @if (displayItems().length) {
       @if (renderVirtualViewport()) {
-      <cdk-virtual-scroll-viewport class="grid-viewport ui-grid-viewport" part="viewport" [itemSize]="rowSize()"
-        [style.height]="viewportHeight()" (scrolledIndexChange)="onViewportIndexChange($event)">
-        <div class="body-grid ui-grid-canvas" part="body" role="rowgroup"
-          [style.gridTemplateColumns]="gridTemplateColumns()">
-          <ng-container *cdkVirtualFor="let item of displayItems(); trackBy: trackDisplayItem">
-            <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
-          </ng-container>
+      <div class="grid-virtual-spacer" [style.height.px]="virtualContentHeight()">
+        <div class="body-grid ui-grid-canvas grid-virtual-body" part="body" role="rowgroup"
+          [style.gridTemplateColumns]="gridTemplateColumns()" [style.top.px]="virtualContentOffset()">
+          @for (item of renderedDisplayItems(); track item.id) {
+          <ng-container [ngTemplateOutlet]="displayItemTemplate" [ngTemplateOutletContext]="{ $implicit: item }" />
+          }
         </div>
-      </cdk-virtual-scroll-viewport>
+      </div>
       } @else {
       <div class="body-grid ui-grid-canvas" part="body" role="rowgroup"
         [style.gridTemplateColumns]="gridTemplateColumns()">

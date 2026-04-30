@@ -120,7 +120,7 @@ export function gridEditorInputType(column: GridColumnDef): string {
 }
 
 export function gridColumnWidth(column: GridColumnDef): string {
-  return column.width ?? 'minmax(11rem, 1fr)';
+  return column.width ?? 'minmax(11rem, max-content)';
 }
 
 export function gridCellIndent(

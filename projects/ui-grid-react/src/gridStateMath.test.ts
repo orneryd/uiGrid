@@ -26,7 +26,7 @@ describe('gridStateMath', () => {
   });
 
   it('builds grid template columns deterministically', () => {
-    expect(buildGridTemplateColumns(orderVisibleColumns(columns, ['status', 'revenue', 'customer']))).toBe('2fr 120px minmax(11rem, 1fr)');
+    expect(buildGridTemplateColumns(orderVisibleColumns(columns, ['status', 'revenue', 'customer']))).toBe('2fr 120px minmax(11rem, max-content)');
   });
 
   it('resolves benchmark iterations with a minimum of one', () => {

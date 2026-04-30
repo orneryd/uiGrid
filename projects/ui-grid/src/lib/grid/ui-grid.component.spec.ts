@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { FILTER_CONDITIONS, SORT_DIRECTIONS } from './grid.constants';
 import { UiGridApi } from './grid.api';
-import { GridExpandableTemplateContext, GridOptions } from './grid.models';
+import { GridColumnDef, GridExpandableTemplateContext, GridOptions } from './grid.models';
 import { UiGridComponent } from './ui-grid.component';
 
 const baseData = [
@@ -553,7 +553,7 @@ describe('UiGridComponent', () => {
 
     const shadowRoot = getShadowRoot(fixture);
     expect(gridApi.core.getVisibleRows()).toHaveLength(5);
-    expect(shadowRoot.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(shadowRoot.querySelector('.grid-virtual-spacer')).not.toBeNull();
   });
 
   it('respects disabled feature flags and default sizing fallbacks', () => {
@@ -1163,12 +1163,75 @@ describe('UiGridComponent', () => {
     const rootElement = fixture.nativeElement as HTMLElement;
     const gridHost = rootElement.querySelector('app-ui-grid') as HTMLElement;
     const shadowRoot = gridHost.shadowRoot!;
-    expect(shadowRoot.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(shadowRoot.querySelector('.grid-virtual-spacer')).not.toBeNull();
 
     gridApi.expandable.expandAllRows();
     fixture.detectChanges();
 
     expect(gridApi.core.getVisibleRows()).toHaveLength(6);
+  });
+
+  it('uses overflow-capable default grid tracks so pinned columns can stick inside a horizontal scroller', () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enablePinning: true,
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', pinnedLeft: true },
+        { name: 'status' },
+        { name: 'revenue', align: 'end' },
+      ],
+    }));
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as any;
+    expect(component.gridTemplateColumns()).toContain('max-content');
+  });
+
+  it('appends pinned columns in click order and returns unpinned columns to the normal area', () => {
+    let gridApi!: UiGridApi;
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enablePinning: true,
+      columnDefs: [
+        { name: 'name', displayName: 'Customer' },
+        { name: 'status' },
+        { name: 'revenue', align: 'end' },
+        { name: 'owner', field: 'account.owner' },
+      ],
+    }, (api) => {
+      gridApi = api;
+    }));
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as any;
+    expect(component.visibleColumns().map((column: GridColumnDef) => column.name)).toEqual([
+      'name',
+      'status',
+      'revenue',
+      'owner',
+    ]);
+
+    gridApi.pinning.pinColumn('revenue', 'left');
+    fixture.detectChanges();
+    gridApi.pinning.pinColumn('owner', 'left');
+    fixture.detectChanges();
+
+    expect(component.visibleColumns().map((column: GridColumnDef) => column.name)).toEqual([
+      'revenue',
+      'owner',
+      'name',
+      'status',
+    ]);
+
+    gridApi.pinning.pinColumn('revenue', 'none');
+    fixture.detectChanges();
+
+    expect(component.visibleColumns().map((column: GridColumnDef) => column.name)).toEqual([
+      'owner',
+      'name',
+      'status',
+      'revenue',
+    ]);
   });
 
   it('raises infinite scroll load events near the top and bottom of the viewport', async () => {

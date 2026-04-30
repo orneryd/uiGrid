@@ -156,6 +156,7 @@ h1 {
 }
 
 .grid-table {
+  position: relative;
   min-height: 0;
   width: 100%;
   min-width: 0;
@@ -167,6 +168,22 @@ h1 {
 .filter-grid,
 .body-grid {
   display: grid;
+  width: max-content;
+  min-width: 100%;
+}
+
+.header-grid,
+.filter-grid {
+  position: sticky;
+  z-index: 3;
+}
+
+.header-grid {
+  top: 0;
+}
+
+.filter-grid {
+  top: var(--ui-grid-header-sticky-top, 0px);
 }
 
 .header-cell,
@@ -432,6 +449,17 @@ h1 {
 
 .grid-viewport {
   width: 100%;
+}
+
+.grid-virtual-spacer {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+.grid-virtual-body {
+  position: absolute;
+  left: 0;
 }
 
 .cdk-drag-preview {
