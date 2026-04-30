@@ -958,9 +958,8 @@ impl EguiGrid {
             if response.clicked() {
                 // Check if the click landed on the expand icon
                 let click_pos = ui.input(|i| i.pointer.interact_pos());
-                let hit_expand = expand_icon_rect.is_some_and(|icon_rect| {
-                    click_pos.is_some_and(|pos| icon_rect.contains(pos))
-                });
+                let hit_expand = expand_icon_rect
+                    .is_some_and(|icon_rect| click_pos.is_some_and(|pos| icon_rect.contains(pos)));
 
                 if hit_expand {
                     // Toggle expansion and select the row, but don't focus the cell
@@ -991,9 +990,8 @@ impl EguiGrid {
             if response.double_clicked() {
                 // Don't enter edit mode if double-clicking the expand icon
                 let click_pos = ui.input(|i| i.pointer.interact_pos());
-                let hit_expand = expand_icon_rect.is_some_and(|icon_rect| {
-                    click_pos.is_some_and(|pos| icon_rect.contains(pos))
-                });
+                let hit_expand = expand_icon_rect
+                    .is_some_and(|icon_rect| click_pos.is_some_and(|pos| icon_rect.contains(pos)));
 
                 if !hit_expand {
                     if self.edit_session.is_some() {
