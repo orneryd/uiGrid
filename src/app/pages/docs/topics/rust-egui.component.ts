@@ -99,7 +99,7 @@ grid.show(ui, &mut options, &columns, &mut column_ext, &theme);`;
 
   protected readonly extensionsSnippet = `let ext = vec![
     EguiColumnExt::new("revenue")
-        .with_formatter(|value, _row| format!("${}", value)),
+      .with_formatter(|value, _row| format!("\${}", value)),
 
     EguiColumnExt::new("status")
         .with_cell_renderer(|ui, ctx| {
