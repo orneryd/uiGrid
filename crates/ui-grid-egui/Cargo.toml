@@ -18,7 +18,7 @@ egui_extras = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-ui-grid-fixtures = { path = "../ui-grid-fixtures", version = "0.1" }
+ui-grid-fixtures = { path = "../ui-grid-fixtures" }
 eframe = { workspace = true }
 egui_extras = { workspace = true, features = ["datepicker"] }
 jiff = { workspace = true }
