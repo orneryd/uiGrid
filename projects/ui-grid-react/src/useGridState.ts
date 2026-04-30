@@ -507,7 +507,7 @@ export function useGridState(
 
   const focusRenderedCell = useCallback((position: GridCellPosition): void => {
     const focusToken = ++renderedCellFocusTokenRef.current;
-    const selector = `.body-cell[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
+    const selector = `.body-cell[data-row-id="${CSS.escape(position.rowId)}"][data-col-name="${CSS.escape(position.columnName)}"]`;
 
     const doFocus = (retry = true): void => {
       if (focusToken !== renderedCellFocusTokenRef.current) return;
@@ -532,7 +532,7 @@ export function useGridState(
     const ec = editingCellRef.current;
     if (!ec) return;
 
-    const selector = `.cell-editor[data-row-id="${ec.rowId}"][data-col-name="${ec.columnName}"]`;
+    const selector = `.cell-editor[data-row-id="${CSS.escape(ec.rowId)}"][data-col-name="${CSS.escape(ec.columnName)}"]`;
 
     const doFocus = (retry = true): void => {
       if (focusToken !== editorFocusTokenRef.current) return;

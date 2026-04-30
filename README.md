@@ -40,6 +40,7 @@ Everything below ships free and MIT-licensed. No enterprise tier, no license key
 | CSV Export               | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
 | Virtual Scrolling        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
 | Pagination               | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
+| **Column Pinning**       | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
 | Column Reordering        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
 | **Save/Restore State**   | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |        —        |
 | **Infinite Scroll**      | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
@@ -48,6 +49,7 @@ Everything below ships free and MIT-licensed. No enterprise tier, no license key
 | **Feature Tree-Shaking** | **Free** |         —         |         —          |        —        |     —      |        —        |
 | **SSR Support**          | **Free** |         —         |    ~$999/dev/yr    |        —        |     —      |        —        |
 | i18n                     | **Free** |         —         |    ~$999/dev/yr    |      Free       |    Paid    |   Community\*   |
+| React Native             | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
 | Angular Native           | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
 | **License**              | **MIT**  |        MIT        |     Commercial     |  Apache/Comm.   | Commercial | Comm./Community |
 
@@ -90,6 +92,34 @@ export class MyGridComponent {
       this.gridApi = api;
     },
   };
+}
+```
+
+### React
+
+```bash
+npm install @ornery/ui-grid @ornery/ui-grid-react
+```
+
+```tsx
+import { UiGrid } from '@ornery/ui-grid-react';
+import { GridOptions } from '@ornery/ui-grid';
+
+function MyGrid() {
+  const options: GridOptions = {
+    id: 'my-grid',
+    data: [
+      { name: 'Alice', role: 'Engineer', salary: 120000 },
+      { name: 'Bob', role: 'Designer', salary: 95000 },
+    ],
+    columnDefs: [
+      { name: 'name' },
+      { name: 'role' },
+      { name: 'salary', type: 'number', align: 'end' },
+    ],
+  };
+
+  return <UiGrid options={options} />;
 }
 ```
 
@@ -151,6 +181,7 @@ See the [ui-grid-egui README](./crates/ui-grid-egui/README.md) for custom format
 - **Cell Editing** — inline spreadsheet-style editing with full keyboard navigation (Tab, Enter, Escape)
 - **Pagination** — client-side or external pagination with configurable page sizes
 - **Infinite Scroll** — bi-directional infinite scrolling with loading state management
+- **Column Pinning** — freeze columns left or right with CSS `position: sticky`, programmatic API, save/restore state
 - **Column Moving** — drag-and-drop column reordering via Angular CDK
 - **CSV Export** — download visible rows with formula-injection protection
 - **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows

@@ -122,10 +122,13 @@ export function UiGrid({
     if (item.kind !== 'row') return null;
     const rowItem = item as RowItem;
 
-    return visibleColumns.map((column) => (
+    return visibleColumns.map((column) => {
+      const pinned = state.isPinned(column);
+      const pinOffset = pinned ? state.pinnedOffset(column) : null;
+      return (
       <div
         key={`${rowItem.row.id}-${column.name}`}
-        className={`${cellClassName(rowItem, column)}${state.isPinned(column) ? ' is-pinned' : ''}`}
+        className={`${cellClassName(rowItem, column)}${pinned ? ' is-pinned' : ''}`}
         data-part="body-cell"
         role="gridcell"
         tabIndex={0}
@@ -136,16 +139,10 @@ export function UiGrid({
         onDoubleClick={(e) => state.handleCellDoubleClick(rowItem.row, column, e)}
         onKeyDown={(e) => state.handleCellKeyDown(rowItem.row, column, e)}
         style={{
-          position: state.isPinned(column) ? 'sticky' : undefined,
-          left:
-            state.pinnedOffset(column)?.side === 'left'
-              ? state.pinnedOffset(column)!.offset
-              : undefined,
-          right:
-            state.pinnedOffset(column)?.side === 'right'
-              ? state.pinnedOffset(column)!.offset
-              : undefined,
-          zIndex: state.isPinned(column) ? 2 : undefined,
+          position: pinned ? 'sticky' : undefined,
+          left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
+          right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
+          zIndex: pinned ? 2 : undefined,
         }}
       >
         <div
@@ -204,7 +201,8 @@ export function UiGrid({
           </span>
         </div>
       </div>
-    ));
+      );
+    });
   }
 
   function cellClassName(item: RowItem, column: GridColumnDef): string {
@@ -330,24 +328,21 @@ export function UiGrid({
               role="row"
               style={{ gridTemplateColumns }}
             >
-              {visibleColumns.map((column) => (
+              {visibleColumns.map((column) => {
+                const pinned = state.isPinned(column);
+                const pinOffset = pinned ? state.pinnedOffset(column) : null;
+                return (
                 <div
                   key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${state.isPinned(column) ? ' is-pinned' : ''}`}
+                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}`}
                   data-part="header-cell"
                   role="columnheader"
                   aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
                   style={{
-                    position: state.isPinned(column) ? 'sticky' : undefined,
-                    left:
-                      state.pinnedOffset(column)?.side === 'left'
-                        ? state.pinnedOffset(column)!.offset
-                        : undefined,
-                    right:
-                      state.pinnedOffset(column)?.side === 'right'
-                        ? state.pinnedOffset(column)!.offset
-                        : undefined,
-                    zIndex: state.isPinned(column) ? 2 : undefined,
+                    position: pinned ? 'sticky' : undefined,
+                    left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
+                    right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
+                    zIndex: pinned ? 2 : undefined,
                   }}
                 >
                   <span className="header-label">{state.headerLabel(column)}</span>
@@ -389,30 +384,28 @@ export function UiGrid({
                         </button>
                       )}
                     {state.pinningFeature &&
-                      (column.pinnedLeft === true ||
-                        column.pinnedRight === true ||
-                        column.enablePinning === true) &&
                       state.isPinningEnabled() &&
                       state.isColumnPinnable(column) && (
                         <button
                           type="button"
-                          className={`chip-action${state.isPinned(column) ? ' chip-action-active' : ''}`}
+                          className={`chip-action${pinned ? ' chip-action-active' : ''}`}
                           data-part="pin-toggle"
-                          aria-label={state.isPinned(column) ? labels.unpin : labels.pinLeft}
-                          title={state.isPinned(column) ? labels.unpin : labels.pinLeft}
+                          aria-label={pinned ? labels.unpin : labels.pinLeft}
+                          title={pinned ? labels.unpin : labels.pinLeft}
                           onClick={() => state.togglePin(column)}
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
                             <path d="M12 2L3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5z" />
                           </svg>
                           <span className="sr-only ui-grid-sr-only">
-                            {state.isPinned(column) ? labels.unpin : labels.pinLeft}
+                            {pinned ? labels.unpin : labels.pinLeft}
                           </span>
                         </button>
                       )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Filter row */}
@@ -422,22 +415,19 @@ export function UiGrid({
                 data-part="filters"
                 style={{ gridTemplateColumns }}
               >
-                {visibleColumns.map((column) => (
+                {visibleColumns.map((column) => {
+                  const pinned = state.isPinned(column);
+                  const pinOffset = pinned ? state.pinnedOffset(column) : null;
+                  return (
                   <label
                     key={column.name}
-                    className={`filter-cell ui-grid-filter-container${state.isPinned(column) ? ' is-pinned' : ''}`}
+                    className={`filter-cell ui-grid-filter-container${pinned ? ' is-pinned' : ''}`}
                     data-part="filter-cell"
                     style={{
-                      position: state.isPinned(column) ? 'sticky' : undefined,
-                      left:
-                        state.pinnedOffset(column)?.side === 'left'
-                          ? state.pinnedOffset(column)!.offset
-                          : undefined,
-                      right:
-                        state.pinnedOffset(column)?.side === 'right'
-                          ? state.pinnedOffset(column)!.offset
-                          : undefined,
-                      zIndex: state.isPinned(column) ? 2 : undefined,
+                      position: pinned ? 'sticky' : undefined,
+                      left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
+                      right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
+                      zIndex: pinned ? 2 : undefined,
                     }}
                   >
                     <span className="sr-only ui-grid-sr-only">
@@ -452,7 +442,8 @@ export function UiGrid({
                       onChange={(e) => state.updateFilter(column.name, e.target.value)}
                     />
                   </label>
-                ))}
+                  );
+                })}
               </div>
             )}
 

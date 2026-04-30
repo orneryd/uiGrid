@@ -7,7 +7,7 @@ export interface PinnedColumnState {
 }
 
 export function isPinningEnabled(options: GridOptions): boolean {
-  return options.enablePinning !== false;
+  return options.enablePinning === true;
 }
 
 export function isColumnPinnable(options: GridOptions, column: GridColumnDef): boolean {
@@ -18,7 +18,7 @@ export function getColumnPinDirection(
   pinnedColumns: Readonly<PinnedColumnState>,
   column: GridColumnDef,
 ): PinDirection {
-  return (pinnedColumns as PinnedColumnState)[column.name] ?? 'none';
+  return pinnedColumns[column.name] ?? 'none';
 }
 
 export function pinColumnState(
@@ -26,7 +26,7 @@ export function pinColumnState(
   columnName: string,
   direction: PinDirection,
 ): PinnedColumnState {
-  const next: PinnedColumnState = { ...(current as PinnedColumnState) };
+  const next: PinnedColumnState = { ...current };
   if (direction === 'none') {
     delete next[columnName];
   } else {
@@ -38,8 +38,8 @@ export function pinColumnState(
 export function buildInitialPinnedState(columns: readonly GridColumnDef[]): PinnedColumnState {
   const state: PinnedColumnState = {};
   for (const col of columns) {
-    if ((col as any).pinnedLeft) state[col.name] = 'left';
-    else if ((col as any).pinnedRight) state[col.name] = 'right';
+    if (col.pinnedLeft) state[col.name] = 'left';
+    else if (col.pinnedRight) state[col.name] = 'right';
   }
   return state;
 }
@@ -49,7 +49,7 @@ export function computePinnedOffset(
   pinnedColumns: Readonly<PinnedColumnState>,
   column: GridColumnDef,
 ): { side: 'left' | 'right'; offset: string } | null {
-  const direction = (pinnedColumns as PinnedColumnState)[column.name];
+  const direction = pinnedColumns[column.name];
   if (!direction) return null;
 
   function resolveColumnWidthForOffset(column: GridColumnDef): string {
@@ -63,7 +63,7 @@ export function computePinnedOffset(
     const offsetParts: string[] = [];
     for (const col of visibleColumns) {
       if (col.name === column.name) break;
-      if ((pinnedColumns as PinnedColumnState)[col.name] === 'left') {
+      if (pinnedColumns[col.name] === 'left') {
         offsetParts.push(resolveColumnWidthForOffset(col));
       }
     }
@@ -78,7 +78,7 @@ export function computePinnedOffset(
     const reversed = [...visibleColumns].reverse();
     for (const col of reversed) {
       if (col.name === column.name) break;
-      if ((pinnedColumns as PinnedColumnState)[col.name] === 'right') {
+      if (pinnedColumns[col.name] === 'right') {
         offsetParts.push(resolveColumnWidthForOffset(col));
       }
     }
@@ -96,7 +96,7 @@ export function pinningButtonLabel(
   column: GridColumnDef,
   labels: GridLabels,
 ): string {
-  const direction = (pinnedColumns as PinnedColumnState)[column.name];
+  const direction = pinnedColumns[column.name];
   if (direction === 'left' || direction === 'right') return labels.unpin;
   return labels.pinLeft;
 }

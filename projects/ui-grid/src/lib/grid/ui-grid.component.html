@@ -107,8 +107,7 @@
               <span class="sr-only ui-grid-sr-only">{{ groupingButtonLabel(column) }}</span>
             </button>
             }
-            @if (pinningFeature && (column.pinnedLeft === true || column.pinnedRight === true || column.enablePinning
-            === true) && isPinningEnabled() && isColumnPinnable(column)) {
+            @if (pinningFeature && isPinningEnabled() && isColumnPinnable(column)) {
             <button type="button" class="chip-action" part="pin-toggle" [class.chip-action-active]="isPinned(column)"
               [attr.aria-label]="isPinned(column) ? labels().unpin : labels().pinLeft"
               [attr.title]="isPinned(column) ? labels().unpin : labels().pinLeft" (click)="togglePin(column)">

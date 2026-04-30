@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.1.5 (web) — 2026-04-30
+
+### Added
+
+- **Column Pinning** — freeze columns left/right via CSS `position: sticky`. New `enablePinning` option on `GridOptions` and `GridColumnDef`, `pinnedLeft`/`pinnedRight` column def properties, and `gridApi.pinning.pinColumn()` programmatic API. Pinning state is included in save/restore. Implemented for both Angular and React.
+- Pin toggle button in column headers (cycles left → right → none).
+- `FEATURE_PINNING` compile-time feature flag for tree-shaking.
+- Pinning labels (`pinLeft`, `pinRight`, `unpin`) added to `GridLabels` and `en-US.json`.
+- Pinned column styles with opaque backgrounds and edge shadow indicators.
+
+### Fixed
+
+- Pin button visibility now uses opt-out pattern (`enablePinning !== false`) consistent with other features.
+- Reduced redundant `pinnedOffset()` calls per cell in Angular and React renders.
+- Removed unnecessary `as any` casts in `buildInitialPinnedState`.
+- Added `CSS.escape()` to selector-based cell focusing in React to prevent selector injection from special characters in row IDs.
+
+## v0.1.1 (Rust crates) — 2026-04-30
+
+### Fixed
+
+- **egui: Row expansion click handling** — Expand/collapse icons in `ui-grid-egui` were not responding to clicks because the full-cell click overlay was stealing interaction from the icon button. Replaced the interactive icon button with a passive visual icon and moved click handling into the cell overlay with hit-testing against the icon rect.
+- Clicking the expand icon now selects the row without focusing the cell or entering edit mode.
+- Double-clicking the expand icon no longer triggers cell editing.
+- Expand icon hit target increased from 16×16 to 24×24 for easier clicking.
+
+### Changed
+
+- Bumped all Rust crate versions from 0.1.0 to 0.1.1 (workspace-level `Cargo.toml`).
+
 ## v0.1.3 - 2026-04-28
 
 ### Added
