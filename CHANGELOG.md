@@ -9,6 +9,7 @@
 - `FEATURE_PINNING` compile-time feature flag for tree-shaking.
 - Pinning labels (`pinColumn`, `pinLeft`, `pinRight`, `unpin`) added to `GridLabels` and `en-US.json`.
 - Pinned column styles with opaque backgrounds and edge shadow indicators.
+- Expanded public `--ui-grid-*` CSS variable coverage for layout, controls, scrolling, pinning, and state styling. See [Theming](./docs/theming.md).
 
 ### Fixed
 
