@@ -16,8 +16,8 @@ console_error_panic_hook.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
-ui-grid-core = { path = "../ui-grid-core" }
-ui-grid-virtualization = { path = "../ui-grid-virtualization" }
+ui-grid-core = { path = "../ui-grid-core", version = "0.1" }
+ui-grid-virtualization = { path = "../ui-grid-virtualization", version = "0.1" }
 wasm-bindgen.workspace = true
 
 [dev-dependencies]

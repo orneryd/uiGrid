@@ -52,10 +52,28 @@ let ext = vec![
 cargo run -p ui-grid-egui --example demo --release
 ```
 
+### Building the demo locally
+
+Prerequisites: [Rust 1.95+](https://rustup.rs/)
+
+```sh
+git clone https://github.com/orneryd/uiGrid.git
+cd uiGrid
+cargo run -p ui-grid-egui --example demo --release
+```
+
+The demo app showcases:
+- Column sorting (click header), filtering (type in filter row), and grouping
+- Custom cell renderers (status pills, currency formatting, boolean checkboxes)
+- Cell editing via double-click or Enter, including a date picker widget
+- Tree view with expandable/collapsible rows
+- Theme switching (4 built-in presets)
+- Smooth scrolling with 100K+ row virtualization
+
 ## License
 
 MIT
 
-Roadmap:
+## Roadmap
 
 - Drag and drop reorderable columns
