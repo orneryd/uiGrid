@@ -8,7 +8,7 @@ import {
   UiGridComponent
 } from '@ornery/ui-grid';
 
-type HarnessMode = 'expandable' | 'tree' | 'templated';
+type HarnessMode = 'expandable' | 'tree' | 'templated' | 'pinning';
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -174,7 +174,8 @@ export class GridBrowserHarnessComponent {
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' },
     { label: 'Tree', value: 'tree' },
-    { label: 'Templated', value: 'templated' }
+    { label: 'Templated', value: 'templated' },
+    { label: 'Pinning', value: 'pinning' }
   ] as const;
 
   private readonly statusTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('status');
@@ -186,6 +187,8 @@ export class GridBrowserHarnessComponent {
         return this.treeOptions();
       case 'templated':
         return this.templatedOptions();
+      case 'pinning':
+        return this.pinningOptions();
       default:
         return this.expandableOptions();
     }
@@ -241,6 +244,48 @@ export class GridBrowserHarnessComponent {
       treeChildrenField: 'children',
       showTreeExpandNoChildren: false,
       treeIndent: 16
+    };
+  }
+
+  private pinningOptions(): GridOptions {
+    const data = Array.from({ length: 20 }, (_v, i) => ({
+      id: `pin-${i + 1}`,
+      name: `Row ${i + 1}`,
+      department: i % 3 === 0 ? 'Engineering' : i % 3 === 1 ? 'Design' : 'Sales',
+      region: i % 4 === 0 ? 'West' : i % 4 === 1 ? 'East' : i % 4 === 2 ? 'Central' : 'South',
+      q1: 1000 + i * 120,
+      q2: 1100 + i * 95,
+      q3: 900 + i * 140,
+      q4: 1300 + i * 80,
+      total: 4300 + i * 435,
+      growth: `${(2.5 + i * 0.3).toFixed(1)}%`,
+      status: i % 2 === 0 ? 'Active' : 'Review',
+    }));
+    return {
+      id: 'browser-harness-pinning',
+      title: 'Browser Harness: Pinning',
+      emptyMessage: 'No rows',
+      rowIdentity: (row) => String(row['id']),
+      data,
+      rowHeight: 46,
+      viewportHeight: 300,
+      enableSorting: true,
+      enableFiltering: true,
+      enablePinning: true,
+      enableVirtualization: true,
+      virtualizationThreshold: 1,
+      columnDefs: [
+        { name: 'name', displayName: 'Name', width: '160px', pinnedLeft: true },
+        { name: 'department', displayName: 'Department', width: '140px' },
+        { name: 'region', displayName: 'Region', width: '120px' },
+        { name: 'q1', displayName: 'Q1 Revenue', width: '130px', align: 'end' },
+        { name: 'q2', displayName: 'Q2 Revenue', width: '130px', align: 'end' },
+        { name: 'q3', displayName: 'Q3 Revenue', width: '130px', align: 'end' },
+        { name: 'q4', displayName: 'Q4 Revenue', width: '130px', align: 'end' },
+        { name: 'total', displayName: 'Total', width: '120px', align: 'end' },
+        { name: 'growth', displayName: 'Growth', width: '100px', align: 'end' },
+        { name: 'status', displayName: 'Status', width: '120px' },
+      ],
     };
   }
 

@@ -156,11 +156,10 @@ h1 {
 }
 
 .grid-table {
-  display: grid;
   min-height: 0;
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  overflow-x: var(--ui-grid-overflow-x, auto);
   overflow-y: hidden;
 }
 

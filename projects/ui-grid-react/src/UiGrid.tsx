@@ -395,7 +395,7 @@ export function UiGrid({
                           onClick={() => state.togglePin(column)}
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                            <path d="M12 2L3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5z" />
+                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
                           </svg>
                           <span className="sr-only ui-grid-sr-only">
                             {pinned ? labels.unpin : labels.pinLeft}
