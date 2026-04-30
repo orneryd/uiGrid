@@ -291,26 +291,24 @@ impl EguiGrid {
         });
         let (tab, enter, escape, up, down, left, right, shift) = input;
 
-        if escape {
-            if self.edit_session.is_some() {
-                self.edit_session = None;
-                return;
-            }
+        if escape && self.edit_session.is_some() {
+            self.edit_session = None;
+            return;
         }
 
         if enter && self.edit_session.is_some() {
             self.commit_edit(options, columns);
-            if let Some(ref focused) = self.focused_cell {
-                if let Some(next) = find_next_grid_cell(
+            if let Some(ref focused) = self.focused_cell
+                && let Some(next) = find_next_grid_cell(
                     &self.cached_result.visible_rows,
                     columns,
                     &focused.row_id,
                     &focused.column_name,
                     GridMoveDirection::Down,
                     None::<fn(&_, &_) -> bool>,
-                ) {
-                    self.begin_edit_at(&next, options, columns);
-                }
+                )
+            {
+                self.begin_edit_at(&next, options, columns);
             }
             return;
         }
@@ -331,17 +329,17 @@ impl EguiGrid {
             } else {
                 GridMoveDirection::Right
             };
-            if let Some(ref focused) = self.focused_cell.clone() {
-                if let Some(next) = find_next_grid_cell(
+            if let Some(ref focused) = self.focused_cell.clone()
+                && let Some(next) = find_next_grid_cell(
                     &self.cached_result.visible_rows,
                     columns,
                     &focused.row_id,
                     &focused.column_name,
                     dir,
                     None::<fn(&_, &_) -> bool>,
-                ) {
-                    self.begin_edit_at(&next, options, columns);
-                }
+                )
+            {
+                self.begin_edit_at(&next, options, columns);
             }
             return;
         }
@@ -362,21 +360,20 @@ impl EguiGrid {
             None
         };
 
-        if let Some(dir) = direction {
-            if let Some(ref focused) = self.focused_cell.clone() {
-                if let Some(next) = find_next_grid_cell(
-                    &self.cached_result.visible_rows,
-                    columns,
-                    &focused.row_id,
-                    &focused.column_name,
-                    dir,
-                    None::<fn(&_, &_) -> bool>,
-                ) {
-                    self.focused_cell = Some(next.clone());
-                    self.selected_row_ids = vec![next.row_id.clone()];
-                    self.last_clicked_row_id = Some(next.row_id.clone());
-                }
-            }
+        if let Some(dir) = direction
+            && let Some(ref focused) = self.focused_cell.clone()
+            && let Some(next) = find_next_grid_cell(
+                &self.cached_result.visible_rows,
+                columns,
+                &focused.row_id,
+                &focused.column_name,
+                dir,
+                None::<fn(&_, &_) -> bool>,
+            )
+        {
+            self.focused_cell = Some(next.clone());
+            self.selected_row_ids = vec![next.row_id.clone()];
+            self.last_clicked_row_id = Some(next.row_id.clone());
         }
     }
 
@@ -446,10 +443,9 @@ impl EguiGrid {
                 r.get("id")
                     .and_then(|v| v.as_str())
                     .is_some_and(|id| id == session.editing_cell.row_id)
-            }) {
-                if let Some(obj) = row.as_object_mut() {
-                    obj.insert(field.to_string(), new_value.clone());
-                }
+            }) && let Some(obj) = row.as_object_mut()
+            {
+                obj.insert(field.to_string(), new_value.clone());
             }
 
             self.pipeline_dirty = true;
@@ -757,6 +753,7 @@ impl EguiGrid {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_display_item(
         &mut self,
         ui: &mut Ui,
@@ -857,6 +854,7 @@ impl EguiGrid {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_data_row(
         &mut self,
         ui: &mut Ui,
@@ -878,7 +876,7 @@ impl EguiGrid {
         let is_selected = self.selected_row_ids.contains(&row_item.row.id);
         let bg = if is_selected {
             theme.accent_tint(30)
-        } else if row_index % 2 == 0 {
+        } else if row_index.is_multiple_of(2) {
             theme.row_even
         } else {
             theme.row_odd
@@ -1084,11 +1082,11 @@ impl EguiGrid {
         theme: &GridTheme,
     ) {
         if let Some(ref mut session) = self.edit_session {
-            if let Some(ext) = find_column_ext_mut(column_ext, &column.name) {
-                if let Some(ref mut editor) = ext.cell_editor {
-                    editor(ui, &mut session.editing_value, theme);
-                    return;
-                }
+            if let Some(ext) = find_column_ext_mut(column_ext, &column.name)
+                && let Some(ref mut editor) = ext.cell_editor
+            {
+                editor(ui, &mut session.editing_value, theme);
+                return;
             }
 
             let response = egui::TextEdit::singleline(&mut session.editing_value)
@@ -1101,21 +1099,19 @@ impl EguiGrid {
     }
 
     fn handle_row_click(&mut self, row_id: &str, shift: bool) {
-        if shift {
-            if let Some(ref last) = self.last_clicked_row_id {
-                let rows = &self.cached_result.visible_rows;
-                let start = rows.iter().position(|r| r.id == *last);
-                let end = rows.iter().position(|r| r.id == row_id);
-                if let (Some(s), Some(e)) = (start, end) {
-                    let (from, to) = if s <= e { (s, e) } else { (e, s) };
-                    self.selected_row_ids = rows[from..=to].iter().map(|r| r.id.clone()).collect();
-                    self.events.push(EguiGridEvent {
-                        kind: EguiGridEventKind::SelectionChanged {
-                            selected_ids: self.selected_row_ids.clone(),
-                        },
-                    });
-                    return;
-                }
+        if shift && let Some(ref last) = self.last_clicked_row_id {
+            let rows = &self.cached_result.visible_rows;
+            let start = rows.iter().position(|r| r.id == *last);
+            let end = rows.iter().position(|r| r.id == row_id);
+            if let (Some(s), Some(e)) = (start, end) {
+                let (from, to) = if s <= e { (s, e) } else { (e, s) };
+                self.selected_row_ids = rows[from..=to].iter().map(|r| r.id.clone()).collect();
+                self.events.push(EguiGridEvent {
+                    kind: EguiGridEventKind::SelectionChanged {
+                        selected_ids: self.selected_row_ids.clone(),
+                    },
+                });
+                return;
             }
         }
 

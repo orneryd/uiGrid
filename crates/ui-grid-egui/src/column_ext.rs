@@ -12,11 +12,15 @@ pub struct GridCellContext<'a> {
     pub row_index: usize,
 }
 
+type Formatter = Box<dyn Fn(&Value, &GridRow) -> String>;
+type CellRenderer = Box<dyn Fn(&mut Ui, &GridCellContext<'_>)>;
+type CellEditor = Box<dyn FnMut(&mut Ui, &mut String, &GridTheme) -> bool>;
+
 pub struct EguiColumnExt {
     pub column_name: String,
-    pub formatter: Option<Box<dyn Fn(&Value, &GridRow) -> String>>,
-    pub cell_renderer: Option<Box<dyn Fn(&mut Ui, &GridCellContext<'_>)>>,
-    pub cell_editor: Option<Box<dyn FnMut(&mut Ui, &mut String, &GridTheme) -> bool>>,
+    pub formatter: Option<Formatter>,
+    pub cell_renderer: Option<CellRenderer>,
+    pub cell_editor: Option<CellEditor>,
 }
 
 impl EguiColumnExt {
