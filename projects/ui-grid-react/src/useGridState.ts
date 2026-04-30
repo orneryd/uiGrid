@@ -148,6 +148,53 @@ import {
 } from '../../ui-grid/src/lib/grid/ui-grid.events';
 import { downloadGridCsvFile, observeGridHostSize } from '../../ui-grid/src/lib/grid/ui-grid.host';
 
+function escapeCssSelectorValue(value: string): string {
+  const nativeEscape = globalThis.CSS?.escape;
+  if (typeof nativeEscape === 'function') {
+    return nativeEscape(value);
+  }
+
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.charCodeAt(index);
+    const character = value.charAt(index);
+
+    if (codePoint === 0x0000) {
+      output += '\uFFFD';
+      continue;
+    }
+
+    const isControlCharacter = (codePoint >= 0x0001 && codePoint <= 0x001f) || codePoint === 0x007f;
+    const startsWithDigit = index === 0 && codePoint >= 0x0030 && codePoint <= 0x0039;
+    const secondCharDigitAfterHyphen =
+      index === 1 &&
+      codePoint >= 0x0030 && codePoint <= 0x0039 &&
+      value.charCodeAt(0) === 0x002d;
+
+    if (isControlCharacter || startsWithDigit || secondCharDigitAfterHyphen) {
+      output += `\\${codePoint.toString(16)} `;
+      continue;
+    }
+
+    if (index === 0 && value.length === 1 && codePoint === 0x002d) {
+      output += `\\${character}`;
+      continue;
+    }
+
+    const isSafeCharacter =
+      codePoint >= 0x0080 ||
+      codePoint === 0x002d ||
+      codePoint === 0x005f ||
+      (codePoint >= 0x0030 && codePoint <= 0x0039) ||
+      (codePoint >= 0x0041 && codePoint <= 0x005a) ||
+      (codePoint >= 0x0061 && codePoint <= 0x007a);
+
+    output += isSafeCharacter ? character : `\\${character}`;
+  }
+
+  return output;
+}
+
 export interface UseGridStateResult {
   pipeline: PipelineResult;
   visibleColumns: GridColumnDef[];
@@ -507,7 +554,7 @@ export function useGridState(
 
   const focusRenderedCell = useCallback((position: GridCellPosition): void => {
     const focusToken = ++renderedCellFocusTokenRef.current;
-    const selector = `.body-cell[data-row-id="${CSS.escape(position.rowId)}"][data-col-name="${CSS.escape(position.columnName)}"]`;
+    const selector = `.body-cell[data-row-id="${escapeCssSelectorValue(position.rowId)}"][data-col-name="${escapeCssSelectorValue(position.columnName)}"]`;
 
     const doFocus = (retry = true): void => {
       if (focusToken !== renderedCellFocusTokenRef.current) return;
@@ -532,7 +579,7 @@ export function useGridState(
     const ec = editingCellRef.current;
     if (!ec) return;
 
-    const selector = `.cell-editor[data-row-id="${CSS.escape(ec.rowId)}"][data-col-name="${CSS.escape(ec.columnName)}"]`;
+    const selector = `.cell-editor[data-row-id="${escapeCssSelectorValue(ec.rowId)}"][data-col-name="${escapeCssSelectorValue(ec.columnName)}"]`;
 
     const doFocus = (retry = true): void => {
       if (focusToken !== editorFocusTokenRef.current) return;
