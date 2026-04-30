@@ -78,7 +78,7 @@ The intended end state is not "a Rust version and a JavaScript version".
 
 The intended end state is:
 
-- Rust owns the full deterministic grid engine
+- Rust owns the full core grid engine
 - Angular, React, and web components adapt their existing APIs onto the Rust engine
 - JavaScript remains only where the browser or framework requires it
 
@@ -181,7 +181,7 @@ Exit criteria:
 Deliverables:
 
 - pure Rust types and transformation logic
-- deterministic pipeline implementation
+- core pipeline implementation
 - parity tests against the fixture corpus
 
 Exit criteria:

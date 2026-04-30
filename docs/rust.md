@@ -1,12 +1,12 @@
 # Rust / WASM
 
-UI Grid's deterministic engine is being moved into Rust and exposed through WebAssembly.
+UI Grid's core engine is being moved into Rust and exposed through WebAssembly.
 
 Today, the easiest way to run that Rust-backed engine locally is the browser-native demo in `projects/ui-grid-vanilla/`. That demo mounts the grid as a custom element, registers the Rust/WASM pipeline, and lets you interact with sorting, filtering, grouping, virtualization, and CSV export directly in the browser.
 
 ## What runs in Rust today
 
-The Rust/WASM engine currently owns the deterministic pipeline work:
+The Rust/WASM engine currently owns the pipeline work:
 
 - filtering
 - sorting

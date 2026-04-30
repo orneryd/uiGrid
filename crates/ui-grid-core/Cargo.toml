@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Deterministic Rust engine for ui-grid"
+description = "Rust engine for ui-grid"
 
 [dependencies]
 anyhow.workspace = true

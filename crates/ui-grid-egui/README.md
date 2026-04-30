@@ -1,6 +1,6 @@
 # ui-grid-egui
 
-Native [egui](https://github.com/emilk/egui) widget adapter for the [`@ornery/ui-grid`](https://github.com/ornerydev/ui-grid) deterministic grid pipeline. Drop-in data grid with sorting, filtering, grouping, cell editing, tree view, pagination, row selection, and 100K+ row virtualization.
+Native [egui](https://github.com/emilk/egui) widget adapter for the [`@ornery/ui-grid`](https://github.com/ornerydev/ui-grid) angular grid pipeline. Drop-in data grid with sorting, filtering, grouping, cell editing, tree view, pagination, row selection, and 100K+ row virtualization.
 
 ## Usage
 
@@ -63,6 +63,7 @@ cargo run -p ui-grid-egui --example demo --release
 ```
 
 The demo app showcases:
+
 - Column sorting (click header), filtering (type in filter row), and grouping
 - Custom cell renderers (status pills, currency formatting, boolean checkboxes)
 - Cell editing via double-click or Enter, including a date picker widget

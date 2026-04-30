@@ -9,8 +9,8 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
     <section class="docs-topic">
       <h1>Rust / WASM</h1>
       <p class="docs-lead">
-        UI Grid's deterministic engine is being moved into Rust and exposed through WebAssembly.
-        The easiest way to run that engine locally today is the browser-native vanilla demo.
+        UI Grid's core engine is being moved into Rust and exposed through WebAssembly. The easiest
+        way to run that engine locally today is the browser-native vanilla demo.
       </p>
 
       <h2>What runs in Rust</h2>
@@ -31,7 +31,8 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
 
       <h2>Build the compiled UI Grid library</h2>
       <p>
-        The vanilla demo intentionally consumes the compiled library output in <code>dist/ui-grid/</code>
+        The vanilla demo intentionally consumes the compiled library output in
+        <code>dist/ui-grid/</code>
         rather than raw Angular source files.
       </p>
       <app-code-block lang="bash" [code]="libraryBuildSnippet" />
@@ -61,12 +62,15 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
 
       <h2>Current limitation</h2>
       <p>
-        This is not yet a desktop-native Rust UI app. The current local Rust path is a browser-native
-        WASM demo backed by the Rust engine, which is the correct baseline for future Rust-framework wrappers.
+        This is not yet a desktop-native Rust UI app. The current local Rust path is a
+        browser-native WASM demo backed by the Rust engine, which is the correct baseline for future
+        Rust-framework wrappers.
       </p>
     </section>
   `,
-  styles: `@use '../docs-topic';`
+  styles: `
+    @use '../docs-topic';
+  `,
 })
 export class DocsRustComponent {
   protected readonly prereqSnippet = `curl https://sh.rustup.rs -sSf | sh

@@ -2,7 +2,7 @@
 
 `ui-grid-egui` is the native Rust adapter for UI Grid on top of `egui`.
 
-It wraps the deterministic grid model with an `egui` widget layer so Rust applications can render the grid natively without a browser or JavaScript runtime.
+It wraps the core grid model with an `egui` widget layer so Rust applications can render the grid natively without a browser or JavaScript runtime.
 
 ## Install
 

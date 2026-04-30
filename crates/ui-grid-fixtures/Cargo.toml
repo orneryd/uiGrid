@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Deterministic fixtures for ui-grid parity testing"
+description = "fixtures for ui-grid parity testing"
 publish = false
 
 [dependencies]
