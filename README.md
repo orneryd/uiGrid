@@ -50,6 +50,7 @@ Everything below ships free and MIT-licensed. No enterprise tier, no license key
 | **SSR Support**          | **Free** |         —         |    ~$999/dev/yr    |        —        |     —      |        —        |
 | i18n                     | **Free** |         —         |    ~$999/dev/yr    |      Free       |    Paid    |   Community\*   |
 | React Native             | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
+| Rust/egui Native           | **Yes**  |      No      |      No       |       No        |  No   |     No     |
 | Angular Native           | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
 | **License**              | **MIT**  |        MIT        |     Commercial     |  Apache/Comm.   | Commercial | Comm./Community |
 
@@ -259,6 +260,7 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Internationalization](./docs/i18n.md)       | Runtime overrides, build-time locales                  |
 | [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
 | [Rust / WASM](./docs/rust.md)                | Build and run the Rust-backed browser demo locally     |
+| [Rust / egui](./docs/rust-egui.md)           | Native Rust egui adapter usage and local demo          |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 

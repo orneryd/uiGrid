@@ -93,3 +93,4 @@ Open `http://127.0.0.1:4174/` to see the framework-agnostic vanilla demo that mo
 - [Theming](./theming.md) — customize colors and layout via CSS custom properties
 - [API Reference](./api-reference.md) — full GridOptions, GridColumnDef, and UiGridApi documentation
 - [Rust / WASM](./rust.md) — build and run the Rust-backed browser demo locally
+- [Rust / egui](./rust-egui.md) — use the native Rust `ui-grid-egui` adapter in egui apps

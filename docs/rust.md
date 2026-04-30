@@ -123,3 +123,5 @@ npm run build:rust:web
 This is not yet a desktop-native Rust UI app. The current local "Rust app" path is a browser-native WASM demo backed by the Rust engine.
 
 That is the correct baseline for the next phase: adding thin wrappers for Rust-specific UI frameworks without duplicating the grid engine.
+
+If you want the native Rust widget adapter instead, see [Rust / egui](./rust-egui.md).
