@@ -169,6 +169,8 @@ export interface GridLabels {
   statsVisibleRows: string;
   /** Group row – "rows" suffix */
   groupRowsSuffix: string;
+  /** Pin trigger for choosing left or right */
+  pinColumn: string;
   /** Pin left action */
   pinLeft: string;
   /** Pin right action */

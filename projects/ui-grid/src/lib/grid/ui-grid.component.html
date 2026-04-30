@@ -68,10 +68,11 @@
           [attr.aria-sort]="sortingFeature ? sortAriaSort(column) : null" cdkDrag [cdkDragData]="column"
           [cdkDragDisabled]="!columnMovingFeature"
           [class.is-active]="sortingFeature && sortDirection(column) !== 'none'" [class.is-pinned]="isPinned(column)"
+          [class.is-pin-menu-open]="isPinMenuOpen(column)"
           [style.position]="isPinned(column) ? 'sticky' : null"
           [style.left]="pinnedOffset(column)?.side === 'left' ? pinnedOffset(column)?.offset : null"
           [style.right]="pinnedOffset(column)?.side === 'right' ? pinnedOffset(column)?.offset : null"
-          [style.zIndex]="isPinned(column) ? 2 : null">
+          [style.zIndex]="isPinMenuOpen(column) ? 8 : isPinned(column) ? 2 : null">
           <span class="header-label">{{ headerLabel(column) }}</span>
 
           <div class="header-actions">
@@ -111,14 +112,41 @@
             </button>
             }
             @if (pinningFeature && isPinningEnabled() && isColumnPinnable(column)) {
-            <button type="button" class="chip-action" part="pin-toggle" [class.chip-action-active]="isPinned(column)"
-              [attr.aria-label]="isPinned(column) ? labels().unpin : labels().pinLeft"
-              [attr.title]="isPinned(column) ? labels().unpin : labels().pinLeft" (click)="togglePin(column)">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z"></path>
-              </svg>
-              <span class="sr-only ui-grid-sr-only">{{ isPinned(column) ? labels().unpin : labels().pinLeft }}</span>
-            </button>
+            <div class="pin-control" [class.pin-control-open]="isPinMenuOpen(column)" (click)="$event.stopPropagation()">
+              <button type="button" class="chip-action pin-trigger" part="pin-toggle"
+                [class.chip-action-active]="isPinned(column) || isPinMenuOpen(column)"
+                [attr.aria-label]="pinButtonLabel(column)" [attr.title]="pinButtonLabel(column)"
+                [attr.aria-haspopup]="isPinned(column) ? null : 'menu'"
+                [attr.aria-expanded]="isPinned(column) ? null : isPinMenuOpen(column)"
+                (click)="onPinTrigger(column, $event)">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z"></path>
+                </svg>
+                <span class="sr-only ui-grid-sr-only">{{ pinButtonLabel(column) }}</span>
+              </button>
+
+              <div class="pin-menu" part="pin-menu" role="menu" aria-label="Pin options"
+                [attr.aria-hidden]="!isPinMenuOpen(column)">
+                <button type="button" class="pin-menu-action" part="pin-left-action" role="menuitem"
+                  [attr.aria-label]="labels().pinLeft" [attr.title]="labels().pinLeft"
+                  [tabIndex]="isPinMenuOpen(column) ? 0 : -1"
+                  (click)="choosePinDirection(column, 'left', $event)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M10 6 4 12l6 6v-4h10v-4H10V6z"></path>
+                  </svg>
+                  <span class="sr-only ui-grid-sr-only">{{ labels().pinLeft }}</span>
+                </button>
+                <button type="button" class="pin-menu-action" part="pin-right-action" role="menuitem"
+                  [attr.aria-label]="labels().pinRight" [attr.title]="labels().pinRight"
+                  [tabIndex]="isPinMenuOpen(column) ? 0 : -1"
+                  (click)="choosePinDirection(column, 'right', $event)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M14 6v4H4v4h10v4l6-6-6-6z"></path>
+                  </svg>
+                  <span class="sr-only ui-grid-sr-only">{{ labels().pinRight }}</span>
+                </button>
+              </div>
+            </div>
             }
           </div>
         </div>

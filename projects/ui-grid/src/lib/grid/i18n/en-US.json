@@ -23,8 +23,8 @@
   "toolbarOf": "of",
   "toolbarRows": "rows",
   "statsVisibleRows": "visible rows",
-  "groupRowsSuffix": "rows"
-  ,
+  "groupRowsSuffix": "rows",
+  "pinColumn": "Pin column",
   "pinLeft": "Pin left",
   "pinRight": "Pin right",
   "unpin": "Unpin"

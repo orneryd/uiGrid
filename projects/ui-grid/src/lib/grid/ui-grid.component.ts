@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   PLATFORM_ID,
   TemplateRef,
   ViewEncapsulation,
@@ -197,6 +198,7 @@ export class UiGridComponent {
   protected readonly expandedRows = signal<Record<string, boolean>>({});
   protected readonly expandedTreeRows = signal<Record<string, boolean>>({});
   protected readonly pinnedColumns = signal<PinnedColumnState>({});
+  protected readonly openPinMenuColumn = signal<string | null>(null);
   protected readonly currentPage = signal(1);
   protected readonly pageSize = signal(0);
   protected readonly autoViewportHeight = signal<number | null>(null);
@@ -297,6 +299,7 @@ export class UiGridComponent {
       this.columnOrder.set(options.columnDefs.map((column) => column.name));
       this.groupByColumns.set(options.grouping?.groupBy ?? []);
       this.pinnedColumns.set(buildInitialPinnedState(options.columnDefs));
+      this.openPinMenuColumn.set(null);
       this.currentPage.set(options.paginationCurrentPage ?? 1);
       this.pageSize.set(this.initialPageSize(options));
       this.scrollTop.set(0);
@@ -774,11 +777,20 @@ export class UiGridComponent {
     return this.pinnedColumns()[column.name] !== undefined;
   }
 
+  protected isPinMenuOpen(column: GridColumnDef): boolean {
+    return this.openPinMenuColumn() === column.name;
+  }
+
+  protected pinButtonLabel(column: GridColumnDef): string {
+    return this.isPinned(column) ? this.labels().unpin : this.labels().pinColumn;
+  }
+
   protected pinnedOffset(column: GridColumnDef): { side: 'left' | 'right'; offset: string } | null {
     return computePinnedOffset(this.visibleColumns(), this.pinnedColumns(), column);
   }
 
   protected pinColumn(columnName: string, direction: PinDirection): void {
+    this.openPinMenuColumn.set(null);
     pinGridColumnCommand(
       this.gridApi,
       this.isPinningEnabled(),
@@ -789,10 +801,48 @@ export class UiGridComponent {
     );
   }
 
-  protected togglePin(column: GridColumnDef): void {
-    const current = this.pinnedColumns()[column.name];
-    const next: PinDirection = current === 'left' ? 'right' : current === 'right' ? 'none' : 'left';
-    this.pinColumn(column.name, next);
+  protected onPinTrigger(column: GridColumnDef, event?: Event): void {
+    event?.stopPropagation();
+    if (this.isPinned(column)) {
+      this.pinColumn(column.name, 'none');
+      return;
+    }
+
+    this.openPinMenuColumn.update((current) => current === column.name ? null : column.name);
+  }
+
+  protected choosePinDirection(column: GridColumnDef, direction: 'left' | 'right', event?: Event): void {
+    event?.stopPropagation();
+    this.pinColumn(column.name, direction);
+  }
+
+  @HostListener('document:click', ['$event'])
+  protected handleDocumentClick(event: Event): void {
+    if (!this.openPinMenuColumn() || this.eventPathIncludesClass(event, 'pin-control')) {
+      return;
+    }
+
+    this.openPinMenuColumn.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  protected handleDocumentEscape(): void {
+    this.openPinMenuColumn.set(null);
+  }
+
+  private eventPathIncludesClass(event: Event, className: string): boolean {
+    const eventPath = typeof event.composedPath === 'function'
+      ? event.composedPath()
+      : (event.target ? [event.target] : []);
+
+    return eventPath.some((target) => {
+      if (!target || typeof target !== 'object' || !('classList' in target)) {
+        return false;
+      }
+
+      const classList = (target as { classList?: DOMTokenList }).classList;
+      return classList?.contains(className) ?? false;
+    });
   }
 
   private toggleGroupingByName(columnName: string): void {

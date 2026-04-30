@@ -1234,6 +1234,77 @@ describe('UiGridComponent', () => {
     ]);
   });
 
+  it('opens a left-right pin menu for unpinned columns and unpins directly from an active pin button', () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput('options', createOptions({
+      enablePinning: true,
+      columnDefs: [
+        { name: 'name', displayName: 'Customer' },
+        { name: 'status' },
+        { name: 'revenue', align: 'end' },
+      ],
+    }));
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as any;
+    const shadowRoot = getShadowRoot(fixture);
+    const pinToggleFor = (headerLabel: string): HTMLButtonElement => {
+      const headerCell = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
+        node.querySelector('.header-label')?.textContent?.trim() === headerLabel,
+      ) as HTMLElement | undefined;
+
+      if (!headerCell) {
+        throw new Error(`Missing header cell for ${headerLabel}`);
+      }
+
+      return headerCell.querySelector('[part="pin-toggle"]') as HTMLButtonElement;
+    };
+
+    pinToggleFor('Customer').click();
+    fixture.detectChanges();
+
+    const customerHeader = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
+      node.querySelector('.header-label')?.textContent?.trim() === 'Customer',
+    ) as HTMLElement;
+    const customerMenu = customerHeader.querySelector('[part="pin-menu"]') as HTMLElement;
+    expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(true);
+    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(true);
+    expect(customerMenu.getAttribute('aria-hidden')).toBe('false');
+    expect(customerHeader.querySelector('[part="pin-left-action"]')).not.toBeNull();
+    expect(customerHeader.querySelector('[part="pin-right-action"]')).not.toBeNull();
+
+    (customerHeader.querySelector('[part="pin-left-action"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.pinnedColumns()).toMatchObject({ name: 'left' });
+    expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(false);
+    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(false);
+    expect(customerMenu.getAttribute('aria-hidden')).toBe('true');
+
+    pinToggleFor('Customer').click();
+    fixture.detectChanges();
+
+    expect(component.pinnedColumns().name).toBeUndefined();
+    expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(false);
+    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(false);
+
+    pinToggleFor('Status').click();
+    fixture.detectChanges();
+    const statusHeader = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
+      node.querySelector('.header-label')?.textContent?.trim() === 'Status',
+    ) as HTMLElement;
+    const statusMenu = statusHeader.querySelector('[part="pin-menu"]') as HTMLElement;
+    expect(statusHeader.classList.contains('is-pin-menu-open')).toBe(true);
+    expect(statusMenu.getAttribute('aria-hidden')).toBe('false');
+
+    (statusHeader.querySelector('[part="pin-right-action"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.pinnedColumns()).toMatchObject({ status: 'right' });
+    expect(statusHeader.classList.contains('is-pin-menu-open')).toBe(false);
+    expect(statusMenu.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('raises infinite scroll load events near the top and bottom of the viewport', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
