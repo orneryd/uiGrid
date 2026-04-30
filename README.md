@@ -1,15 +1,16 @@
 [![CI](https://github.com/orneryd/uiGrid/actions/workflows/ci.yml/badge.svg)](https://github.com/orneryd/uiGrid/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/orneryd/uiGrid/badge.svg?branch=main)](https://coveralls.io/github/orneryd/uiGrid?branch=main)
 [![npm](https://img.shields.io/npm/v/@ornery/ui-grid)](https://www.npmjs.com/package/@ornery/ui-grid)
+[![crates.io](https://img.shields.io/crates/v/ui-grid-egui)](https://crates.io/crates/ui-grid-egui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
 
 # UI Grid — Remastered
 
-**The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, and React**
+**The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, React, and native Rust/egui.**
 
 A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` api surface, modern Angular signals internals, and zero legacy baggage.
 
-**[Live Demo & Docs](https://orneryd.github.io/uiGrid/)** | **[npm](https://www.npmjs.com/package/@ornery/ui-grid)**
+**[Live Demo & Docs](https://orneryd.github.io/uiGrid/)** | **[npm](https://www.npmjs.com/package/@ornery/ui-grid)** | **[crates.io](https://crates.io/crates/ui-grid-egui)**
 
 ---
 
@@ -105,6 +106,36 @@ export class MyGridComponent {
   };
 </script>
 ```
+
+### Native Rust / egui
+
+```toml
+[dependencies]
+ui-grid-egui = "0.1"
+ui-grid-core = "0.1"
+```
+
+```rust
+use ui_grid_egui::{EguiGrid, EguiColumnExt, GridThemePreset};
+use ui_grid_core::models::{GridOptions, GridColumnDef};
+
+let mut grid = EguiGrid::new();
+let theme = GridThemePreset::DefaultDark.build();
+let mut column_ext: Vec<EguiColumnExt> = vec![];
+
+// Each frame, inside your egui UI:
+grid.show(ui, &mut options, &columns, &mut column_ext, &theme);
+```
+
+To run the interactive demo app locally:
+
+```bash
+git clone https://github.com/orneryd/uiGrid.git
+cd uiGrid
+cargo run -p ui-grid-egui --example demo --release
+```
+
+See the [ui-grid-egui README](./crates/ui-grid-egui/README.md) for custom formatters, renderers, and editors.
 
 ---
 
@@ -212,6 +243,16 @@ npm run build:rust:web  # Build the browser-native Rust/WASM artifact
 npm run start:vanilla   # Run the Rust-backed browser demo at 127.0.0.1:4174
 ```
 
+### Rust / egui
+
+Requires [Rust 1.95+](https://rustup.rs/).
+
+```bash
+cargo test --workspace                                    # Run all Rust tests
+cargo clippy --workspace --all-targets -- -D warnings     # Lint
+cargo run -p ui-grid-egui --example demo --release        # Run the native egui demo app
+```
+
 ---
 
 ## Compatibility
@@ -224,6 +265,8 @@ npm run start:vanilla   # Run the Rust-backed browser demo at 127.0.0.1:4174
 | RxJS        | 7.8     |
 | Node        | 22.20   |
 | npm         | 11.11   |
+| Rust        | 1.95+   |
+| egui        | 0.34    |
 
 ---
 
