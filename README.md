@@ -3,7 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@ornery/ui-grid)](https://www.npmjs.com/package/@ornery/ui-grid)
 [![crates.io](https://img.shields.io/crates/v/ui-grid-egui)](https://crates.io/crates/ui-grid-egui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
-[![Discord](https://img.shields.io/discord/1225884976722018356?style=for-the-badge&logo=discord&logoColor=white&color=7289da)](https://discord.gg/Baz4w8ZWN)
+
+### [Discord Community](https://discord.gg/Baz4w8ZWN)
 
 # UI Grid — Remastered
 
