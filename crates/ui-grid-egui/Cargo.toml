@@ -1,0 +1,28 @@
+[package]
+name = "ui-grid-egui"
+description = "egui widget adapter for @ornery/ui-grid"
+readme = "README.md"
+keywords = ["egui", "grid", "table", "datagrid", "ui"]
+categories = ["gui"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+ui-grid-core = { path = "../ui-grid-core", version = "0.1" }
+egui = { workspace = true }
+egui_extras = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ui-grid-fixtures = { path = "../ui-grid-fixtures", version = "0.1" }
+eframe = { workspace = true }
+egui_extras = { workspace = true, features = ["datepicker"] }
+jiff = { workspace = true }
+
+[[example]]
+name = "demo"
+path = "examples/demo/main.rs"
