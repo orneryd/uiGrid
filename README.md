@@ -4,7 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/ui-grid-egui)](https://crates.io/crates/ui-grid-egui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
 
-### [Discord Community](https://discord.gg/Baz4w8ZWN)
+#### [Discord Community](https://discord.gg/Baz4w8ZWN)
 
 # UI Grid — Remastered
 
