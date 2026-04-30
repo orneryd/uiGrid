@@ -90,6 +90,23 @@ fn icon_button(ui: &mut Ui, icon: IconKind, color: Color32) -> egui::Response {
     response
 }
 
+/// Paint an expand/collapse icon without registering interaction.
+/// Returns the allocated rect (with padding) so the caller can do hit-testing.
+fn expand_icon_passive(ui: &mut Ui, expanded: bool, color: Color32) -> egui::Rect {
+    let size = Vec2::new(24.0, 24.0);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let c = rect.center();
+        let h = 5.0 * 0.8;
+        if expanded {
+            paint_triangle(ui.painter(), c, h, TriDir::Down, color);
+        } else {
+            paint_triangle(ui.painter(), c, h, TriDir::Right, color);
+        }
+    }
+    rect
+}
+
 enum TriDir {
     Right,
     Down,
@@ -913,9 +930,11 @@ impl EguiGrid {
         // Render cell content
         ui.add_space(theme.cell_padding_x);
 
-        if col_index == 0 {
-            self.draw_row_leading_controls(ui, options, row_item, theme);
-        }
+        let expand_icon_rect = if col_index == 0 {
+            self.draw_row_leading_controls(ui, options, row_item, theme)
+        } else {
+            None
+        };
 
         let is_editing = self.edit_session.as_ref().is_some_and(|s| {
             s.editing_cell.row_id == row_item.row.id && s.editing_cell.column_name == column.name
@@ -937,51 +956,79 @@ impl EguiGrid {
             );
 
             if response.clicked() {
-                // Commit any in-progress edit on a different cell
-                if self.edit_session.is_some() {
-                    self.commit_edit(options, columns);
-                }
-
-                let shift = ui.input(|i| i.modifiers.shift);
-                self.handle_row_click(&row_item.row.id, shift);
-
-                self.focused_cell = Some(GridCellPosition {
-                    row_id: row_item.row.id.clone(),
-                    column_name: column.name.clone(),
+                // Check if the click landed on the expand icon
+                let click_pos = ui.input(|i| i.pointer.interact_pos());
+                let hit_expand = expand_icon_rect.is_some_and(|icon_rect| {
+                    click_pos.is_some_and(|pos| icon_rect.contains(pos))
                 });
-            }
 
-            if response.double_clicked() {
-                // Commit any in-progress edit on a different cell
-                if self.edit_session.is_some() {
-                    self.commit_edit(options, columns);
-                }
+                if hit_expand {
+                    // Toggle expansion and select the row, but don't focus the cell
+                    self.toggle_row_expansion(options, row_item);
+                    self.selected_row_ids = vec![row_item.row.id.clone()];
+                    self.last_clicked_row_id = Some(row_item.row.id.clone());
+                    self.events.push(EguiGridEvent {
+                        kind: EguiGridEventKind::SelectionChanged {
+                            selected_ids: self.selected_row_ids.clone(),
+                        },
+                    });
+                } else {
+                    // Normal cell click — commit any in-progress edit, select row, focus cell
+                    if self.edit_session.is_some() {
+                        self.commit_edit(options, columns);
+                    }
 
-                let is_editable = column.enable_cell_edit || options.enable_cell_edit;
-                if is_editable {
+                    let shift = ui.input(|i| i.modifiers.shift);
+                    self.handle_row_click(&row_item.row.id, shift);
+
                     self.focused_cell = Some(GridCellPosition {
                         row_id: row_item.row.id.clone(),
                         column_name: column.name.clone(),
                     });
-                    let current_value = get_cell_value(&row_item.row.entity, column);
-                    let session = begin_grid_edit_session(
-                        &row_item.row.id,
-                        &column.name,
-                        stringify_grid_editor_value(&current_value),
-                    );
-                    self.edit_session = Some(session);
+                }
+            }
+
+            if response.double_clicked() {
+                // Don't enter edit mode if double-clicking the expand icon
+                let click_pos = ui.input(|i| i.pointer.interact_pos());
+                let hit_expand = expand_icon_rect.is_some_and(|icon_rect| {
+                    click_pos.is_some_and(|pos| icon_rect.contains(pos))
+                });
+
+                if !hit_expand {
+                    if self.edit_session.is_some() {
+                        self.commit_edit(options, columns);
+                    }
+
+                    let is_editable = column.enable_cell_edit || options.enable_cell_edit;
+                    if is_editable {
+                        self.focused_cell = Some(GridCellPosition {
+                            row_id: row_item.row.id.clone(),
+                            column_name: column.name.clone(),
+                        });
+                        let current_value = get_cell_value(&row_item.row.entity, column);
+                        let session = begin_grid_edit_session(
+                            &row_item.row.id,
+                            &column.name,
+                            stringify_grid_editor_value(&current_value),
+                        );
+                        self.edit_session = Some(session);
+                    }
                 }
             }
         }
     }
 
+    /// Draws leading controls (tree indent, expand icon) and returns the expand
+    /// icon rect if one was drawn.  The icon is painted passively — click
+    /// handling is done by the cell overlay in `draw_data_row`.
     fn draw_row_leading_controls(
         &mut self,
         ui: &mut Ui,
         options: &GridOptions,
         row_item: &RowItem,
         theme: &GridTheme,
-    ) {
+    ) -> Option<egui::Rect> {
         if options.enable_tree_view && row_item.row.tree_level > 0 {
             let indent = row_item.row.tree_level as f32 * theme.tree_indent_per_level;
             ui.add_space(indent);
@@ -993,25 +1040,9 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            let icon = if expanded {
-                IconKind::ExpandDown
-            } else {
-                IconKind::ExpandRight
-            };
-            if icon_button(ui, icon, theme.accent).clicked() {
-                let next = !expanded;
-                self.expanded_tree_rows
-                    .insert(row_item.row.id.clone(), next);
-                self.pipeline_dirty = true;
-                self.events.push(EguiGridEvent {
-                    kind: EguiGridEventKind::TreeNodeToggled {
-                        row_id: row_item.row.id.clone(),
-                        expanded: next,
-                    },
-                });
-            }
+            return Some(expand_icon_passive(ui, expanded, theme.accent));
         } else if options.enable_tree_view {
-            ui.add_space(16.0);
+            ui.add_space(24.0);
         }
 
         if options.enable_expandable && !options.enable_tree_view {
@@ -1020,23 +1051,10 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            let icon = if expanded {
-                IconKind::ExpandDown
-            } else {
-                IconKind::ExpandRight
-            };
-            if icon_button(ui, icon, theme.accent).clicked() {
-                let next = !expanded;
-                self.expanded_rows.insert(row_item.row.id.clone(), next);
-                self.pipeline_dirty = true;
-                self.events.push(EguiGridEvent {
-                    kind: EguiGridEventKind::RowExpanded {
-                        row_id: row_item.row.id.clone(),
-                        expanded: next,
-                    },
-                });
-            }
+            return Some(expand_icon_passive(ui, expanded, theme.accent));
         }
+
+        None
     }
 
     fn draw_formatted_cell(
@@ -1095,6 +1113,41 @@ impl EguiGrid {
                 .show(ui)
                 .response;
             response.request_focus();
+        }
+    }
+
+    fn toggle_row_expansion(&mut self, options: &GridOptions, row_item: &RowItem) {
+        if options.enable_tree_view && row_item.row.has_children {
+            let expanded = self
+                .expanded_tree_rows
+                .get(&row_item.row.id)
+                .copied()
+                .unwrap_or(false);
+            let next = !expanded;
+            self.expanded_tree_rows
+                .insert(row_item.row.id.clone(), next);
+            self.pipeline_dirty = true;
+            self.events.push(EguiGridEvent {
+                kind: EguiGridEventKind::TreeNodeToggled {
+                    row_id: row_item.row.id.clone(),
+                    expanded: next,
+                },
+            });
+        } else if options.enable_expandable && !options.enable_tree_view {
+            let expanded = self
+                .expanded_rows
+                .get(&row_item.row.id)
+                .copied()
+                .unwrap_or(false);
+            let next = !expanded;
+            self.expanded_rows.insert(row_item.row.id.clone(), next);
+            self.pipeline_dirty = true;
+            self.events.push(EguiGridEvent {
+                kind: EguiGridEventKind::RowExpanded {
+                    row_id: row_item.row.id.clone(),
+                    expanded: next,
+                },
+            });
         }
     }
 
