@@ -5,9 +5,9 @@
 ### Added
 
 - **Column Pinning** — freeze columns left/right via CSS `position: sticky`. New `enablePinning` option on `GridOptions` and `GridColumnDef`, `pinnedLeft`/`pinnedRight` column def properties, and `gridApi.pinning.pinColumn()` programmatic API. Pinning state is included in save/restore. Implemented for both Angular and React.
-- Pin toggle button in column headers (cycles left → right → none).
+- Header pin control for choosing left or right pinning, with direct unpin on already-pinned columns.
 - `FEATURE_PINNING` compile-time feature flag for tree-shaking.
-- Pinning labels (`pinLeft`, `pinRight`, `unpin`) added to `GridLabels` and `en-US.json`.
+- Pinning labels (`pinColumn`, `pinLeft`, `pinRight`, `unpin`) added to `GridLabels` and `en-US.json`.
 - Pinned column styles with opaque backgrounds and edge shadow indicators.
 
 ### Fixed

@@ -52,6 +52,7 @@
   --ui-grid-toolbar-padding-inline: var(--app-ui-grid-toolbar-padding-inline, 1.25rem);
   --ui-grid-toolbar-inline-gap: var(--app-ui-grid-toolbar-inline-gap, 0.4rem);
   --ui-grid-overflow-x: var(--app-ui-grid-overflow-x, auto);
+  --ui-grid-overflow-y: var(--app-ui-grid-overflow-y, auto);
 
   /* Grid layering */
   --ui-grid-header-z-index: var(--app-ui-grid-header-z-index, 3);
@@ -292,7 +293,7 @@ h1 {
   width: 100%;
   min-width: 0;
   overflow-x: var(--ui-grid-overflow-x);
-  overflow-y: hidden;
+  overflow-y: var(--ui-grid-overflow-y);
 }
 
 .header-grid,
