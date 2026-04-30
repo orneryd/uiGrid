@@ -220,7 +220,7 @@ app-ui-grid::part(header) {
 }
 ```
 
-See [docs/theming.md](./docs/theming.md) for the full variable reference, `::part()` hooks, and the demo app's 4-mode theme system.
+See [docs/theming.md](./docs/theming.md) for the full CSS variable reference grouped by grid section, `::part()` hooks, and the demo app's 4-mode theme system.
 
 ---
 
