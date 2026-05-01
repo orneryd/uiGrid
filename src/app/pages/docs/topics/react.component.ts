@@ -26,7 +26,10 @@ type ReactDomClientRuntime = {
 };
 
 type ReactGridRuntime = {
-  UiGrid: unknown;
+  UiGrid?: unknown;
+  default?: {
+    UiGrid: unknown;
+  };
 };
 
 @Component({
@@ -401,12 +404,13 @@ export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid-react';`;
       const [reactModule, reactDomClientModule, reactGridModule] = await Promise.all([
         import('react') as Promise<ReactRuntime>,
         import('react-dom/client') as Promise<ReactDomClientRuntime>,
-        import('@ornery/ui-grid-react') as Promise<ReactGridRuntime>,
+        import('@ornery/ui-grid-react') as unknown as Promise<ReactGridRuntime>,
       ]);
+      const resolvedReactGridModule = reactGridModule.default ?? reactGridModule;
 
       this.reactRoot = reactDomClientModule.createRoot(host);
       this.reactRoot.render(
-        reactModule.createElement(reactGridModule.UiGrid, {
+        reactModule.createElement(resolvedReactGridModule.UiGrid, {
           options: this.demoOptions,
           className: 'react-docs-demo-grid',
         })
