@@ -224,6 +224,20 @@
   align-items: center;
 }
 
+.header-cell[draggable='true'] {
+  cursor: grab;
+}
+
+.header-cell.is-dragging {
+  opacity: 0.6;
+}
+
+.header-cell.is-drag-target {
+  background: color-mix(in srgb, var(--ui-grid-accent) 9%, var(--ui-grid-header-background));
+  border: 1px dashed color-mix(in srgb, var(--ui-grid-accent) 45%, var(--ui-grid-border-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-grid-accent) 18%, transparent);
+}
+
 .header-cell.is-active {
   background: color-mix(in srgb, var(--ui-grid-accent) 8%, var(--ui-grid-header-background));
 }

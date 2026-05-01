@@ -308,6 +308,7 @@ export interface UseGridStateResult {
   toggleRowExpansion: (row: GridRow, event?: React.MouseEvent) => void;
   toggleTreeRow: (row: GridRow, event?: React.MouseEvent) => void;
   moveColumn: (fromIndex: number, toIndex: number) => void;
+  moveVisibleColumn: (columnName: string, targetColumnName: string) => void;
   nextPage: () => void;
   previousPage: () => void;
   onPageSizeChange: (value: string) => void;
@@ -1571,6 +1572,18 @@ export function useGridState(
     );
   }, []);
 
+  const moveVisibleColumnFn = useCallback((columnName: string, targetColumnName: string): void => {
+    moveGridVisibleColumnCommand(
+      gridApiRef.current!,
+      FEATURE_COLUMN_MOVING && optionsRef.current.enableColumnMoving === true,
+      columnOrderRef.current,
+      visibleColumnsRef.current.map((column) => column.name),
+      columnName,
+      targetColumnName,
+      (order) => setColumnOrder(order),
+    );
+  }, []);
+
   const nextPageFn = useCallback((): void => {
     seekPageFn(getCurrentPageValueFn() + 1);
   }, [seekPageFn, getCurrentPageValueFn]);
@@ -1718,6 +1731,7 @@ export function useGridState(
     toggleRowExpansion: toggleRowExpansionFn,
     toggleTreeRow: toggleTreeRowFn,
     moveColumn: moveColumnFn,
+    moveVisibleColumn: moveVisibleColumnFn,
     nextPage: nextPageFn,
     previousPage: previousPageFn,
     onPageSizeChange: onPageSizeChangeFn,

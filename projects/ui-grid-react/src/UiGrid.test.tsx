@@ -164,6 +164,47 @@ describe('UiGrid React component', () => {
     ]);
   });
 
+  it('reorders visible columns by header drag and drop without shifting hidden columns', () => {
+    const { container } = renderGrid({
+      columnDefs: [
+        { name: 'id', visible: false },
+        { name: 'name', displayName: 'Customer' },
+        { name: 'status' },
+        { name: 'revenue' },
+        { name: 'owner', field: 'account.owner' },
+        { name: 'badge' },
+      ],
+    });
+
+    const dataTransfer = {
+      effectAllowed: 'all',
+      dropEffect: 'none',
+      store: new Map<string, string>(),
+      setData(type: string, value: string) {
+        this.store.set(type, value);
+      },
+      getData(type: string) {
+        return this.store.get(type) ?? '';
+      },
+    };
+
+    const sourceHeader = container.querySelectorAll('.header-cell')[4] as HTMLElement;
+    const targetHeader = container.querySelectorAll('.header-cell')[1] as HTMLElement;
+
+    act(() => {
+      fireEvent.dragStart(sourceHeader, { dataTransfer });
+      fireEvent.dragOver(targetHeader, { dataTransfer });
+      fireEvent.drop(targetHeader, { dataTransfer });
+      fireEvent.dragEnd(sourceHeader, { dataTransfer });
+    });
+
+    const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
+      el.textContent?.trim()
+    );
+
+    expect(headers).toEqual(['Customer', 'Badge', 'Status', 'Revenue', 'Owner']);
+  });
+
   it('groups rows and collapses groups', () => {
     const { container, gridApi } = renderGrid();
 

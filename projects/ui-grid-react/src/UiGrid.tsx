@@ -51,6 +51,7 @@ export function UiGrid({
     expandableFeature,
     treeViewFeature,
     csvExportFeature,
+    columnMovingFeature,
     paginationCurrentPage,
     paginationTotalPages,
     paginationSelectedPageSize,
@@ -66,6 +67,8 @@ export function UiGrid({
   const headerGridRef = React.useRef<HTMLDivElement | null>(null);
   const filterGridRef = React.useRef<HTMLDivElement | null>(null);
   const [openPinMenuColumn, setOpenPinMenuColumn] = React.useState<string | null>(null);
+  const [draggedColumnName, setDraggedColumnName] = React.useState<string | null>(null);
+  const [dropTargetColumnName, setDropTargetColumnName] = React.useState<string | null>(null);
   const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
   const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
   const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
@@ -118,6 +121,60 @@ export function UiGrid({
     },
     [state],
   );
+
+  const handleHeaderDragStart = React.useCallback(
+    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
+      if (!columnMovingFeature) {
+        event.preventDefault();
+        return;
+      }
+
+      setDraggedColumnName(column.name);
+      setDropTargetColumnName(null);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', column.name);
+    },
+    [columnMovingFeature],
+  );
+
+  const handleHeaderDragOver = React.useCallback(
+    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
+      if (!columnMovingFeature || !draggedColumnName || draggedColumnName === column.name) {
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDropTargetColumnName(column.name);
+    },
+    [columnMovingFeature, draggedColumnName],
+  );
+
+  const handleHeaderDrop = React.useCallback(
+    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+
+      if (!columnMovingFeature) {
+        return;
+      }
+
+      const sourceColumnName = draggedColumnName ?? event.dataTransfer.getData('text/plain');
+      setDraggedColumnName(null);
+      setDropTargetColumnName(null);
+
+      if (!sourceColumnName || sourceColumnName === column.name) {
+        return;
+      }
+
+      state.moveVisibleColumn(sourceColumnName, column.name);
+    },
+    [columnMovingFeature, draggedColumnName, state],
+  );
+
+  const handleHeaderDragEnd = React.useCallback(() => {
+    setDraggedColumnName(null);
+    setDropTargetColumnName(null);
+  }, []);
 
   React.useLayoutEffect(() => {
     setHeaderStickyHeight(headerGridRef.current?.offsetHeight ?? 0);
@@ -431,10 +488,20 @@ export function UiGrid({
                 return (
                 <div
                   key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}`}
+                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}${draggedColumnName === column.name ? ' is-dragging' : ''}${dropTargetColumnName === column.name ? ' is-drag-target' : ''}`}
                   data-part="header-cell"
                   role="columnheader"
                   aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
+                  draggable={columnMovingFeature}
+                  onDragStart={(event) => handleHeaderDragStart(column, event)}
+                  onDragOver={(event) => handleHeaderDragOver(column, event)}
+                  onDrop={(event) => handleHeaderDrop(column, event)}
+                  onDragEnd={handleHeaderDragEnd}
+                  onDragLeave={() => {
+                    if (dropTargetColumnName === column.name) {
+                      setDropTargetColumnName(null);
+                    }
+                  }}
                   style={{
                     position: pinned ? 'sticky' : undefined,
                     left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,

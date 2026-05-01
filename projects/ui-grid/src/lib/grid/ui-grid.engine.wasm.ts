@@ -2,6 +2,7 @@ import type { BuildGridPipelineContext, PipelineResult } from './grid.core';
 import { registerRustWasmGridEngine } from './ui-grid.engine';
 
 type UiGridWasmModule = typeof import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
+const uiGridWasmModulePath = '../../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
 
 export function registerUiGridWasmEngineFromModule(module: UiGridWasmModule): void {
   registerRustWasmGridEngine({
@@ -12,6 +13,6 @@ export function registerUiGridWasmEngineFromModule(module: UiGridWasmModule): vo
 }
 
 export async function enableUiGridWasmEngine(): Promise<void> {
-  const module = await import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
+  const module = await import(/* @vite-ignore */ uiGridWasmModulePath);
   registerUiGridWasmEngineFromModule(module);
 }

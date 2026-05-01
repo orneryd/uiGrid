@@ -39,6 +39,7 @@ export type {
 export type { PinDirection, PinnedColumnState } from './grid.core.pinning';
 
 type UiGridWasmCoreModule = typeof import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
+const uiGridWasmCoreModulePath = '../../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
 
 
 let wasmCore: UiGridWasmCoreModule | null = null;
@@ -50,7 +51,7 @@ export async function initWasmCore(): Promise<boolean> {
   }
 
   if (!wasmInitPromise) {
-    wasmInitPromise = import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js')
+    wasmInitPromise = import(/* @vite-ignore */ uiGridWasmCoreModulePath)
       .then((module) => {
         wasmCore = module;
         return true;
