@@ -34,7 +34,7 @@
   },
   "scripts": {
     "start": "vite serve demo --config demo/vite.config.ts",
-    "build": "tsup src/index.ts --format esm,cjs --dts --tsconfig tsconfig.json --external react --external react-dom --external @ornery/ui-grid",
+    "build": "npm run build:library --prefix ../.. && tsup src/index.ts --format esm,cjs --tsconfig tsconfig.build.json --external react --external react-dom --external @ornery/ui-grid && tsc -p tsconfig.dts.json",
     "test": "vitest run",
     "test:watch": "vitest"
   }

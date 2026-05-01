@@ -88,19 +88,10 @@ import {
   FEATURE_AUTO_RESIZE,
   FEATURE_SAVE_STATE,
   FEATURE_PINNING,
-} from '@ornery/ui-grid';
-import type {
-  DisplayItem,
-  GroupItem,
-  ExpandableItem,
-  RowItem,
-  PipelineResult,
-  GridInfiniteScrollState,
-  GridMoveDirection,
-  GridCellTemplateContext,
-  GridExpandableTemplateContext,
-} from '@ornery/ui-grid';
-import {
+  buildInitialPinnedState,
+  computePinnedOffset,
+  isColumnPinnable,
+  isPinningEnabled,
   applyGridSortStateCommand,
   updateGridFilterCommand,
   clearGridFiltersCommand,
@@ -127,16 +118,6 @@ import {
   setGridInfiniteScrollDirectionsCommand,
   restoreGridStateCommand,
   pinGridColumnCommand,
-} from '../../ui-grid/src/lib/grid/ui-grid.commands';
-import {
-  buildInitialPinnedState,
-  computePinnedOffset,
-  isColumnPinnable,
-  isPinningEnabled,
-  PinDirection,
-  PinnedColumnState,
-} from '../../ui-grid/src/lib/grid/grid.core';
-import {
   raiseGridRenderingComplete,
   raiseGridRowsRendered,
   raiseGridRowsVisibleChanged,
@@ -145,8 +126,22 @@ import {
   raiseGridScrollBegin,
   raiseGridScrollEnd,
   raiseGridBenchmarkComplete,
-} from '../../ui-grid/src/lib/grid/ui-grid.events';
-import { downloadGridCsvFile, observeGridHostSize } from '../../ui-grid/src/lib/grid/ui-grid.host';
+  downloadGridCsvFile,
+  observeGridHostSize,
+} from '@ornery/ui-grid';
+import type {
+  DisplayItem,
+  GroupItem,
+  ExpandableItem,
+  RowItem,
+  PipelineResult,
+  GridInfiniteScrollState,
+  GridMoveDirection,
+  GridCellTemplateContext,
+  GridExpandableTemplateContext,
+  PinDirection,
+  PinnedColumnState,
+} from '@ornery/ui-grid';
 
 function escapeCssSelectorValue(value: string): string {
   const nativeEscape = globalThis.CSS?.escape;
