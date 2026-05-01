@@ -20,7 +20,7 @@
     "test": "npm run build:rust:wasm && ng test --watch=false && npm test --prefix projects/ui-grid-react && npm test --prefix projects/ui-grid-vanilla",
     "test:angular": "npm run build:rust:wasm && ng test --watch=false",
     "test:rust": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --workspace",
-    "test:react": "npm test --prefix projects/ui-grid-react",
+    "test:react": "npm run build:rust:wasm && npm test --prefix projects/ui-grid-react",
     "test:vanilla": "npm run build:library && npm run build:rust:web && npm test --prefix projects/ui-grid-vanilla"
   },
   "private": true,
