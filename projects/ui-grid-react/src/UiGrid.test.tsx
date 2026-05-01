@@ -235,7 +235,8 @@ describe('UiGrid React component', () => {
     });
 
     expect(gridApi.core.getVisibleRows()).toHaveLength(5);
-    expect(container.querySelector('.grid-viewport')).not.toBeNull();
+    expect(container.querySelector('.grid-virtual-spacer')).not.toBeNull();
+    expect(container.querySelector('.grid-virtual-body')).not.toBeNull();
   });
 
   it('paginates rows', () => {
