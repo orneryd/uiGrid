@@ -12,23 +12,20 @@ import type { GridOptions } from '@ornery/ui-grid';
 import { CodeBlockComponent } from '../../shared/code-block.component';
 import { createDemoData } from '../../shared/demo-data';
 
-type ReactRuntime = {
-  createElement: (type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]) => unknown;
-};
-
 type ReactRoot = {
-  render: (node: unknown) => void;
   unmount: () => void;
 };
 
-type ReactDomClientRuntime = {
-  createRoot: (container: Element) => ReactRoot;
-};
-
 type ReactGridRuntime = {
-  UiGrid?: unknown;
+  mountUiGrid?: (container: Element | DocumentFragment, props: {
+    options: GridOptions;
+    className?: string;
+  }) => ReactRoot;
   default?: {
-    UiGrid: unknown;
+    mountUiGrid: (container: Element | DocumentFragment, props: {
+      options: GridOptions;
+      className?: string;
+    }) => ReactRoot;
   };
 };
 
@@ -401,20 +398,13 @@ export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid-react';`;
     }
 
     try {
-      const [reactModule, reactDomClientModule, reactGridModule] = await Promise.all([
-        import('react') as Promise<ReactRuntime>,
-        import('react-dom/client') as Promise<ReactDomClientRuntime>,
-        import('@ornery/ui-grid-react') as unknown as Promise<ReactGridRuntime>,
-      ]);
+      const reactGridModule = await (import('@ornery/ui-grid-react') as unknown as Promise<ReactGridRuntime>);
       const resolvedReactGridModule = reactGridModule.default ?? reactGridModule;
 
-      this.reactRoot = reactDomClientModule.createRoot(host);
-      this.reactRoot.render(
-        reactModule.createElement(resolvedReactGridModule.UiGrid, {
-          options: this.demoOptions,
-          className: 'react-docs-demo-grid',
-        })
-      );
+      this.reactRoot = resolvedReactGridModule.mountUiGrid?.(host, {
+        options: this.demoOptions,
+        className: 'react-docs-demo-grid',
+      }) ?? null;
       this.demoError.set(null);
     } catch (error) {
       this.demoError.set(error instanceof Error ? error.message : String(error));

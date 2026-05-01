@@ -1,5 +1,6 @@
 export { UiGrid } from './UiGrid';
 export type { UiGridProps } from './UiGrid';
+export { mountUiGrid } from './mountUiGrid';
 export { useGridState } from './useGridState';
 export type { UseGridStateResult } from './useGridState';
 export { useVirtualScroll } from './useVirtualScroll';
