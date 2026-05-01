@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.1.6 (web) — 2026-04-30
+
+### Added
+
+- **Column pinning across Angular and React** — freeze columns left or right with CSS `position: sticky`, `enablePinning`, `pinnedLeft`/`pinnedRight`, save/restore support, and `gridApi.pinning.pinColumn()` for programmatic control.
+- Angular/React header pin controls with explicit left/right actions, direct unpinning, and matching pinning labels in `GridLabels` and `en-US.json`.
+- React wrapper docs page mounted inside the Angular docs app so wrapper behavior can be verified directly in the published documentation.
+- Expanded `--ui-grid-*` CSS variable coverage for pinning, layout, controls, scrolling, and state styling.
+- Release packaging now includes the Rust/WASM core artifacts and CI provisions the Rust toolchains needed to build them.
+
+### Changed
+
+- Framework wrappers now route more work through the Rust/WASM core where it improves performance without changing the public API.
+- React docs/demo column widths and header layout were widened so header text and pin controls fit cleanly.
+- Docs and Pages packaging were updated so the published site can bundle and serve the React wrapper consistently.
+
+### Fixed
+
+- Pin button behavior now matches between Angular and React, including left/right pin selection, pin-state icon behavior, and unpin flows.
+- React pinned-column ordering, sticky offsets, and virtualized header/body alignment were corrected.
+- GitHub Pages now mounts the React docs island correctly in production, including local alias/resolver fixes for `@ornery/ui-grid-react` and wrapper-owned mounting to avoid React runtime mismatches.
+- React virtualization tests and docs build type resolution were updated for the current wrapper output and import surface.
+- Pin button visibility uses the same opt-out behavior as the rest of the grid feature flags, and React cell focusing now escapes selector values safely.
+
+## v0.1.2 (Rust crates) — 2026-04-30
+
+### Added
+
+- Rust packaging, screenshots, and documentation updates for the crate workspace and WASM distribution.
+- CI/build pipeline support for Rust toolchains and packaging the WASM core alongside the web deliverables.
+
+### Changed
+
+- Framework wrappers now use as much of the Rust/WASM core as possible without regressing interactive performance.
+- Bumped the Rust workspace crates from `0.1.1` to `0.1.2` via the workspace-level `Cargo.toml`.
+
+### Fixed
+
+- **egui: Row expansion click handling** — expand/collapse icons in `ui-grid-egui` no longer lose clicks to the full-cell overlay.
+- Clicking the expand icon now selects the row without focusing the cell or entering edit mode.
+- Double-clicking the expand icon no longer triggers cell editing.
+- Expand icon hit target increased from `16x16` to `24x24` for easier interaction.
+
 ## v0.1.5 (web) — 2026-04-30
 
 ### Added

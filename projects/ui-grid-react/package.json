@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid-react",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "description": "React wrapper for @ornery/ui-grid",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -16,7 +16,7 @@
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
-    "@ornery/ui-grid": "^0.1.3"
+    "@ornery/ui-grid": "^0.1.6"
   },
   "devDependencies": {
     "@ornery/ui-grid": "file:../ui-grid",
