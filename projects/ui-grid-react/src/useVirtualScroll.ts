@@ -13,6 +13,7 @@ export interface UseVirtualScrollResult {
   totalHeight: number;
   offsetY: number;
   onScroll: (event: React.UIEvent<HTMLDivElement>) => void;
+  setScrollTop: (scrollTop: number) => void;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   scrollTop: number;
 }
@@ -39,6 +40,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
     totalHeight: virtualWindow.totalHeight,
     offsetY: virtualWindow.offsetY,
     onScroll,
+    setScrollTop,
     viewportRef,
     scrollTop,
   };

@@ -393,8 +393,25 @@ export function useGridState(
   const rowSize = options.rowHeight ?? 44;
 
   const visibleColumns = useMemo(() => {
-    return orderVisibleColumns(options.columnDefs, columnOrder);
-  }, [options.columnDefs, columnOrder]);
+    const orderedColumns = orderVisibleColumns(options.columnDefs, columnOrder);
+    const pinnedEntries = Object.entries(pinnedColumns);
+    if (pinnedEntries.length === 0) {
+      return orderedColumns;
+    }
+
+    const columnByName = new Map(orderedColumns.map((column) => [column.name, column]));
+    const pinnedLeft = pinnedEntries
+      .filter(([, direction]) => direction === 'left')
+      .map(([columnName]) => columnByName.get(columnName))
+      .filter((column): column is GridColumnDef => column !== undefined);
+    const pinnedRight = pinnedEntries
+      .filter(([, direction]) => direction === 'right')
+      .map(([columnName]) => columnByName.get(columnName))
+      .filter((column): column is GridColumnDef => column !== undefined);
+    const centerColumns = orderedColumns.filter((column) => pinnedColumns[column.name] === undefined);
+
+    return [...pinnedLeft, ...centerColumns, ...pinnedRight];
+  }, [options.columnDefs, columnOrder, pinnedColumns]);
 
   const visibleColumnsRef = useRef(visibleColumns);
   visibleColumnsRef.current = visibleColumns;

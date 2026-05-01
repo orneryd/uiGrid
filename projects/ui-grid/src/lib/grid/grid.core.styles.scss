@@ -380,6 +380,11 @@ h1 {
 
 .header-label {
   min-width: 0;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  hyphens: none;
 }
 
 .header-actions {

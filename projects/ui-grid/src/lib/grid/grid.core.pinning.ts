@@ -55,7 +55,11 @@ export function computePinnedOffset(
   function resolveColumnWidthForOffset(column: GridColumnDef): string {
     const w = column.width;
     if (!w) return '11rem';
-    if (w.includes('fr') || w.includes('minmax')) return '11rem';
+    const minmaxMatch = w.match(/^minmax\((.+?),\s*(.+)\)$/i);
+    if (minmaxMatch) {
+      return minmaxMatch[1]?.trim() || '11rem';
+    }
+    if (w.includes('fr')) return '11rem';
     return w;
   }
 

@@ -46,4 +46,5 @@ Thumbs.db
 *node_modules*
 *dist*
 target
-projects/ui-grid/src/lib
+projects/ui-grid/src/lib/grid/**/*.d.ts
+projects/ui-grid/src/lib/grid/**/*.d.ts.map

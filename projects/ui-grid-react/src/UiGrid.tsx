@@ -63,13 +63,103 @@ export function UiGrid({
     overscan: 3,
   });
 
+  const headerGridRef = React.useRef<HTMLDivElement | null>(null);
+  const filterGridRef = React.useRef<HTMLDivElement | null>(null);
+  const [openPinMenuColumn, setOpenPinMenuColumn] = React.useState<string | null>(null);
+  const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
+  const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
+  const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
+  const scrollContainerHeight = `${(options.viewportHeight ?? 560) + stickyChromeHeight}px`;
+
+  const eventPathIncludesClass = React.useCallback((event: Event, className: string): boolean => {
+    const eventPath = typeof event.composedPath === 'function'
+      ? event.composedPath()
+      : (event.target ? [event.target] : []);
+
+    return eventPath.some((target) => {
+      if (!target || typeof target !== 'object' || !('classList' in target)) {
+        return false;
+      }
+
+      const classList = (target as { classList?: DOMTokenList }).classList;
+      return classList?.contains(className) ?? false;
+    });
+  }, []);
+
+  const isPinMenuOpen = React.useCallback(
+    (column: GridColumnDef) => openPinMenuColumn === column.name,
+    [openPinMenuColumn],
+  );
+
+  const pinButtonLabel = React.useCallback(
+    (column: GridColumnDef) => (state.isPinned(column) ? labels.unpin : labels.pinColumn),
+    [labels, state],
+  );
+
+  const onPinTrigger = React.useCallback(
+    (column: GridColumnDef, event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      if (state.isPinned(column)) {
+        setOpenPinMenuColumn(null);
+        state.gridApi.pinning.pinColumn(column.name, 'none');
+        return;
+      }
+
+      setOpenPinMenuColumn((current) => (current === column.name ? null : column.name));
+    },
+    [state],
+  );
+
+  const choosePinDirection = React.useCallback(
+    (column: GridColumnDef, direction: 'left' | 'right', event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      setOpenPinMenuColumn(null);
+      state.gridApi.pinning.pinColumn(column.name, direction);
+    },
+    [state],
+  );
+
+  React.useLayoutEffect(() => {
+    setHeaderStickyHeight(headerGridRef.current?.offsetHeight ?? 0);
+    setFilterStickyHeight(filterGridRef.current?.offsetHeight ?? 0);
+  }, [visibleColumns, filteringFeature, options.enableFiltering]);
+
+  React.useEffect(() => {
+    if (!openPinMenuColumn) {
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (eventPathIncludesClass(event, 'pin-control')) {
+        return;
+      }
+
+      setOpenPinMenuColumn(null);
+    };
+
+    const handleDocumentEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenPinMenuColumn(null);
+      }
+    };
+
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleDocumentEscape);
+
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('keydown', handleDocumentEscape);
+    };
+  }, [eventPathIncludesClass, openPinMenuColumn]);
+
   const itemsToRender = virtualizationEnabled
     ? displayItems.slice(virtualScroll.visibleRange.start, virtualScroll.visibleRange.end)
     : displayItems;
 
-  const onViewportScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    virtualScroll.onScroll(event);
-    const startIndex = Math.floor(event.currentTarget.scrollTop / rowSize);
+  const onGridTableScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const bodyScrollTop = Math.max(0, event.currentTarget.scrollTop - stickyChromeHeight);
+    virtualScroll.setScrollTop(bodyScrollTop);
+    const startIndex = Math.floor(bodyScrollTop / rowSize);
     state.onViewportScroll(startIndex);
   };
 
@@ -320,21 +410,28 @@ export function UiGrid({
             </p>
           </div>
 
-          <div className="grid-table ui-grid-contents-wrapper" data-part="grid-table">
+          <div
+            className="grid-table ui-grid-contents-wrapper"
+            data-part="grid-table"
+            style={virtualizationEnabled ? { height: scrollContainerHeight, overflowY: 'auto' } : undefined}
+            onScroll={virtualizationEnabled ? onGridTableScroll : undefined}
+          >
             {/* Header row */}
             <div
               className="header-grid ui-grid-header ui-grid-header-canvas"
               data-part="header"
               role="row"
+              ref={headerGridRef}
               style={{ gridTemplateColumns }}
             >
               {visibleColumns.map((column) => {
                 const pinned = state.isPinned(column);
                 const pinOffset = pinned ? state.pinnedOffset(column) : null;
+                const pinMenuOpen = isPinMenuOpen(column);
                 return (
                 <div
                   key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}`}
+                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}`}
                   data-part="header-cell"
                   role="columnheader"
                   aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
@@ -342,7 +439,7 @@ export function UiGrid({
                     position: pinned ? 'sticky' : undefined,
                     left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
                     right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-                    zIndex: pinned ? 2 : undefined,
+                    zIndex: pinMenuOpen ? 8 : pinned ? 2 : undefined,
                   }}
                 >
                   <span className="header-label">{state.headerLabel(column)}</span>
@@ -386,21 +483,62 @@ export function UiGrid({
                     {state.pinningFeature &&
                       state.isPinningEnabled() &&
                       state.isColumnPinnable(column) && (
-                        <button
-                          type="button"
-                          className={`chip-action${pinned ? ' chip-action-active' : ''}`}
-                          data-part="pin-toggle"
-                          aria-label={pinned ? labels.unpin : labels.pinLeft}
-                          title={pinned ? labels.unpin : labels.pinLeft}
-                          onClick={() => state.togglePin(column)}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
-                          </svg>
-                          <span className="sr-only ui-grid-sr-only">
-                            {pinned ? labels.unpin : labels.pinLeft}
-                          </span>
-                        </button>
+                        <div className={`pin-control${pinMenuOpen ? ' pin-control-open' : ''}`} onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            className={`chip-action pin-trigger${pinned || pinMenuOpen ? ' chip-action-active' : ''}`}
+                            data-part="pin-toggle"
+                            aria-label={pinButtonLabel(column)}
+                            title={pinButtonLabel(column)}
+                            aria-haspopup={pinned ? undefined : 'menu'}
+                            aria-expanded={pinned ? undefined : pinMenuOpen}
+                            onClick={(event) => onPinTrigger(column, event)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
+                            </svg>
+                            <span className="sr-only ui-grid-sr-only">{pinButtonLabel(column)}</span>
+                          </button>
+
+                          <div
+                            className="pin-menu"
+                            data-part="pin-menu"
+                            role="menu"
+                            aria-label="Pin options"
+                            aria-hidden={!pinMenuOpen}
+                          >
+                            <button
+                              type="button"
+                              className="pin-menu-action"
+                              data-part="pin-left-action"
+                              role="menuitem"
+                              aria-label={labels.pinLeft}
+                              title={labels.pinLeft}
+                              tabIndex={pinMenuOpen ? 0 : -1}
+                              onClick={(event) => choosePinDirection(column, 'left', event)}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                                <path d="M10 6 4 12l6 6v-4h10v-4H10V6z" />
+                              </svg>
+                              <span className="sr-only ui-grid-sr-only">{labels.pinLeft}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="pin-menu-action"
+                              data-part="pin-right-action"
+                              role="menuitem"
+                              aria-label={labels.pinRight}
+                              title={labels.pinRight}
+                              tabIndex={pinMenuOpen ? 0 : -1}
+                              onClick={(event) => choosePinDirection(column, 'right', event)}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                                <path d="M14 6v4H4v4h10v4l6-6-6-6z" />
+                              </svg>
+                              <span className="sr-only ui-grid-sr-only">{labels.pinRight}</span>
+                            </button>
+                          </div>
+                        </div>
                       )}
                   </div>
                 </div>
@@ -413,7 +551,8 @@ export function UiGrid({
               <div
                 className="filter-grid ui-grid-header"
                 data-part="filters"
-                style={{ gridTemplateColumns }}
+                ref={filterGridRef}
+                style={{ gridTemplateColumns, ['--ui-grid-header-sticky-top' as string]: `${headerStickyHeight}px` }}
               >
                 {visibleColumns.map((column) => {
                   const pinned = state.isPinned(column);
@@ -450,29 +589,19 @@ export function UiGrid({
             {/* Body */}
             {displayItems.length > 0 ? (
               virtualizationEnabled ? (
-                <div
-                  className="grid-viewport ui-grid-viewport"
-                  data-part="viewport"
-                  ref={virtualScroll.viewportRef}
-                  style={{ height: viewportHeightPx, overflow: 'auto', position: 'relative' }}
-                  onScroll={onViewportScroll}
-                >
-                  <div style={{ height: `${virtualScroll.totalHeight}px`, position: 'relative' }}>
-                    <div
-                      className="body-grid ui-grid-canvas"
-                      data-part="body"
-                      role="rowgroup"
-                      style={{
-                        gridTemplateColumns,
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        transform: `translateY(${virtualScroll.offsetY}px)`,
-                      }}
-                    >
-                      {itemsToRender.map(renderDisplayItem)}
-                    </div>
+                <div className="grid-virtual-spacer" style={{ height: `${virtualScroll.totalHeight}px` }}>
+                  <div
+                    className="body-grid ui-grid-canvas grid-virtual-body"
+                    data-part="body"
+                    role="rowgroup"
+                    style={{
+                      gridTemplateColumns,
+                      position: 'absolute',
+                      top: `${virtualScroll.offsetY}px`,
+                      left: 0,
+                    }}
+                  >
+                    {itemsToRender.map(renderDisplayItem)}
                   </div>
                 </div>
               ) : (

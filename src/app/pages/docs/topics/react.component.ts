@@ -1,5 +1,33 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  ViewChild,
+  afterNextRender,
+  inject,
+  signal,
+} from '@angular/core';
+import type { GridOptions } from '@ornery/ui-grid';
 import { CodeBlockComponent } from '../../shared/code-block.component';
+import { createDemoData } from '../../shared/demo-data';
+
+type ReactRuntime = {
+  createElement: (type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]) => unknown;
+};
+
+type ReactRoot = {
+  render: (node: unknown) => void;
+  unmount: () => void;
+};
+
+type ReactDomClientRuntime = {
+  createRoot: (container: Element) => ReactRoot;
+};
+
+type ReactGridRuntime = {
+  UiGrid: unknown;
+};
 
 @Component({
   selector: 'app-docs-react',
@@ -13,6 +41,18 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
         core TypeScript engine — sorting, filtering, grouping, virtualization, cell editing,
         and the full <code>UiGridApi</code> — with zero code duplication.
       </p>
+
+      <h2>Live Demo</h2>
+      <p>
+        This page mounts the real React wrapper inside the Angular docs app so you can verify the
+        wrapper behavior directly.
+      </p>
+      <div class="docs-grid-demo react-docs-demo">
+        <div #reactDemoHost class="react-demo-host"></div>
+      </div>
+      @if (demoError(); as error) {
+        <p class="react-demo-error">{{ error }}</p>
+      }
 
       <h2>Install</h2>
       <app-code-block lang="bash" [code]="installSnippet" />
@@ -119,9 +159,75 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
       <app-code-block lang="typescript" [code]="exportsSnippet" />
     </section>
   `,
-  styles: `@use '../docs-topic';`
+  styles: `
+    @use '../docs-topic';
+
+    .react-docs-demo {
+      padding: 1rem;
+    }
+
+    .react-demo-host {
+      min-height: 54rem;
+    }
+
+    .react-demo-error {
+      color: #fca5a5;
+    }
+  `
 })
 export class DocsReactComponent {
+  @ViewChild('reactDemoHost', { static: true })
+  private readonly reactDemoHost?: ElementRef<HTMLElement>;
+
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly demoError = signal<string | null>(null);
+  private reactRoot: ReactRoot | null = null;
+  private readonly demoData = createDemoData().slice(0, 10_000).map((row, index) => ({
+    ...row,
+    region: ['North America', 'EMEA', 'APAC', 'LATAM'][index % 4],
+    tier: ['Strategic', 'Growth', 'Scale'][index % 3],
+    seats: 25 + (index % 12) * 15,
+  }));
+  private readonly demoOptions: GridOptions = {
+    id: 'docs-react-demo',
+    title: 'React Wrapper Demo',
+    emptyMessage: 'No accounts match the current filters.',
+    rowHeight: 44,
+    viewportHeight: 520,
+    enableSorting: true,
+    enableFiltering: true,
+    enableGrouping: true,
+    enablePinning: true,
+    enableVirtualization: true,
+    virtualizationThreshold: 10,
+    enableColumnMoving: true,
+    enableCellEditOnFocus: true,
+    columnDefs: [
+      { name: 'id', displayName: 'ID', width: '10rem', pinnedLeft: true },
+      { name: 'name', displayName: 'Customer', width: '14rem', enableCellEdit: true },
+      { name: 'company', width: '13rem' },
+      { name: 'status', width: '11rem' },
+      { name: 'region', width: '11rem' },
+      { name: 'tier', displayName: 'Plan Tier', width: '12rem' },
+      { name: 'seats', type: 'number', align: 'end', width: '10rem' },
+      { name: 'revenue', type: 'number', align: 'end', width: '12rem' },
+      { name: 'renewalDate', displayName: 'Renewal', width: '12rem' },
+      { name: 'owner', field: 'account.owner', displayName: 'Owner', width: '12rem' },
+    ],
+    data: this.demoData,
+  };
+
+  constructor() {
+    afterNextRender(() => {
+      void this.mountReactDemo();
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.reactRoot?.unmount();
+      this.reactRoot = null;
+    });
+  }
+
   protected readonly installSnippet = `npm install @ornery/ui-grid-react`;
 
   protected readonly minimalSnippet = `import { UiGrid } from '@ornery/ui-grid-react';
@@ -284,4 +390,30 @@ export type {
   GridBenchmarkResult, GridSavedState, SortState, UiGridApi,
 } from '@ornery/ui-grid-react';
 export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid-react';`;
+
+  private async mountReactDemo(): Promise<void> {
+    const host = this.reactDemoHost?.nativeElement;
+    if (!host) {
+      return;
+    }
+
+    try {
+      const [reactModule, reactDomClientModule, reactGridModule] = await Promise.all([
+        import('react') as Promise<ReactRuntime>,
+        import('react-dom/client') as Promise<ReactDomClientRuntime>,
+        import('../../../../../projects/ui-grid-react/dist/index.mjs') as Promise<ReactGridRuntime>,
+      ]);
+
+      this.reactRoot = reactDomClientModule.createRoot(host);
+      this.reactRoot.render(
+        reactModule.createElement(reactGridModule.UiGrid, {
+          options: this.demoOptions,
+          className: 'react-docs-demo-grid',
+        })
+      );
+      this.demoError.set(null);
+    } catch (error) {
+      this.demoError.set(error instanceof Error ? error.message : String(error));
+    }
+  }
 }

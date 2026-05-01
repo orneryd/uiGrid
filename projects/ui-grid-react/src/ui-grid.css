@@ -20,6 +20,17 @@
   --ui-grid-status-enterprise-color: var(--app-ui-grid-status-enterprise-color, #115e59);
   --ui-grid-status-pilot-bg: var(--app-ui-grid-status-pilot-bg, rgba(234, 88, 12, 0.14));
   --ui-grid-status-pilot-color: var(--app-ui-grid-status-pilot-color, #c2410c);
+  --ui-grid-pin-menu-open-z-index: var(--app-ui-grid-pin-menu-open-z-index, 8);
+  --ui-grid-pin-menu-z-index: var(--app-ui-grid-pin-menu-z-index, 20);
+  --ui-grid-pin-menu-gap: var(--app-ui-grid-pin-menu-gap, 0.25rem);
+  --ui-grid-pin-menu-padding: var(--app-ui-grid-pin-menu-padding, 0.25rem);
+  --ui-grid-pin-menu-radius: var(--app-ui-grid-pin-menu-radius, 999px);
+  --ui-grid-pin-menu-shadow: var(--app-ui-grid-pin-menu-shadow, 0 10px 24px color-mix(in srgb, var(--ui-grid-cell-color) 10%, transparent));
+  --ui-grid-pin-menu-action-size: var(--app-ui-grid-pin-menu-action-size, 1.75rem);
+  --ui-grid-pin-control-collapsed-size: var(--app-ui-grid-pin-control-collapsed-size, 1px);
+  --ui-grid-pin-control-transition-duration: var(--app-ui-grid-pin-control-transition-duration, 160ms);
+  --ui-grid-pin-control-transition-easing: var(--app-ui-grid-pin-control-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+  --ui-grid-pin-menu-scale-closed: var(--app-ui-grid-pin-menu-scale-closed, 0.72);
   display: block;
   color: var(--ui-grid-cell-color);
 }
@@ -39,10 +50,16 @@
 .grid-hero {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1.5rem;
-  align-items: end;
+  align-items: flex-start;
   padding: 1rem 0;
   color: var(--ui-grid-cell-color);
+}
+
+.grid-hero > :first-child {
+  flex: 1 1 28rem;
+  min-width: min(100%, 20rem);
 }
 
 .ui-grid-host .eyebrow {
@@ -70,6 +87,9 @@
   gap: 1rem;
   align-items: center;
   flex-wrap: wrap;
+  flex: 0 1 auto;
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .action {
@@ -168,6 +188,22 @@
 .filter-grid,
 .body-grid {
   display: grid;
+  width: max-content;
+  min-width: 100%;
+}
+
+.header-grid,
+.filter-grid {
+  position: sticky;
+  z-index: 3;
+}
+
+.header-grid {
+  top: 0;
+}
+
+.filter-grid {
+  top: var(--ui-grid-header-sticky-top, 0px);
 }
 
 .header-cell,
@@ -192,8 +228,18 @@
   background: color-mix(in srgb, var(--ui-grid-accent) 8%, var(--ui-grid-header-background));
 }
 
+.header-cell.is-pin-menu-open {
+  z-index: var(--ui-grid-pin-menu-open-z-index);
+}
+
 .header-label {
   min-width: 0;
+  display: block;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  hyphens: none;
 }
 
 .header-actions {
@@ -201,6 +247,8 @@
   align-items: center;
   gap: 0.4rem;
   justify-self: end;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .header-action,
@@ -250,14 +298,115 @@
   color: var(--ui-grid-accent);
 }
 
+.pin-control {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  justify-items: center;
+  min-width: 2rem;
+  overflow: hidden;
+}
+
+.pin-trigger {
+  grid-area: 1 / 1;
+  transform-origin: center;
+  transition:
+    width var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    height var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    opacity var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    transform var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    border-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    background-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing);
+}
+
+.pin-menu {
+  grid-area: 1 / 1;
+  z-index: var(--ui-grid-pin-menu-z-index);
+  display: grid;
+  grid-auto-rows: var(--ui-grid-pin-menu-action-size);
+  gap: var(--ui-grid-pin-menu-gap);
+  padding: var(--ui-grid-pin-menu-padding);
+  border: 1px solid var(--ui-grid-border-color);
+  border-radius: var(--ui-grid-pin-menu-radius);
+  background: var(--ui-grid-surface);
+  box-shadow: var(--ui-grid-pin-menu-shadow);
+  justify-items: center;
+  align-items: center;
+  width: 2rem;
+  max-height: var(--ui-grid-pin-control-collapsed-size);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(var(--ui-grid-pin-menu-scale-closed));
+  transform-origin: center;
+  transition:
+    max-height var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    opacity var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    transform var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    padding var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    border-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
+    box-shadow var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing);
+}
+
+.pin-control-open {
+  align-items: start;
+}
+
+.pin-control-open .pin-trigger {
+  width: var(--ui-grid-pin-control-collapsed-size);
+  height: var(--ui-grid-pin-control-collapsed-size);
+  opacity: 0;
+  transform: scale(0.72);
+  pointer-events: none;
+}
+
+.pin-control-open .pin-menu {
+  max-height: calc((var(--ui-grid-pin-menu-action-size) * 2) + var(--ui-grid-pin-menu-gap) + (var(--ui-grid-pin-menu-padding) * 2));
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.pin-menu-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-grid-pin-menu-action-size);
+  height: var(--ui-grid-pin-menu-action-size);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-grid-cell-color);
+  cursor: pointer;
+}
+
+.pin-menu-action:hover,
+.pin-menu-action:focus-visible {
+  outline: 0;
+  background: color-mix(in srgb, var(--ui-grid-accent) 12%, var(--ui-grid-surface));
+  color: var(--ui-grid-accent);
+}
+
+.pin-menu-action svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
 .filter-cell {
   padding: 0.75rem 1rem 1rem;
   border-bottom: 1px solid var(--ui-grid-border-color);
   background: var(--ui-grid-header-background);
+  overflow: hidden;
 }
 
 .filter-cell input {
+  display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   border: 1px solid var(--ui-grid-border-color);
   border-radius: var(--ui-grid-radius);
   background: var(--ui-grid-surface);
@@ -388,6 +537,17 @@
 
 .grid-viewport {
   width: 100%;
+}
+
+.grid-virtual-spacer {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+.grid-virtual-body {
+  position: absolute;
+  left: 0;
 }
 
 .body-cell.align-center {
