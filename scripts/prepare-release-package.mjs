@@ -15,6 +15,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const rootDir = process.cwd();
 const outputDir = path.resolve(rootDir, args.get('--output') || 'dist/npm-package');
 const elementDir = path.resolve(rootDir, args.get('--element') || 'dist/ui-grid-element');
+const wasmDir = path.resolve(rootDir, args.get('--wasm') || 'dist/ui-grid-wasm');
 const rootPackage = JSON.parse(await readFile(path.join(rootDir, 'package.json'), 'utf8'));
 const sourcePackage = JSON.parse(await readFile(path.join(rootDir, 'projects/ui-grid/package.json'), 'utf8'));
 const requestedVersion = args.get('--version') || rootPackage.version || sourcePackage.version || '0.1.0';
@@ -47,6 +48,7 @@ await mkdir(outputDir, { recursive: true });
 
 await cp(defaultPresetBuild.dir, outputDir, { recursive: true });
 await cp(elementDir, path.join(outputDir, 'element'), { recursive: true });
+await cp(wasmDir, path.join(outputDir, 'wasm'), { recursive: true });
 await cp(path.join(rootDir, 'README.md'), path.join(outputDir, 'README.md'));
 
 const presetExports = {};
@@ -113,6 +115,10 @@ const finalPackageJson = {
     '.': {
       types: entryTypes,
       default: entryDefault
+    },
+    './wasm': {
+      types: './wasm/ui_grid_wasm.d.ts',
+      default: './wasm/ui_grid_wasm.js'
     },
     ...presetExports,
     './element': './element/main.js',

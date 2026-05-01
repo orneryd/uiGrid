@@ -38,21 +38,8 @@ export type {
 
 export type { PinDirection, PinnedColumnState } from './grid.core.pinning';
 
-const wasmCoreModulePath = '../../../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
-const wasmCoreBinaryPath = '/dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm';
+type UiGridWasmCoreModule = typeof import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
 
-type WasmCallable = (...args: any[]) => any;
-
-type UiGridWasmCoreModule = {
-  default: (input?: string | URL | Request | WebAssembly.Module) => Promise<unknown>;
-  calculate_virtual_window_js: WasmCallable;
-  sort_grid_rows_js: WasmCallable;
-  build_grid_rows_js: WasmCallable;
-  is_tree_enabled_js: WasmCallable;
-  filter_and_flatten_grid_tree_rows_js: WasmCallable;
-  build_grid_display_items_js: WasmCallable;
-  export_csv_rows_js: WasmCallable;
-};
 
 let wasmCore: UiGridWasmCoreModule | null = null;
 let wasmInitPromise: Promise<boolean> | null = null;
@@ -63,9 +50,8 @@ export async function initWasmCore(): Promise<boolean> {
   }
 
   if (!wasmInitPromise) {
-    wasmInitPromise = import(/* @vite-ignore */ wasmCoreModulePath)
-      .then(async (module) => {
-        await module.default(wasmCoreBinaryPath);
+    wasmInitPromise = import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js')
+      .then((module) => {
         wasmCore = module;
         return true;
       })

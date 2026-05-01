@@ -15,7 +15,8 @@
     "importHelpers": true,
     "baseUrl": ".",
     "paths": {
-      "@ornery/ui-grid": ["projects/ui-grid/src/public-api.ts"]
+      "@ornery/ui-grid": ["projects/ui-grid/src/public-api.ts"],
+      "@ornery/ui-grid/wasm": ["dist/ui-grid-wasm"]
     },
     "lib": [
       "ES2022",
