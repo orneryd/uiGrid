@@ -401,7 +401,7 @@ export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid-react';`;
       const [reactModule, reactDomClientModule, reactGridModule] = await Promise.all([
         import('react') as Promise<ReactRuntime>,
         import('react-dom/client') as Promise<ReactDomClientRuntime>,
-        import('../../../../../projects/ui-grid-react/dist/index.mjs') as Promise<ReactGridRuntime>,
+        import('@ornery/ui-grid-react') as Promise<ReactGridRuntime>,
       ]);
 
       this.reactRoot = reactDomClientModule.createRoot(host);
