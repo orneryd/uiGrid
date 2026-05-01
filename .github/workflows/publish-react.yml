@@ -57,7 +57,12 @@ jobs:
           fi
 
           cd projects/ui-grid-react
-          npm version "$VERSION" --no-git-tag-version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$CURRENT_VERSION" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version
+          else
+            echo "Package version already set to $VERSION"
+          fi
 
       - name: Publish to npm
         run: npm publish ./projects/ui-grid-react --access public
