@@ -111,7 +111,7 @@ type RustSection = 'wasm' | 'egui';
 
           <figure class="section-screenshot">
             <img
-              src="/docs/screenshots/pinning-100k.png"
+              src="docs/screenshots/pinning-100k.png"
               alt="ui-grid-egui demo showing pinned columns with a fixed header and filter row"
             />
           </figure>
