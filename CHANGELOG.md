@@ -2,6 +2,14 @@
 
 ## v0.1.7 — 2026-05-01
 
+### Rust
+
+- Brought eGui widget into feature partiy with angular, pinnable columns, save load state, CSV/overridable export, overridable controls, a11y, 118n, and more...
+- Added a new top-level Rust landing page at `/rust` with a hero header and switchable Rust/WASM and egui tabs.
+- Expanded the Rust / egui docs with install, minimal usage, feature recipes, pinning, save/restore state, CSV export, column extensions, and a native demo workflow.
+- Added a pinned-grid screenshot at the top of the egui section to show the native desktop layout and fixed-header / pinned-column behavior.
+- Refreshed the Rust docs to present Rust/WASM and egui as complementary delivery paths for browser and native hosts.
+
 ### Added
 
 - **`@ornery/ui-grid-core` package** — shared logic (grid engine, state, filtering, sorting, grouping, pagination, pinning, infinite scroll, tree, WASM bridge) is now published as a standalone package with zero Angular and zero React peer dependencies. React, Angular, and the new Vanilla/Web Component builds all consume it.
