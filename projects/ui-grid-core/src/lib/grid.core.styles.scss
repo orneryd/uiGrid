@@ -327,8 +327,8 @@ h1 {
 }
 
 .grid-frame {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   border-radius: var(--ui-grid-radius);
   background: var(--ui-grid-surface);
   border: 1px solid var(--ui-grid-border-color);
@@ -381,10 +381,10 @@ h1 {
 
 .grid-table {
   position: relative;
-  flex: 1 1 auto;
   min-height: 0;
   width: 100%;
   min-width: 0;
+  display: grid;
   background: var(--ui-grid-surface);
   overflow-x: var(--ui-grid-overflow-x);
   overflow-y: var(--ui-grid-overflow-y);
