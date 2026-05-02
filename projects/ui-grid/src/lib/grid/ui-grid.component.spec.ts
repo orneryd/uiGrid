@@ -1,9 +1,14 @@
 import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
-import { FILTER_CONDITIONS, SORT_DIRECTIONS } from './grid.constants';
-import { UiGridApi } from './grid.api';
-import { GridColumnDef, GridExpandableTemplateContext, GridOptions } from './grid.models';
+import {
+  FILTER_CONDITIONS,
+  SORT_DIRECTIONS,
+  type GridColumnDef,
+  type GridExpandableTemplateContext,
+  type GridOptions,
+  type UiGridApi,
+} from '@ornery/ui-grid-core';
 import { UiGridComponent } from './ui-grid.component';
 
 const baseData = [
@@ -13,7 +18,7 @@ const baseData = [
     status: 'Pilot',
     revenue: 300,
     active: true,
-    account: { owner: 'Mina Patel' }
+    account: { owner: 'Mina Patel' },
   },
   {
     id: 'row-2',
@@ -21,7 +26,7 @@ const baseData = [
     status: 'Active',
     revenue: 100,
     active: false,
-    account: { owner: 'Casey Tran' }
+    account: { owner: 'Casey Tran' },
   },
   {
     id: 'row-3',
@@ -29,11 +34,14 @@ const baseData = [
     status: 'Active',
     revenue: 200,
     active: true,
-    account: { owner: 'Jordan Silva' }
-  }
+    account: { owner: 'Jordan Silva' },
+  },
 ] as const;
 
-function createOptions(overrides: Partial<GridOptions> = {}, onRegisterApi?: (api: UiGridApi) => void): GridOptions {
+function createOptions(
+  overrides: Partial<GridOptions> = {},
+  onRegisterApi?: (api: UiGridApi) => void,
+): GridOptions {
   return {
     id: 'spec-grid',
     title: 'Spec Grid',
@@ -54,16 +62,16 @@ function createOptions(overrides: Partial<GridOptions> = {}, onRegisterApi?: (ap
         name: 'revenue',
         align: 'end',
         filter: { condition: FILTER_CONDITIONS.greaterThan },
-        formatter: (value) => `$${value}`
+        formatter: (value) => `$${value}`,
       },
       { name: 'owner', field: 'account.owner' },
       {
         name: 'badge',
-        cellRenderer: ({ row }) => `${row['name']}-badge`
-      }
+        cellRenderer: ({ row }) => `${row['name']}-badge`,
+      },
     ],
     onRegisterApi: (api) => onRegisterApi?.(api as UiGridApi),
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -74,20 +82,23 @@ function createOptions(overrides: Partial<GridOptions> = {}, onRegisterApi?: (ap
       <div class="detail-row">{{ row.name }} detail</div>
     </ng-template>
     <app-ui-grid [options]="options()" />
-  `
+  `,
 })
 class ExpandableHostComponent {
   private readonly registeredApi = signal<UiGridApi | null>(null);
-  private readonly detailTemplate = viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detail');
+  private readonly detailTemplate =
+    viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detail');
 
-  readonly options = computed<GridOptions>(() => createOptions(
-    {
-      enableExpandable: true,
-      expandableRowTemplate: this.detailTemplate(),
-      virtualizationThreshold: 99
-    },
-    (api) => this.registeredApi.set(api)
-  ));
+  readonly options = computed<GridOptions>(() =>
+    createOptions(
+      {
+        enableExpandable: true,
+        expandableRowTemplate: this.detailTemplate(),
+        virtualizationThreshold: 99,
+      },
+      (api) => this.registeredApi.set(api),
+    ),
+  );
 
   readonly gridApi = this.registeredApi;
 }
@@ -99,22 +110,24 @@ class ExpandableHostComponent {
       <span class="inline-status">{{ value }}</span>
     </ng-template>
     <app-ui-grid [options]="options()" />
-  `
+  `,
 })
 class CellTemplateHostComponent {
   private readonly registeredApi = signal<UiGridApi | null>(null);
   private readonly statusTemplate = viewChild.required<TemplateRef<unknown>>('status');
 
-  readonly options = computed<GridOptions>(() => createOptions(
-    {
-      columnDefs: [
-        { name: 'name', displayName: 'Customer' },
-        { name: 'status', cellTemplate: this.statusTemplate() as TemplateRef<any> }
-      ],
-      virtualizationThreshold: 99
-    },
-    (api) => this.registeredApi.set(api)
-  ));
+  readonly options = computed<GridOptions>(() =>
+    createOptions(
+      {
+        columnDefs: [
+          { name: 'name', displayName: 'Customer' },
+          { name: 'status', cellTemplate: this.statusTemplate() as TemplateRef<any> },
+        ],
+        virtualizationThreshold: 99,
+      },
+      (api) => this.registeredApi.set(api),
+    ),
+  );
 }
 
 @Component({
@@ -124,34 +137,38 @@ class CellTemplateHostComponent {
       <div class="virtual-detail">{{ row.name }} virtual detail</div>
     </ng-template>
     <app-ui-grid [options]="options()" />
-  `
+  `,
 })
 class VirtualExpandableHostComponent {
   private readonly registeredApi = signal<UiGridApi | null>(null);
-  private readonly detailTemplate = viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detail');
+  private readonly detailTemplate =
+    viewChild.required<TemplateRef<GridExpandableTemplateContext>>('detail');
 
-  readonly options = computed<GridOptions>(() => createOptions(
-    {
-      data: Array.from({ length: 6 }, (_value, index) => ({
-        id: `row-${index + 1}`,
-        name: `Row ${index + 1}`,
-        status: index % 2 === 0 ? 'Active' : 'Pilot',
-        revenue: index * 100,
-        account: { owner: `Owner ${index + 1}` }
-      })),
-      enableExpandable: true,
-      expandableRowTemplate: this.detailTemplate(),
-      virtualizationThreshold: 1
-    },
-    (api) => this.registeredApi.set(api)
-  ));
+  readonly options = computed<GridOptions>(() =>
+    createOptions(
+      {
+        data: Array.from({ length: 6 }, (_value, index) => ({
+          id: `row-${index + 1}`,
+          name: `Row ${index + 1}`,
+          status: index % 2 === 0 ? 'Active' : 'Pilot',
+          revenue: index * 100,
+          account: { owner: `Owner ${index + 1}` },
+        })),
+        enableExpandable: true,
+        expandableRowTemplate: this.detailTemplate(),
+        virtualizationThreshold: 1,
+      },
+      (api) => this.registeredApi.set(api),
+    ),
+  );
 
   readonly gridApi = this.registeredApi;
 }
 
 describe('UiGridComponent', () => {
-
-  function getShadowRoot(fixture: ReturnType<typeof TestBed.createComponent<UiGridComponent>>): ShadowRoot {
+  function getShadowRoot(
+    fixture: ReturnType<typeof TestBed.createComponent<UiGridComponent>>,
+  ): ShadowRoot {
     const host = fixture.nativeElement as HTMLElement;
     if (!host.shadowRoot) {
       throw new Error('Expected a shadow root on app-ui-grid');
@@ -175,11 +192,11 @@ describe('UiGridComponent', () => {
     const evt = el.ownerDocument.createEvent('KeyboardEvent');
     evt.initEvent('keydown', init.bubbles ?? false, init.cancelable ?? false);
     Object.defineProperties(evt, {
-      key:      { get: () => init.key ?? '' },
+      key: { get: () => init.key ?? '' },
       shiftKey: { get: () => init.shiftKey ?? false },
-      ctrlKey:  { get: () => init.ctrlKey ?? false },
-      altKey:   { get: () => init.altKey ?? false },
-      metaKey:  { get: () => init.metaKey ?? false },
+      ctrlKey: { get: () => init.ctrlKey ?? false },
+      altKey: { get: () => init.altKey ?? false },
+      metaKey: { get: () => init.metaKey ?? false },
     });
     return evt as KeyboardEvent;
   }
@@ -193,7 +210,12 @@ describe('UiGridComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [UiGridComponent, ExpandableHostComponent, CellTemplateHostComponent, VirtualExpandableHostComponent]
+      imports: [
+        UiGridComponent,
+        ExpandableHostComponent,
+        CellTemplateHostComponent,
+        VirtualExpandableHostComponent,
+      ],
     }).compileComponents();
   });
 
@@ -207,14 +229,21 @@ describe('UiGridComponent', () => {
     let gridApi: UiGridApi | null = null;
     const fixture = TestBed.createComponent(UiGridComponent);
 
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
-    const bodyCells = [...shadowRoot.querySelectorAll('.body-cell')].map((node) => node.textContent?.trim());
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) =>
+      node.textContent?.trim(),
+    );
+    const bodyCells = [...shadowRoot.querySelectorAll('.body-cell')].map((node) =>
+      node.textContent?.trim(),
+    );
 
     expect(gridApi).toBeTruthy();
     expect(headers).toEqual(['Customer', 'Status', 'Revenue', 'Owner', 'Badge']);
@@ -228,9 +257,12 @@ describe('UiGridComponent', () => {
   it('filters rows deterministically through the grid api and renders the empty state when no rows match', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const filterChanged = vi.fn();
@@ -239,22 +271,30 @@ describe('UiGridComponent', () => {
     gridApi.core.setFilter('status', 'Active');
     fixture.detectChanges();
     expect(filterChanged).toHaveBeenLastCalledWith({ status: 'Active' });
-    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual(['alpha', 'Beta']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'alpha',
+      'Beta',
+    ]);
 
     gridApi.core.setFilter('status', 'Missing');
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
     expect(gridApi.core.getVisibleRows()).toEqual([]);
-    expect(shadowRoot.querySelector('.empty-state strong')?.textContent).toContain('Nothing to show');
+    expect(shadowRoot.querySelector('.empty-state strong')?.textContent).toContain(
+      'Nothing to show',
+    );
   });
 
   it('sorts rows through the api and cycles sort state from the header button', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const sortChanged = vi.fn();
@@ -262,7 +302,11 @@ describe('UiGridComponent', () => {
 
     gridApi.core.sortColumn('name', SORT_DIRECTIONS.asc);
     fixture.detectChanges();
-    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual(['alpha', 'Beta', 'Gamma']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'alpha',
+      'Beta',
+      'Gamma',
+    ]);
     expect(sortChanged).toHaveBeenLastCalledWith('name', SORT_DIRECTIONS.asc);
 
     const shadowRoot = getShadowRoot(fixture);
@@ -270,15 +314,22 @@ describe('UiGridComponent', () => {
     headerButton.click();
     fixture.detectChanges();
     expect(sortChanged).toHaveBeenLastCalledWith('name', SORT_DIRECTIONS.desc);
-    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual(['Gamma', 'Beta', 'alpha']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'Gamma',
+      'Beta',
+      'alpha',
+    ]);
   });
 
   it('groups rows, collapses groups, and raises grouping events', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const groupingChanged = vi.fn();
@@ -293,11 +344,17 @@ describe('UiGridComponent', () => {
     expect(initialGroups).toHaveLength(2);
     expect(shadowRoot.querySelectorAll('.body-cell')).toHaveLength(15);
 
-    const activeGroup = [...initialGroups].find((node) => node.textContent?.includes('status: Active'));
+    const activeGroup = [...initialGroups].find((node) =>
+      node.textContent?.includes('status: Active'),
+    );
     expect(activeGroup).toBeTruthy();
 
-    const firstGroupedOwnerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-2"][data-col-name="owner"]');
-    const secondGroupedOwnerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-3"][data-col-name="owner"]');
+    const firstGroupedOwnerCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-2"][data-col-name="owner"]',
+    );
+    const secondGroupedOwnerCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-3"][data-col-name="owner"]',
+    );
     expect(firstGroupedOwnerCell?.classList.contains('body-cell-odd')).toBe(true);
     expect(secondGroupedOwnerCell?.classList.contains('body-cell-odd')).toBe(false);
 
@@ -309,9 +366,12 @@ describe('UiGridComponent', () => {
   it('moves columns and raises column order events', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const columnOrderChanged = vi.fn();
@@ -321,15 +381,23 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
-    expect(columnOrderChanged).toHaveBeenLastCalledWith(['status', 'revenue', 'name', 'owner', 'badge']);
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) =>
+      node.textContent?.trim(),
+    );
+    expect(columnOrderChanged).toHaveBeenLastCalledWith([
+      'status',
+      'revenue',
+      'name',
+      'owner',
+      'badge',
+    ]);
     expect(headers).toEqual(['Status', 'Revenue', 'Customer', 'Owner', 'Badge']);
 
     (fixture.componentInstance as any).onColumnDrop({
       previousIndex: 1,
       currentIndex: 1,
       item: { data: (fixture.componentInstance as any).visibleColumns()[1] },
-      container: { data: (fixture.componentInstance as any).visibleColumns() }
+      container: { data: (fixture.componentInstance as any).visibleColumns() },
     });
     expect(columnOrderChanged).toHaveBeenCalledTimes(1);
   });
@@ -347,13 +415,13 @@ describe('UiGridComponent', () => {
             { name: 'status' },
             { name: 'revenue' },
             { name: 'owner', field: 'account.owner' },
-            { name: 'badge' }
-          ]
+            { name: 'badge' },
+          ],
         },
         (api) => {
           gridApi = api;
-        }
-      )
+        },
+      ),
     );
     fixture.detectChanges();
 
@@ -361,23 +429,35 @@ describe('UiGridComponent', () => {
       previousIndex: 3,
       currentIndex: 1,
       item: { data: { name: 'badge' } },
-      container: { data: (fixture.componentInstance as any).visibleColumns() }
+      container: { data: (fixture.componentInstance as any).visibleColumns() },
     });
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
+    const headers = [...shadowRoot.querySelectorAll('.header-label')].map((node) =>
+      node.textContent?.trim(),
+    );
 
     expect(headers).toEqual(['Customer', 'Badge', 'Status', 'Revenue', 'Owner']);
-    expect((fixture.componentInstance as any).columnOrder()).toEqual(['id', 'name', 'badge', 'status', 'revenue', 'owner']);
+    expect((fixture.componentInstance as any).columnOrder()).toEqual([
+      'id',
+      'name',
+      'badge',
+      'status',
+      'revenue',
+      'owner',
+    ]);
   });
 
   it('hides and restores rows using string, row object, and GridRow references', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     gridApi.core.setRowInvisible('row-2', 'manual');
@@ -403,9 +483,12 @@ describe('UiGridComponent', () => {
   it('keeps a row hidden until all invisible reasons are cleared', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     gridApi.core.setRowInvisible('row-1', 'manual');
@@ -425,16 +508,23 @@ describe('UiGridComponent', () => {
   it('exports visible rows as csv with the configured header labels', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const anchor = document.createElement('a');
     const originalCreateElement = document.createElement.bind(document);
     const clickSpy = vi.spyOn(anchor, 'click').mockImplementation(() => {});
-    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) =>
-      tagName === 'a' ? anchor : originalCreateElement(tagName)) as typeof document.createElement);
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation(((tagName: string) =>
+        tagName === 'a'
+          ? anchor
+          : originalCreateElement(tagName)) as typeof document.createElement);
     const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:spec-grid');
     const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
@@ -455,21 +545,27 @@ describe('UiGridComponent', () => {
   it('sanitizes csv export values that could be interpreted as spreadsheet formulas', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      id: 'invoice=2026/04',
-      data: [
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
         {
-          id: 'row-1',
-          name: '=SUM(1,1)',
-          status: '+Danger',
-          revenue: 100,
-          active: true,
-          account: { owner: '@mention' }
-        }
-      ]
-    }, (api) => {
-      gridApi = api;
-    }));
+          id: 'invoice=2026/04',
+          data: [
+            {
+              id: 'row-1',
+              name: '=SUM(1,1)',
+              status: '+Danger',
+              revenue: 100,
+              active: true,
+              account: { owner: '@mention' },
+            },
+          ],
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const anchor = document.createElement('a');
@@ -494,9 +590,12 @@ describe('UiGridComponent', () => {
   it('runs a deterministic benchmark and raises scroll events', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const benchmarkComplete = vi.fn();
@@ -515,7 +614,7 @@ describe('UiGridComponent', () => {
       totalMs: 7,
       averageMs: 7 / 3,
       visibleRows: 3,
-      renderedItems: 3
+      renderedItems: 3,
     });
     expect(benchmarkComplete).toHaveBeenCalledWith(benchmark);
 
@@ -541,13 +640,13 @@ describe('UiGridComponent', () => {
             name: `Row ${index}`,
             status: index % 2 === 0 ? 'Active' : 'Pilot',
             revenue: index * 100,
-            account: { owner: `Owner ${index}` }
-          }))
+            account: { owner: `Owner ${index}` },
+          })),
         },
         (api) => {
           gridApi = api;
-        }
-      )
+        },
+      ),
     );
     fixture.detectChanges();
 
@@ -574,18 +673,20 @@ describe('UiGridComponent', () => {
           columnDefs: [
             { name: 'name', visible: false },
             { name: 'status', sortable: false, filterable: false },
-            { name: 'owner', field: 'account.owner' }
-          ]
+            { name: 'owner', field: 'account.owner' },
+          ],
         },
         (api) => {
           gridApi = api;
-        }
-      )
+        },
+      ),
     );
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
-    const headersBefore = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
+    const headersBefore = [...shadowRoot.querySelectorAll('.header-label')].map((node) =>
+      node.textContent?.trim(),
+    );
     expect(headersBefore).toEqual(['Status', 'Owner']);
     expect(shadowRoot.querySelector('.filter-grid')).toBeNull();
     expect(shadowRoot.querySelector('.chip-action')).toBeNull();
@@ -600,7 +701,9 @@ describe('UiGridComponent', () => {
     gridApi.expandable.expandAllRows();
     fixture.detectChanges();
 
-    const headersAfter = [...shadowRoot.querySelectorAll('.header-label')].map((node) => node.textContent?.trim());
+    const headersAfter = [...shadowRoot.querySelectorAll('.header-label')].map((node) =>
+      node.textContent?.trim(),
+    );
     expect(headersAfter).toEqual(['Status', 'Owner']);
     expect(gridApi.core.getVisibleRows()).toHaveLength(3);
     expect(shadowRoot.querySelector('.detail-row')).toBeNull();
@@ -609,9 +712,12 @@ describe('UiGridComponent', () => {
   it('raises rendering and row visibility events when the options id changes and the pipeline shrinks', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const renderingComplete = vi.fn();
@@ -623,9 +729,12 @@ describe('UiGridComponent', () => {
     gridApi.core.on.rowsVisibleChanged(rowsVisibleChanged);
     gridApi.core.on.canvasHeightChanged(canvasHeightChanged);
 
-    fixture.componentRef.setInput('options', createOptions({ id: 'spec-grid-2' }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({ id: 'spec-grid-2' }, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     expect(renderingComplete).toHaveBeenCalled();
@@ -641,15 +750,21 @@ describe('UiGridComponent', () => {
   it('paginates rows and raises pagination events deterministically', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enablePagination: true,
-      enablePaginationControls: true,
-      paginationPageSizes: [1, 2],
-      paginationPageSize: 1,
-      paginationCurrentPage: 1
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          enablePagination: true,
+          enablePaginationControls: true,
+          paginationPageSizes: [1, 2],
+          paginationPageSize: 1,
+          paginationCurrentPage: 1,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const paginationChanged = vi.fn();
@@ -676,17 +791,23 @@ describe('UiGridComponent', () => {
   it('handles pagination button clicks, empty summaries, and invalid page sizes from the template', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      data: [],
-      enablePagination: true,
-      enablePaginationControls: true,
-      paginationPageSizes: [1, 2],
-      paginationPageSize: 1,
-      paginationCurrentPage: 1,
-      emptyMessage: 'No data'
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          data: [],
+          enablePagination: true,
+          enablePaginationControls: true,
+          paginationPageSizes: [1, 2],
+          paginationPageSize: 1,
+          paginationCurrentPage: 1,
+          emptyMessage: 'No data',
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);
@@ -702,15 +823,21 @@ describe('UiGridComponent', () => {
   it('clamps external pagination through the api wrappers and keeps external row indices stable', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enablePagination: true,
-      useExternalPagination: true,
-      totalItems: 7,
-      paginationPageSizes: [2, 5],
-      paginationCurrentPage: 3
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          enablePagination: true,
+          useExternalPagination: true,
+          totalItems: 7,
+          paginationPageSizes: [2, 5],
+          paginationCurrentPage: 3,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const paginationChanged = vi.fn();
@@ -789,9 +916,21 @@ describe('UiGridComponent', () => {
         revenue: 500,
         account: { owner: 'Owner 1' },
         children: [
-          { id: 'child-1', name: 'Child 1', status: 'Pilot', revenue: 150, account: { owner: 'Owner 1A' } },
-          { id: 'child-2', name: 'Child 2', status: 'Pilot', revenue: 180, account: { owner: 'Owner 1B' } }
-        ]
+          {
+            id: 'child-1',
+            name: 'Child 1',
+            status: 'Pilot',
+            revenue: 150,
+            account: { owner: 'Owner 1A' },
+          },
+          {
+            id: 'child-2',
+            name: 'Child 2',
+            status: 'Pilot',
+            revenue: 180,
+            account: { owner: 'Owner 1B' },
+          },
+        ],
       },
       {
         id: 'parent-2',
@@ -799,20 +938,26 @@ describe('UiGridComponent', () => {
         status: 'Pilot',
         revenue: 220,
         account: { owner: 'Owner 2' },
-        children: []
-      }
+        children: [],
+      },
     ];
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      data: treeData,
-      enableTreeView: true,
-      treeChildrenField: 'children',
-      showTreeExpandNoChildren: false,
-      enableGrouping: false,
-      virtualizationThreshold: 99
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          data: treeData,
+          enableTreeView: true,
+          treeChildrenField: 'children',
+          showTreeExpandNoChildren: false,
+          enableGrouping: false,
+          virtualizationThreshold: 99,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const rowExpanded = vi.fn();
@@ -821,11 +966,19 @@ describe('UiGridComponent', () => {
     gridApi.treeBase.on.rowCollapsed(rowCollapsed);
 
     expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual(['parent-1', 'parent-2']);
-    expect(gridApi.treeBase.getRowChildren('parent-1').map((row) => row.id)).toEqual(['child-1', 'child-2']);
+    expect(gridApi.treeBase.getRowChildren('parent-1').map((row) => row.id)).toEqual([
+      'child-1',
+      'child-2',
+    ]);
 
     gridApi.treeBase.expandRow('parent-1');
     fixture.detectChanges();
-    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual(['parent-1', 'child-1', 'child-2', 'parent-2']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual([
+      'parent-1',
+      'child-1',
+      'child-2',
+      'parent-2',
+    ]);
     expect(rowExpanded).toHaveBeenCalled();
 
     gridApi.treeView.setTreeView({ 'parent-1': false });
@@ -835,7 +988,12 @@ describe('UiGridComponent', () => {
 
     gridApi.treeBase.toggleRowTreeState('parent-1');
     fixture.detectChanges();
-    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual(['parent-1', 'child-1', 'child-2', 'parent-2']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual([
+      'parent-1',
+      'child-1',
+      'child-2',
+      'parent-2',
+    ]);
 
     gridApi.treeBase.collapseRow('parent-1');
     fixture.detectChanges();
@@ -844,7 +1002,12 @@ describe('UiGridComponent', () => {
 
     gridApi.treeBase.expandAllRows();
     fixture.detectChanges();
-    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual(['parent-1', 'child-1', 'child-2', 'parent-2']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual([
+      'parent-1',
+      'child-1',
+      'child-2',
+      'parent-2',
+    ]);
 
     gridApi.treeBase.collapseAllRows();
     fixture.detectChanges();
@@ -854,7 +1017,12 @@ describe('UiGridComponent', () => {
     const treeToggle = shadowRoot.querySelector('.row-toggle-tree') as HTMLButtonElement;
     treeToggle.click();
     fixture.detectChanges();
-    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual(['parent-1', 'child-1', 'child-2', 'parent-2']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.id)).toEqual([
+      'parent-1',
+      'child-1',
+      'child-2',
+      'parent-2',
+    ]);
 
     treeToggle.click();
     fixture.detectChanges();
@@ -875,9 +1043,12 @@ describe('UiGridComponent', () => {
   it('exposes helper labels used by the shared display template', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
@@ -902,7 +1073,9 @@ describe('UiGridComponent', () => {
     component.activeFilters.set({ status: 'Active' });
     expect(component.filterValue('status')).toBe('Active');
     expect(component.filterPlaceholder(statusColumn)).toBe('Filter…');
-    expect(component.filterPlaceholder({ ...statusColumn, filterable: false })).toBe('Filter disabled');
+    expect(component.filterPlaceholder({ ...statusColumn, filterable: false })).toBe(
+      'Filter disabled',
+    );
     expect(component.isFilterInputDisabled(statusColumn)).toBe(false);
     expect(component.isFilterInputDisabled({ ...statusColumn, filterable: false })).toBe(true);
 
@@ -924,13 +1097,16 @@ describe('UiGridComponent', () => {
 
   it('resolves custom i18n label overrides while keeping defaults for unset keys', () => {
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      labels: {
-        sortDefault: 'Trier',
-        sortAsc: 'Tri croissant',
-        paginationNext: 'Suivant',
-      }
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        labels: {
+          sortDefault: 'Trier',
+          sortAsc: 'Tri croissant',
+          paginationNext: 'Suivant',
+        },
+      }),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
@@ -948,17 +1124,23 @@ describe('UiGridComponent', () => {
   it('supports keyboard-driven cell editing with commit, navigation, and cancel events', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enableGrouping: false,
-      enableCellEditOnFocus: true,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', enableCellEdit: true },
-        { name: 'status' },
-        { name: 'owner', field: 'account.owner', enableCellEdit: true }
-      ]
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          enableGrouping: false,
+          enableCellEditOnFocus: true,
+          columnDefs: [
+            { name: 'name', displayName: 'Customer', enableCellEdit: true },
+            { name: 'status' },
+            { name: 'owner', field: 'account.owner', enableCellEdit: true },
+          ],
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -970,13 +1152,17 @@ describe('UiGridComponent', () => {
     gridApi.edit.on.cancelCellEdit(cancelCellEdit);
 
     const shadowRoot = getShadowRoot(fixture);
-    const firstNameCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="name"]') as HTMLElement;
+    const firstNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLElement;
     firstNameCell.focus();
     firstNameCell.dispatchEvent(keyDown(firstNameCell, { key: 'Z' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    let editor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]') as HTMLInputElement;
+    let editor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLInputElement;
     expect(editor.value).toBe('Z');
     expect(beginCellEdit).toHaveBeenCalled();
 
@@ -989,11 +1175,15 @@ describe('UiGridComponent', () => {
       expect.objectContaining({ id: 'row-1', name: 'Z' }),
       expect.objectContaining({ name: 'name' }),
       'Z',
-      'Gamma'
+      'Gamma',
     );
 
-    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
-    const statusCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    expect(
+      shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]'),
+    ).toBeNull();
+    const statusCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="status"]',
+    ) as HTMLElement;
     expect(statusCell).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(statusCell);
 
@@ -1001,25 +1191,35 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    const ownerEditor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLInputElement;
     expect(ownerEditor).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(ownerEditor);
-    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]')).toBeNull();
+    expect(
+      shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]'),
+    ).toBeNull();
 
     ownerEditor.dispatchEvent(keyDown(ownerEditor, { key: 'Tab', shiftKey: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const statusCellAgain = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    const statusCellAgain = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="status"]',
+    ) as HTMLElement;
     expect(statusCellAgain).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(statusCellAgain);
-    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]')).toBeNull();
+    expect(
+      shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]'),
+    ).toBeNull();
 
     statusCellAgain.dispatchEvent(keyDown(statusCellAgain, { key: 'Tab', shiftKey: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const nameEditorAgain = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="name"]') as HTMLInputElement;
+    const nameEditorAgain = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLInputElement;
     expect(nameEditorAgain).toBeTruthy();
     expect(shadowRoot.activeElement).toBe(nameEditorAgain);
 
@@ -1028,13 +1228,17 @@ describe('UiGridComponent', () => {
     await fixture.whenStable();
     cancelCellEdit.mockClear();
 
-    const ownerCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="owner"]') as HTMLElement;
+    const ownerCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLElement;
     ownerCell.focus();
     ownerCell.dispatchEvent(keyDown(ownerCell, { key: 'F2' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    editor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    editor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLInputElement;
     expect(editor.value).toBe('Mina Patel');
     editor.value = 'Taylor Morgan';
     editor.dispatchEvent(domEvent(editor, 'input'));
@@ -1045,35 +1249,44 @@ describe('UiGridComponent', () => {
     expect(gridApi.core.getVisibleRows()[0]?.entity['account']).toEqual({ owner: 'Mina Patel' });
     expect(cancelCellEdit).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'row-1' }),
-      expect.objectContaining({ name: 'owner' })
+      expect.objectContaining({ name: 'owner' }),
     );
   });
 
   it('tabs from a non-editable cell to the next editable cell', async () => {
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enableGrouping: false,
-      enableCellEditOnFocus: true,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', enableCellEdit: true },
-        { name: 'status' },
-        { name: 'owner', field: 'account.owner', enableCellEdit: true }
-      ]
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enableGrouping: false,
+        enableCellEditOnFocus: true,
+        columnDefs: [
+          { name: 'name', displayName: 'Customer', enableCellEdit: true },
+          { name: 'status' },
+          { name: 'owner', field: 'account.owner', enableCellEdit: true },
+        ],
+      }),
+    );
     fixture.detectChanges();
     await fixture.whenStable();
 
     const shadowRoot = getShadowRoot(fixture);
-    const statusCell = shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]') as HTMLElement;
+    const statusCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="status"]',
+    ) as HTMLElement;
     statusCell.focus();
     statusCell.dispatchEvent(keyDown(statusCell, { key: 'Tab' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const ownerEditor = shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="owner"]') as HTMLInputElement;
+    const ownerEditor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLInputElement;
     expect(ownerEditor).toBeTruthy();
     expect(ownerEditor.value).toBe('Mina Patel');
-    expect(shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]')).toBeNull();
+    expect(
+      shadowRoot.querySelector('.cell-editor[data-row-id="row-1"][data-col-name="status"]'),
+    ).toBeNull();
   });
 
   it('exercises edit api wrappers, parser fallbacks, and refresh cloning deterministically', async () => {
@@ -1085,24 +1298,30 @@ describe('UiGridComponent', () => {
         enabled: false,
         renewal: '2026-01-01',
         account: { owner: 'Mina Patel' },
-        locked: 'read-only'
-      }
+        locked: 'read-only',
+      },
     ];
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      data: editData,
-      enableGrouping: false,
-      enableCellEdit: true,
-      columnDefs: [
-        { name: 'revenue', type: 'number', enableCellEdit: true },
-        { name: 'enabled', type: 'boolean', enableCellEdit: true },
-        { name: 'renewal', type: 'date', enableCellEdit: true },
-        { name: 'owner', field: 'account.owner', enableCellEdit: true },
-        { name: 'locked', enableCellEdit: false }
-      ]
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          data: editData,
+          enableGrouping: false,
+          enableCellEdit: true,
+          columnDefs: [
+            { name: 'revenue', type: 'number', enableCellEdit: true },
+            { name: 'enabled', type: 'boolean', enableCellEdit: true },
+            { name: 'renewal', type: 'date', enableCellEdit: true },
+            { name: 'owner', field: 'account.owner', enableCellEdit: true },
+            { name: 'locked', enableCellEdit: false },
+          ],
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -1147,8 +1366,12 @@ describe('UiGridComponent', () => {
 
     const visibleColumns = component.visibleColumns();
     expect(component.moveFocus({ id: 'missing-row' }, visibleColumns[0], 'right')).toBe(false);
-    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'left')).toBe(false);
-    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'up')).toBe(false);
+    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'left')).toBe(
+      false,
+    );
+    expect(component.moveFocus(gridApi.core.getVisibleRows()[0], visibleColumns[0], 'up')).toBe(
+      false,
+    );
 
     expect(component.stringifyEditorValue(new Date('2026-02-03T00:00:00.000Z'))).toBe('2026-02-03');
     expect(component.stringifyEditorValue(undefined)).toBe('');
@@ -1173,14 +1396,17 @@ describe('UiGridComponent', () => {
 
   it('uses overflow-capable default grid tracks so pinned columns can stick inside a horizontal scroller', () => {
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enablePinning: true,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', pinnedLeft: true },
-        { name: 'status' },
-        { name: 'revenue', align: 'end' },
-      ],
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enablePinning: true,
+        columnDefs: [
+          { name: 'name', displayName: 'Customer', pinnedLeft: true },
+          { name: 'status' },
+          { name: 'revenue', align: 'end' },
+        ],
+      }),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
@@ -1190,17 +1416,23 @@ describe('UiGridComponent', () => {
   it('appends pinned columns in click order and returns unpinned columns to the normal area', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enablePinning: true,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer' },
-        { name: 'status' },
-        { name: 'revenue', align: 'end' },
-        { name: 'owner', field: 'account.owner' },
-      ],
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          enablePinning: true,
+          columnDefs: [
+            { name: 'name', displayName: 'Customer' },
+            { name: 'status' },
+            { name: 'revenue', align: 'end' },
+            { name: 'owner', field: 'account.owner' },
+          ],
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
@@ -1236,21 +1468,24 @@ describe('UiGridComponent', () => {
 
   it('opens a left-right pin menu for unpinned columns and unpins directly from an active pin button', () => {
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enablePinning: true,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer' },
-        { name: 'status' },
-        { name: 'revenue', align: 'end' },
-      ],
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enablePinning: true,
+        columnDefs: [
+          { name: 'name', displayName: 'Customer' },
+          { name: 'status' },
+          { name: 'revenue', align: 'end' },
+        ],
+      }),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
     const shadowRoot = getShadowRoot(fixture);
     const pinToggleFor = (headerLabel: string): HTMLButtonElement => {
-      const headerCell = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
-        node.querySelector('.header-label')?.textContent?.trim() === headerLabel,
+      const headerCell = [...shadowRoot.querySelectorAll('.header-cell')].find(
+        (node) => node.querySelector('.header-label')?.textContent?.trim() === headerLabel,
       ) as HTMLElement | undefined;
 
       if (!headerCell) {
@@ -1263,12 +1498,14 @@ describe('UiGridComponent', () => {
     pinToggleFor('Customer').click();
     fixture.detectChanges();
 
-    const customerHeader = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
-      node.querySelector('.header-label')?.textContent?.trim() === 'Customer',
+    const customerHeader = [...shadowRoot.querySelectorAll('.header-cell')].find(
+      (node) => node.querySelector('.header-label')?.textContent?.trim() === 'Customer',
     ) as HTMLElement;
     const customerMenu = customerHeader.querySelector('[part="pin-menu"]') as HTMLElement;
     expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(true);
-    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(true);
+    expect(
+      customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open'),
+    ).toBe(true);
     expect(customerMenu.getAttribute('aria-hidden')).toBe('false');
     expect(customerHeader.querySelector('[part="pin-left-action"]')).not.toBeNull();
     expect(customerHeader.querySelector('[part="pin-right-action"]')).not.toBeNull();
@@ -1278,7 +1515,9 @@ describe('UiGridComponent', () => {
 
     expect(component.pinnedColumns()).toMatchObject({ name: 'left' });
     expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(false);
-    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(false);
+    expect(
+      customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open'),
+    ).toBe(false);
     expect(customerMenu.getAttribute('aria-hidden')).toBe('true');
 
     pinToggleFor('Customer').click();
@@ -1286,12 +1525,14 @@ describe('UiGridComponent', () => {
 
     expect(component.pinnedColumns().name).toBeUndefined();
     expect(customerHeader.classList.contains('is-pin-menu-open')).toBe(false);
-    expect(customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open')).toBe(false);
+    expect(
+      customerHeader.querySelector('.pin-control')?.classList.contains('pin-control-open'),
+    ).toBe(false);
 
     pinToggleFor('Status').click();
     fixture.detectChanges();
-    const statusHeader = [...shadowRoot.querySelectorAll('.header-cell')].find((node) =>
-      node.querySelector('.header-label')?.textContent?.trim() === 'Status',
+    const statusHeader = [...shadowRoot.querySelectorAll('.header-cell')].find(
+      (node) => node.querySelector('.header-label')?.textContent?.trim() === 'Status',
     ) as HTMLElement;
     const statusMenu = statusHeader.querySelector('[part="pin-menu"]') as HTMLElement;
     expect(statusHeader.classList.contains('is-pin-menu-open')).toBe(true);
@@ -1308,22 +1549,28 @@ describe('UiGridComponent', () => {
   it('raises infinite scroll load events near the top and bottom of the viewport', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      data: Array.from({ length: 8 }, (_value, index) => ({
-        id: `row-${index + 1}`,
-        name: `Row ${index + 1}`,
-        status: index % 2 === 0 ? 'Active' : 'Pilot',
-        revenue: index * 10,
-        account: { owner: `Owner ${index + 1}` }
-      })),
-      virtualizationThreshold: 1,
-      viewportHeight: 44,
-      infiniteScrollRowsFromEnd: 1,
-      infiniteScrollUp: true,
-      infiniteScrollDown: true
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          data: Array.from({ length: 8 }, (_value, index) => ({
+            id: `row-${index + 1}`,
+            name: `Row ${index + 1}`,
+            status: index % 2 === 0 ? 'Active' : 'Pilot',
+            revenue: index * 10,
+            account: { owner: `Owner ${index + 1}` },
+          })),
+          virtualizationThreshold: 1,
+          viewportHeight: 44,
+          infiniteScrollRowsFromEnd: 1,
+          infiniteScrollUp: true,
+          infiniteScrollDown: true,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const needMoreTop = vi.fn();
@@ -1342,22 +1589,28 @@ describe('UiGridComponent', () => {
   it('updates infinite scroll helper state through the api', async () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      data: Array.from({ length: 5 }, (_value, index) => ({
-        id: `row-${index + 1}`,
-        name: `Row ${index + 1}`,
-        status: 'Active',
-        revenue: index,
-        account: { owner: `Owner ${index + 1}` }
-      })),
-      virtualizationThreshold: 1,
-      viewportHeight: 44,
-      infiniteScrollRowsFromEnd: 1,
-      infiniteScrollUp: true,
-      infiniteScrollDown: true
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          data: Array.from({ length: 5 }, (_value, index) => ({
+            id: `row-${index + 1}`,
+            name: `Row ${index + 1}`,
+            status: 'Active',
+            revenue: index,
+            account: { owner: `Owner ${index + 1}` },
+          })),
+          virtualizationThreshold: 1,
+          viewportHeight: 44,
+          infiniteScrollRowsFromEnd: 1,
+          infiniteScrollUp: true,
+          infiniteScrollDown: true,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
@@ -1366,19 +1619,35 @@ describe('UiGridComponent', () => {
     expect(component.infiniteScrollState().dataLoading).toBe(true);
 
     await gridApi.infiniteScroll.dataLoaded(false, false);
-    expect(component.infiniteScrollState()).toMatchObject({ scrollUp: false, scrollDown: false, dataLoading: false });
+    expect(component.infiniteScrollState()).toMatchObject({
+      scrollUp: false,
+      scrollDown: false,
+      dataLoading: false,
+    });
 
     gridApi.infiniteScroll.saveScrollPercentage();
     expect(component.infiniteScrollState().previousVisibleRows).toBe(5);
 
     gridApi.infiniteScroll.dataRemovedTop(true, false);
-    expect(component.infiniteScrollState()).toMatchObject({ scrollUp: true, scrollDown: false, previousVisibleRows: 0 });
+    expect(component.infiniteScrollState()).toMatchObject({
+      scrollUp: true,
+      scrollDown: false,
+      previousVisibleRows: 0,
+    });
 
     gridApi.infiniteScroll.dataRemovedBottom(false, true);
-    expect(component.infiniteScrollState()).toMatchObject({ scrollUp: false, scrollDown: true, previousVisibleRows: 0 });
+    expect(component.infiniteScrollState()).toMatchObject({
+      scrollUp: false,
+      scrollDown: true,
+      previousVisibleRows: 0,
+    });
 
     gridApi.infiniteScroll.resetScroll(true, true);
-    expect(component.infiniteScrollState()).toMatchObject({ scrollUp: true, scrollDown: true, previousVisibleRows: 0 });
+    expect(component.infiniteScrollState()).toMatchObject({
+      scrollUp: true,
+      scrollDown: true,
+      previousVisibleRows: 0,
+    });
   });
 
   it('raises grid dimension changes through auto resize and updates the fallback viewport height', () => {
@@ -1386,23 +1655,32 @@ describe('UiGridComponent', () => {
     let resizeCallback: ResizeObserverCallback | undefined;
     const disconnect = vi.fn();
 
-    vi.stubGlobal('ResizeObserver', class {
-      constructor(callback: ResizeObserverCallback) {
-        resizeCallback = callback;
-      }
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeCallback = callback;
+        }
 
-      observe(): void {}
+        observe(): void {}
 
-      disconnect = disconnect;
-    });
+        disconnect = disconnect;
+      },
+    );
 
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({
-      enableAutoResize: true,
-      viewportHeight: undefined
-    }, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions(
+        {
+          enableAutoResize: true,
+          viewportHeight: undefined,
+        },
+        (api) => {
+          gridApi = api;
+        },
+      ),
+    );
     fixture.detectChanges();
 
     const gridDimensionChanged = vi.fn();
@@ -1412,21 +1690,27 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
     expect(gridDimensionChanged).not.toHaveBeenCalled();
 
-    resizeCallback?.([
-      {
-        contentRect: { width: 640, height: 720 } as DOMRectReadOnly
-      } as ResizeObserverEntry
-    ], {} as ResizeObserver);
+    resizeCallback?.(
+      [
+        {
+          contentRect: { width: 640, height: 720 } as DOMRectReadOnly,
+        } as ResizeObserverEntry,
+      ],
+      {} as ResizeObserver,
+    );
     fixture.detectChanges();
 
     expect(gridDimensionChanged).toHaveBeenCalledWith(0, 0, 720, 640);
     expect((fixture.componentInstance as any).viewportHeight()).toBe('720px');
 
-    resizeCallback?.([
-      {
-        contentRect: { width: 640, height: 720 } as DOMRectReadOnly
-      } as ResizeObserverEntry
-    ], {} as ResizeObserver);
+    resizeCallback?.(
+      [
+        {
+          contentRect: { width: 640, height: 720 } as DOMRectReadOnly,
+        } as ResizeObserverEntry,
+      ],
+      {} as ResizeObserver,
+    );
     fixture.detectChanges();
     expect(gridDimensionChanged).toHaveBeenCalledTimes(1);
 
@@ -1456,7 +1740,10 @@ describe('UiGridComponent', () => {
     expect(saved.sort).toEqual({ columnName: 'name', direction: SORT_DIRECTIONS.desc });
     expect(saved.grouping).toEqual(['status']);
     expect(saved.expandable).toBeTruthy();
-    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual(['Beta', 'alpha']);
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'Beta',
+      'alpha',
+    ]);
   });
 
   it('ignores malformed values when restoring saved state', async () => {
@@ -1472,7 +1759,7 @@ describe('UiGridComponent', () => {
       grouping: ['status', 123 as never],
       pagination: { paginationCurrentPage: -3, paginationPageSize: 25 } as never,
       expandable: { row1: true, row2: 'yes' as never },
-      treeView: { row3: false, row4: 1 as never }
+      treeView: { row3: false, row4: 1 as never },
     });
 
     const saved = gridApi.saveState.save();
@@ -1486,9 +1773,12 @@ describe('UiGridComponent', () => {
   it('fires toolbar actions from the template and updates benchmark metrics', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
-    fixture.componentRef.setInput('options', createOptions({}, (api) => {
-      gridApi = api;
-    }));
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({}, (api) => {
+        gridApi = api;
+      }),
+    );
     fixture.detectChanges();
 
     const shadowRoot = getShadowRoot(fixture);

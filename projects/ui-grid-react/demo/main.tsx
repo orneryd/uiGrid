@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UiGrid } from '../src/index';
 import type { GridOptions, UiGridApi } from '../src/index';
-import { FILTER_CONDITIONS } from '@ornery/ui-grid';
+import { FILTER_CONDITIONS } from '@ornery/ui-grid-core';
 import '../src/ui-grid.css';
 
 const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'] as const;

@@ -14,8 +14,8 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { createGridApi, UiGridApi } from './grid.api';
 import {
+  createGridApi,
   FEATURE_AUTO_RESIZE,
   FEATURE_CELL_EDIT,
   FEATURE_COLUMN_MOVING,
@@ -29,9 +29,8 @@ import {
   FEATURE_PINNING,
   FEATURE_SORTING,
   FEATURE_TREE_VIEW,
-} from './grid.features';
-import { FILTER_CONDITIONS, SORT_DIRECTIONS, SortDirection } from './grid.constants';
-import {
+  FILTER_CONDITIONS,
+  SORT_DIRECTIONS,
   GridBenchmarkResult,
   GridCellEditableContext,
   GridCellPosition,
@@ -44,11 +43,6 @@ import {
   GridRow,
   GridSavedState,
   SortState,
-} from './grid.models';
-import { runColumnFilter, setupFilters } from './row-searcher';
-import { getSortFn } from './row-sorter';
-import { getCellValue, getPathValue, setPathValue } from './grid.utils';
-import {
   addGridRowInvisibleReason,
   areAllGridRowsExpanded,
   buildGridCellContext,
@@ -96,8 +90,10 @@ import {
   getFirstRowIndexValue as coreGetFirstRowIndexValue,
   getLastRowIndexValue as coreGetLastRowIndexValue,
   getTotalPagesValue as coreGetTotalPagesValue,
+  getCellValue,
   parseGridEditedValue,
   resolveGridRowId as coreResolveGridRowId,
+  setPathValue,
   shouldShowGridExpandToggle,
   shouldShowGridPaginationControls,
   shouldShowGridTreeToggle,
@@ -106,19 +102,14 @@ import {
   headerLabel as coreHeaderLabel,
   normalizeBooleanMap,
   sanitizeDownloadFilename,
-} from './grid.core';
-import {
   PinDirection,
   PinnedColumnState,
   buildInitialPinnedState,
   computePinnedOffset,
   isColumnPinnable,
   isPinningEnabled,
-} from './grid.core';
-import type { DisplayItem, ExpandableItem, GroupItem, PipelineResult } from './grid.core';
-import { buildGridPipeline as buildTypescriptGridPipeline } from './grid.core.pipeline';
-import { defaultGridEngine } from './ui-grid.engine';
-import {
+  buildGridPipeline as buildTypescriptGridPipeline,
+  defaultGridEngine,
   applyGridSortStateCommand,
   beginGridCellEditCommand,
   cancelGridCellEditCommand,
@@ -133,6 +124,7 @@ import {
   maybeRequestInfiniteScrollCommand,
   moveGridColumnCommand,
   moveGridVisibleColumnCommand,
+  pinGridColumnCommand,
   resetGridInfiniteScrollCommand,
   restoreGridStateCommand,
   saveGridInfiniteScrollPercentageCommand,
@@ -145,15 +137,10 @@ import {
   toggleGridGroupingCommand,
   toggleGridTreeRowCommand,
   updateGridFilterCommand,
-} from './ui-grid.commands';
-import { pinGridColumnCommand } from './ui-grid.commands';
-import {
   downloadGridCsvFile,
   focusGridEditor,
   focusGridRenderedCell,
   observeGridHostSize,
-} from './ui-grid.host';
-import {
   raiseGridBenchmarkComplete,
   raiseGridCanvasHeightChanged,
   raiseGridDimensionChanged,
@@ -162,15 +149,17 @@ import {
   raiseGridRowsVisibleChanged,
   raiseGridScrollBegin,
   raiseGridScrollEnd,
-} from './ui-grid.events';
+  type DisplayItem,
+  type ExpandableItem,
+  type GroupItem,
+  type PipelineResult,
+  type SortDirection,
+  type UiGridApi,
+} from '@ornery/ui-grid-core';
 
 @Component({
   selector: 'app-ui-grid',
-  imports: [
-    NgTemplateOutlet,
-    CdkDropList,
-    CdkDrag,
-  ],
+  imports: [NgTemplateOutlet, CdkDropList, CdkDrag],
   templateUrl: './ui-grid.component.html',
   styleUrl: './ui-grid.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -401,7 +390,9 @@ export class UiGridComponent {
       .filter(([, direction]) => direction === 'right')
       .map(([columnName]) => columnByName.get(columnName))
       .filter((column): column is GridColumnDef => column !== undefined);
-    const centerColumns = orderedColumns.filter((column) => pinnedColumns[column.name] === undefined);
+    const centerColumns = orderedColumns.filter(
+      (column) => pinnedColumns[column.name] === undefined,
+    );
 
     return [...pinnedLeft, ...centerColumns, ...pinnedRight];
   });
@@ -418,9 +409,6 @@ export class UiGridComponent {
   protected readonly displayItems = computed(() => this.pipeline().displayItems);
   protected readonly renderVirtualViewport = computed(
     () => this.virtualizationEnabled() && !isPlatformServer(this.platformId),
-  );
-  protected readonly stickyChromeHeight = computed(
-    () => this.headerStickyHeight() + this.filterStickyHeight(),
   );
   private readonly virtualMetrics = computed(() => {
     const items = this.displayItems();
@@ -442,9 +430,7 @@ export class UiGridComponent {
 
     return { offsets, totalHeight };
   });
-  private readonly virtualBodyScrollTop = computed(() =>
-    Math.max(0, this.scrollTop() - this.stickyChromeHeight()),
-  );
+  private readonly virtualBodyScrollTop = computed(() => Math.max(0, this.scrollTop()));
   private readonly variableVirtualHeights = computed(() =>
     this.displayItems().some((item) => item.kind === 'expandable'),
   );
@@ -474,7 +460,10 @@ export class UiGridComponent {
 
       return {
         start: window.visibleRange.start,
-        end: Math.min(items.length, Math.max(window.visibleRange.end, window.visibleRange.start + 1)),
+        end: Math.min(
+          items.length,
+          Math.max(window.visibleRange.end, window.visibleRange.start + 1),
+        ),
         offsetTop: window.offsetY,
       };
     }
@@ -513,9 +502,7 @@ export class UiGridComponent {
   });
   protected readonly pipelineMs = computed(() => this.pipeline().pipelineMs);
   protected readonly virtualizationEnabled = computed(() => this.pipeline().virtualizationEnabled);
-  protected readonly scrollContainerHeight = computed(() =>
-    `${this.viewportHeightValue() + this.stickyChromeHeight()}px`,
-  );
+  protected readonly scrollContainerHeight = computed(() => `${this.viewportHeightValue()}px`);
   protected readonly virtualContentHeight = computed(() => this.virtualMetrics().totalHeight);
   protected readonly virtualContentOffset = computed(() => this.virtualWindow().offsetTop);
   protected readonly labels = computed<GridLabels>(() => resolveGridLabels(this.options().labels));
@@ -624,11 +611,15 @@ export class UiGridComponent {
   }
 
   protected cellTemplate(column: GridColumnDef): TemplateRef<GridCellTemplateContext> | null {
-    return column.cellTemplate ?? null;
+    return (column.cellTemplate as TemplateRef<GridCellTemplateContext> | undefined) ?? null;
   }
 
   protected expandableTemplate(): TemplateRef<GridExpandableTemplateContext> | null {
-    return this.options().expandableRowTemplate ?? null;
+    return (
+      (this.options().expandableRowTemplate as
+        | TemplateRef<GridExpandableTemplateContext>
+        | undefined) ?? null
+    );
   }
 
   protected cellContext(row: GridRow, column: GridColumnDef): GridCellTemplateContext {
@@ -859,10 +850,14 @@ export class UiGridComponent {
       return;
     }
 
-    this.openPinMenuColumn.update((current) => current === column.name ? null : column.name);
+    this.openPinMenuColumn.update((current) => (current === column.name ? null : column.name));
   }
 
-  protected choosePinDirection(column: GridColumnDef, direction: 'left' | 'right', event?: Event): void {
+  protected choosePinDirection(
+    column: GridColumnDef,
+    direction: 'left' | 'right',
+    event?: Event,
+  ): void {
     event?.stopPropagation();
     this.pinColumn(column.name, direction);
   }
@@ -882,9 +877,12 @@ export class UiGridComponent {
   }
 
   private eventPathIncludesClass(event: Event, className: string): boolean {
-    const eventPath = typeof event.composedPath === 'function'
-      ? event.composedPath()
-      : (event.target ? [event.target] : []);
+    const eventPath =
+      typeof event.composedPath === 'function'
+        ? event.composedPath()
+        : event.target
+          ? [event.target]
+          : [];
 
     return eventPath.some((target) => {
       if (!target || typeof target !== 'object' || !('classList' in target)) {
@@ -928,9 +926,7 @@ export class UiGridComponent {
     }
 
     this.scrollTop.set(target.scrollTop);
-    this.onViewportIndexChange(
-      this.resolveVirtualStartIndex(Math.max(0, target.scrollTop - this.stickyChromeHeight())),
-    );
+    this.onViewportIndexChange(this.resolveVirtualStartIndex(Math.max(0, target.scrollTop)));
   }
 
   protected ssrVisibleItemCount(): number {
@@ -1602,10 +1598,7 @@ export class UiGridComponent {
       state: this.infiniteScrollState(),
       startIndex,
       visibleRows: this.pipeline().visibleRows.length,
-      viewportRows: Math.max(
-        1,
-        Math.ceil(this.viewportHeightValue() / this.rowSize()),
-      ),
+      viewportRows: Math.max(1, Math.ceil(this.viewportHeightValue() / this.rowSize())),
       threshold: this.options().infiniteScrollRowsFromEnd ?? 20,
       setState: (state) => this.infiniteScrollState.set(state),
     });
@@ -1726,8 +1719,8 @@ export class UiGridComponent {
     const offsets = this.virtualMetrics().offsets;
     let startIndex = 0;
     while (
-      startIndex < items.length
-      && (offsets[startIndex] ?? 0) + this.displayItemHeight(items[startIndex]!) <= bodyScrollTop
+      startIndex < items.length &&
+      (offsets[startIndex] ?? 0) + this.displayItemHeight(items[startIndex]!) <= bodyScrollTop
     ) {
       startIndex += 1;
     }
@@ -1741,8 +1734,10 @@ export class UiGridComponent {
       return;
     }
 
-    const headerHeight = (shadowRoot.querySelector('.header-grid') as HTMLElement | null)?.offsetHeight ?? 0;
-    const filterHeight = (shadowRoot.querySelector('.filter-grid') as HTMLElement | null)?.offsetHeight ?? 0;
+    const headerHeight =
+      (shadowRoot.querySelector('.header-grid') as HTMLElement | null)?.offsetHeight ?? 0;
+    const filterHeight =
+      (shadowRoot.querySelector('.filter-grid') as HTMLElement | null)?.offsetHeight ?? 0;
 
     if (headerHeight !== this.headerStickyHeight()) {
       this.headerStickyHeight.set(headerHeight);

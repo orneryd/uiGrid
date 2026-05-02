@@ -128,7 +128,7 @@ import {
   raiseGridBenchmarkComplete,
   downloadGridCsvFile,
   observeGridHostSize,
-} from '@ornery/ui-grid';
+} from '@ornery/ui-grid-core';
 import type {
   DisplayItem,
   GroupItem,
@@ -141,7 +141,7 @@ import type {
   GridExpandableTemplateContext,
   PinDirection,
   PinnedColumnState,
-} from '@ornery/ui-grid';
+} from '@ornery/ui-grid-core';
 
 function escapeCssSelectorValue(value: string): string {
   const nativeEscape = globalThis.CSS?.escape;
@@ -162,9 +162,7 @@ function escapeCssSelectorValue(value: string): string {
     const isControlCharacter = (codePoint >= 0x0001 && codePoint <= 0x001f) || codePoint === 0x007f;
     const startsWithDigit = index === 0 && codePoint >= 0x0030 && codePoint <= 0x0039;
     const secondCharDigitAfterHyphen =
-      index === 1 &&
-      codePoint >= 0x0030 && codePoint <= 0x0039 &&
-      value.charCodeAt(0) === 0x002d;
+      index === 1 && codePoint >= 0x0030 && codePoint <= 0x0039 && value.charCodeAt(0) === 0x002d;
 
     if (isControlCharacter || startsWithDigit || secondCharDigitAfterHyphen) {
       output += `\\${codePoint.toString(16)} `;
@@ -409,7 +407,9 @@ export function useGridState(
       .filter(([, direction]) => direction === 'right')
       .map(([columnName]) => columnByName.get(columnName))
       .filter((column): column is GridColumnDef => column !== undefined);
-    const centerColumns = orderedColumns.filter((column) => pinnedColumns[column.name] === undefined);
+    const centerColumns = orderedColumns.filter(
+      (column) => pinnedColumns[column.name] === undefined,
+    );
 
     return [...pinnedLeft, ...centerColumns, ...pinnedRight];
   }, [options.columnDefs, columnOrder, pinnedColumns]);

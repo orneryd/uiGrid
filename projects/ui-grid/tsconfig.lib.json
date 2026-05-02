@@ -5,14 +5,11 @@
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "paths": {
+      "@ornery/ui-grid-core": ["../ui-grid-core/src/index.ts"]
+    },
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": [
-    "src/public-api.ts"
-  ]
+  "include": ["src/public-api.ts"]
 }

@@ -7,7 +7,7 @@
     "declarationMap": true,
     "baseUrl": ".",
     "paths": {
-      "@ornery/ui-grid": ["../ui-grid/src/public-api.react.ts"]
+      "@ornery/ui-grid-core": ["../ui-grid-core/src/index.ts"]
     }
   },
   "include": ["src"]

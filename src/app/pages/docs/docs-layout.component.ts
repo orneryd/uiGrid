@@ -34,11 +34,11 @@ import { DocsRustEguiComponent } from './topics/rust-egui.component';
     DocsAccessibilityComponent,
     DocsReactComponent,
     DocsRustComponent,
-    DocsRustEguiComponent
+    DocsRustEguiComponent,
   ],
   templateUrl: './docs-layout.component.html',
   styleUrl: './docs-layout.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DocsLayoutComponent {
   protected readonly topics = [
@@ -53,15 +53,14 @@ export class DocsLayoutComponent {
     { id: 'web-component', label: 'Web Component' },
     { id: 'i18n', label: 'Internationalization' },
     { id: 'accessibility', label: 'Accessibility' },
-    { id: 'react', label: 'React' },
     { id: 'rust', label: 'Rust / WASM' },
-    { id: 'rust-egui', label: 'Rust / egui' }
+    { id: 'rust-egui', label: 'Rust / egui' },
   ] as const;
 
   private readonly route = inject(ActivatedRoute);
   private readonly topicParam = toSignal(
     this.route.paramMap.pipe(map((params) => params.get('topic'))),
-    { initialValue: null }
+    { initialValue: null },
   );
 
   protected readonly activeTopic = computed(() => this.topicParam() ?? 'getting-started');

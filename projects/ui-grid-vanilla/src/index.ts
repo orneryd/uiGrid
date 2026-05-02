@@ -1,17 +1,33 @@
-import { defineUiGridElement, registerRustWasmGridEngine } from '@ornery/ui-grid';
-import type { BuildGridPipelineContext, GridOptions, PipelineResult } from '@ornery/ui-grid';
+import { registerRustWasmGridEngine } from '@ornery/ui-grid-core';
+import type { BuildGridPipelineContext, GridOptions, PipelineResult } from '@ornery/ui-grid-core';
 
-export type { GridOptions, UiGridApi } from '@ornery/ui-grid';
-export { defineUiGridElement } from '@ornery/ui-grid';
+import {
+  defineStandaloneUiGridElement,
+  type VanillaUiGridElement,
+} from './ui-grid-standalone.element';
+export {
+  createVanillaGridController,
+  type GridControllerSnapshot,
+  type GridSaveState,
+  type VanillaGridController,
+} from './grid-controller';
+export {
+  defineStandaloneUiGridElement,
+  UiGridStandaloneElement,
+  type VanillaUiGridElement,
+  type UiGridControlIconKey,
+  type UiGridIconDefinition,
+  type UiGridIconOverrides,
+} from './ui-grid-standalone.element';
+
+export type { GridOptions, UiGridApi } from '@ornery/ui-grid-core';
 
 export interface UiGridRustWebModule {
   default(input?: unknown): Promise<unknown>;
   build_pipeline_js(context: BuildGridPipelineContext): PipelineResult;
 }
 
-export type VanillaUiGridElement = HTMLElement & {
-  options: GridOptions;
-};
+export { defineStandaloneUiGridElement as defineUiGridElement };
 
 export async function registerVanillaUiGridRustModule(
   module: UiGridRustWebModule,
@@ -35,7 +51,7 @@ export async function mountVanillaUiGrid(
     await registerVanillaUiGridRustModule(rustModule);
   }
 
-  await defineUiGridElement(tagName);
+  await defineStandaloneUiGridElement(tagName);
 
   const grid = document.createElement(tagName) as VanillaUiGridElement;
   grid.options = options;

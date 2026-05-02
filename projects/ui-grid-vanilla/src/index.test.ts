@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@ornery/ui-grid', () => ({
-  defineUiGridElement: vi.fn(),
-  registerRustWasmGridEngine: vi.fn(),
-}));
+vi.mock('@ornery/ui-grid-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ornery/ui-grid-core')>();
+  return {
+    ...actual,
+    registerRustWasmGridEngine: vi.fn(),
+  };
+});
 
-import { defineUiGridElement, registerRustWasmGridEngine } from '@ornery/ui-grid';
-import { mountVanillaUiGrid } from './index';
+import { registerRustWasmGridEngine } from '@ornery/ui-grid-core';
+import { defineUiGridElement, mountVanillaUiGrid } from './index';
 
 describe('mountVanillaUiGrid', () => {
   beforeEach(() => {
@@ -14,7 +17,7 @@ describe('mountVanillaUiGrid', () => {
     vi.clearAllMocks();
   });
 
-  it('defines the Rust element and mounts it with the provided options', async () => {
+  it('defines and mounts the standalone element with the provided options', async () => {
     const target = document.getElementById('app');
     if (!target) {
       throw new Error('Expected test root element');
@@ -35,9 +38,15 @@ describe('mountVanillaUiGrid', () => {
 
     expect(module.default).toHaveBeenCalledTimes(1);
     expect(registerRustWasmGridEngine).toHaveBeenCalledTimes(1);
-    expect(defineUiGridElement).toHaveBeenCalledWith('ui-grid-element');
+    expect(customElements.get('ui-grid-element')).toBeDefined();
     expect(grid.tagName.toLowerCase()).toBe('ui-grid-element');
     expect(grid.options).toBe(options);
     expect(target.firstElementChild).toBe(grid);
+  });
+
+  it('exposes defineUiGridElement compatibility alias', async () => {
+    await defineUiGridElement('ui-grid-element');
+    await defineUiGridElement('ui-grid-element');
+    expect(customElements.get('ui-grid-element')).toBeDefined();
   });
 });

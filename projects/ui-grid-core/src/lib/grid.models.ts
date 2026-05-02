@@ -1,7 +1,10 @@
-import type { TemplateRef } from '@angular/core';
 import { FilterCondition, SortDirection } from './grid.constants';
 import { nextUid } from './grid.utils';
 import defaultLabels from './i18n/en-US.json';
+
+export interface GridTemplateRefLike<Context = unknown> {
+  createEmbeddedView?(context: Context): unknown;
+}
 
 export type GridRecord = Record<string, unknown>;
 
@@ -11,7 +14,7 @@ export type GridFilterPredicate = (
   term: unknown,
   value: unknown,
   row: GridRecord,
-  column: GridColumnDef
+  column: GridColumnDef,
 ) => boolean;
 
 export type GridFilterOperator = FilterCondition | RegExp | GridFilterPredicate;
@@ -91,7 +94,7 @@ export interface GridColumnDef {
   sortingAlgorithm?: GridSortFn;
   valueGetter?: (row: GridRecord) => unknown;
   formatter?: (value: unknown, row: GridRecord) => string;
-  cellTemplate?: TemplateRef<GridCellTemplateContext>;
+  cellTemplate?: GridTemplateRefLike<GridCellTemplateContext>;
   cellRenderer?: (context: GridCellTemplateContext) => string;
 }
 
@@ -214,7 +217,7 @@ export interface GridOptions {
   enableExpandable?: boolean;
   expandableRowHeight?: number;
   expandableRowHeaderWidth?: number;
-  expandableRowTemplate?: TemplateRef<GridExpandableTemplateContext>;
+  expandableRowTemplate?: GridTemplateRefLike<GridExpandableTemplateContext>;
   expandableRowScope?: Record<string, unknown>;
   enableTreeView?: boolean;
   treeChildrenField?: string;
@@ -264,7 +267,7 @@ export class GridRow {
     readonly id: string,
     readonly entity: GridRecord,
     readonly index: number,
-    readonly height = 44
+    readonly height = 44,
   ) {}
 
   setThisRowInvisible(reason: string): void {

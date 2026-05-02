@@ -3,10 +3,10 @@ import {
   activeGridEngineBackend,
   clearRustWasmGridEngine,
   defaultGridEngine,
-} from '@ornery/ui-grid';
+} from '@ornery/ui-grid-core';
 import { registerReactUiGridWasmEngineFromModule } from './rustWasmGridEngine';
-import { SORT_DIRECTIONS } from '@ornery/ui-grid';
-import type { BuildGridPipelineContext, PipelineResult } from '@ornery/ui-grid';
+import { SORT_DIRECTIONS } from '@ornery/ui-grid-core';
+import type { BuildGridPipelineContext, PipelineResult } from '@ornery/ui-grid-core';
 
 function createContext(): BuildGridPipelineContext {
   return {

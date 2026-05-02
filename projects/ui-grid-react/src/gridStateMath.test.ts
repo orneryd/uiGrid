@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GridColumnDef } from '@ornery/ui-grid';
+import type { GridColumnDef } from '@ornery/ui-grid-core';
 import {
   buildGridTemplateColumns,
   computeViewportHeightPx,
@@ -18,15 +18,17 @@ describe('gridStateMath', () => {
   ];
 
   it('orders only visible columns by the provided column order', () => {
-    expect(orderVisibleColumns(columns, ['customer', 'revenue', 'status', 'owner']).map((column) => column.name)).toEqual([
-      'customer',
-      'revenue',
-      'status',
-    ]);
+    expect(
+      orderVisibleColumns(columns, ['customer', 'revenue', 'status', 'owner']).map(
+        (column) => column.name,
+      ),
+    ).toEqual(['customer', 'revenue', 'status']);
   });
 
   it('builds grid template columns deterministically', () => {
-    expect(buildGridTemplateColumns(orderVisibleColumns(columns, ['status', 'revenue', 'customer']))).toBe('2fr 120px minmax(11rem, max-content)');
+    expect(
+      buildGridTemplateColumns(orderVisibleColumns(columns, ['status', 'revenue', 'customer'])),
+    ).toBe('2fr 120px minmax(11rem, max-content)');
   });
 
   it('resolves benchmark iterations with a minimum of one', () => {

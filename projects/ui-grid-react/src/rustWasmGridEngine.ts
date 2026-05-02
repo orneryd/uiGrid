@@ -1,5 +1,5 @@
-import type { BuildGridPipelineContext, PipelineResult } from '@ornery/ui-grid';
-import { registerRustWasmGridEngine } from '@ornery/ui-grid';
+import type { BuildGridPipelineContext, PipelineResult } from '@ornery/ui-grid-core';
+import { registerRustWasmGridEngine } from '@ornery/ui-grid-core';
 
 const uiGridWasmModulePath = '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
 const uiGridWasmBinaryPath = '/dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm';
@@ -12,7 +12,7 @@ export function registerReactUiGridWasmEngineFromModule(module: UiGridWasmModule
   registerRustWasmGridEngine({
     buildPipeline(context: BuildGridPipelineContext): PipelineResult {
       return module.build_pipeline_js(context);
-    }
+    },
   });
 }
 

@@ -1,7 +1,7 @@
 import { createCustomElement } from '@angular/elements';
 import { createApplication } from '@angular/platform-browser';
 
-import { enableUiGridWasmEngine } from './ui-grid.engine.wasm';
+import { enableUiGridWasmEngine } from '@ornery/ui-grid-core';
 import { UiGridComponent } from './ui-grid.component';
 
 const elementDefinitions = new Map<string, Promise<void>>();

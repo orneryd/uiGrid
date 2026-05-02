@@ -1,5 +1,3 @@
-import '@angular/compiler';
-
 import { mountVanillaUiGrid } from '../src/index';
 import type { GridOptions } from '../src/index';
 import * as uiGridRustWebModule from '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';

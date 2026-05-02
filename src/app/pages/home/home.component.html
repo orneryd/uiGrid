@@ -29,6 +29,22 @@
     <app-ui-grid [options]="options()" />
   </section>
 
+  <section class="state-panel">
+    <div class="state-header">
+      <div>
+        <h2>Saved State</h2>
+        <p>Capture and restore state using <code>gridApi.saveState.save()</code> and
+          <code>gridApi.saveState.restore(...)</code>.</p>
+      </div>
+      <div class="state-actions">
+        <button type="button" class="state-button" (click)="captureState()">Capture State</button>
+        <button type="button" class="state-button state-button-secondary" (click)="restoreState()">Restore
+          State</button>
+      </div>
+    </div>
+    <pre>{{ savedStateJson() }}</pre>
+  </section>
+
   <section class="harness-stage">
     <app-grid-browser-harness />
   </section>

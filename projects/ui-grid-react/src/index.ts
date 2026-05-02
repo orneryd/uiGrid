@@ -1,12 +1,27 @@
 export { UiGrid } from './UiGrid';
 export type { UiGridProps } from './UiGrid';
 export { mountUiGrid } from './mountUiGrid';
+export {
+  mountUiGridCustomElement,
+  type MountUiGridCustomElementOptions,
+  type MountedUiGridCustomElement,
+} from './vanillaAdapter';
 export { useGridState } from './useGridState';
 export type { UseGridStateResult } from './useGridState';
 export { useVirtualScroll } from './useVirtualScroll';
 export type { UseVirtualScrollOptions, UseVirtualScrollResult } from './useVirtualScroll';
-export { orderVisibleColumns, buildGridTemplateColumns, resolveBenchmarkIterations, formatPaginationSummary, computeViewportHeightPx, computeViewportRows } from './gridStateMath';
-export { enableReactUiGridWasmEngine, registerReactUiGridWasmEngineFromModule } from './rustWasmGridEngine';
+export {
+  orderVisibleColumns,
+  buildGridTemplateColumns,
+  resolveBenchmarkIterations,
+  formatPaginationSummary,
+  computeViewportHeightPx,
+  computeViewportRows,
+} from './gridStateMath';
+export {
+  enableReactUiGridWasmEngine,
+  registerReactUiGridWasmEngineFromModule,
+} from './rustWasmGridEngine';
 
 export type {
   GridOptions,
@@ -20,7 +35,7 @@ export type {
   GridBenchmarkResult,
   GridSavedState,
   SortState,
-} from '@ornery/ui-grid';
+} from '@ornery/ui-grid-core';
 
-export type { UiGridApi } from '@ornery/ui-grid';
-export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid';
+export type { UiGridApi } from '@ornery/ui-grid-core';
+export { DEFAULT_GRID_LABELS } from '@ornery/ui-grid-core';

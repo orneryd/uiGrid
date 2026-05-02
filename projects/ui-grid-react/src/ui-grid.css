@@ -25,11 +25,20 @@
   --ui-grid-pin-menu-gap: var(--app-ui-grid-pin-menu-gap, 0.25rem);
   --ui-grid-pin-menu-padding: var(--app-ui-grid-pin-menu-padding, 0.25rem);
   --ui-grid-pin-menu-radius: var(--app-ui-grid-pin-menu-radius, 999px);
-  --ui-grid-pin-menu-shadow: var(--app-ui-grid-pin-menu-shadow, 0 10px 24px color-mix(in srgb, var(--ui-grid-cell-color) 10%, transparent));
+  --ui-grid-pin-menu-shadow: var(
+    --app-ui-grid-pin-menu-shadow,
+    0 10px 24px color-mix(in srgb, var(--ui-grid-cell-color) 10%, transparent)
+  );
   --ui-grid-pin-menu-action-size: var(--app-ui-grid-pin-menu-action-size, 1.75rem);
   --ui-grid-pin-control-collapsed-size: var(--app-ui-grid-pin-control-collapsed-size, 1px);
-  --ui-grid-pin-control-transition-duration: var(--app-ui-grid-pin-control-transition-duration, 160ms);
-  --ui-grid-pin-control-transition-easing: var(--app-ui-grid-pin-control-transition-easing, cubic-bezier(0.22, 1, 0.36, 1));
+  --ui-grid-pin-control-transition-duration: var(
+    --app-ui-grid-pin-control-transition-duration,
+    160ms
+  );
+  --ui-grid-pin-control-transition-easing: var(
+    --app-ui-grid-pin-control-transition-easing,
+    cubic-bezier(0.22, 1, 0.36, 1)
+  );
   --ui-grid-pin-menu-scale-closed: var(--app-ui-grid-pin-menu-scale-closed, 0.72);
   display: block;
   color: var(--ui-grid-cell-color);
@@ -325,13 +334,20 @@
   grid-area: 1 / 1;
   transform-origin: center;
   transition:
-    width var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    height var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    opacity var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    transform var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    border-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    background-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing);
+    width var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    height var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    opacity var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    transform var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    border-color var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    background-color var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    color var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing);
 }
 
 .pin-menu {
@@ -354,12 +370,18 @@
   transform: scale(var(--ui-grid-pin-menu-scale-closed));
   transform-origin: center;
   transition:
-    max-height var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    opacity var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    transform var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    padding var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    border-color var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing),
-    box-shadow var(--ui-grid-pin-control-transition-duration) var(--ui-grid-pin-control-transition-easing);
+    max-height var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    opacity var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    transform var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    padding var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    border-color var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing),
+    box-shadow var(--ui-grid-pin-control-transition-duration)
+      var(--ui-grid-pin-control-transition-easing);
 }
 
 .pin-control-open {
@@ -375,7 +397,10 @@
 }
 
 .pin-control-open .pin-menu {
-  max-height: calc((var(--ui-grid-pin-menu-action-size) * 2) + var(--ui-grid-pin-menu-gap) + (var(--ui-grid-pin-menu-padding) * 2));
+  max-height: calc(
+    (var(--ui-grid-pin-menu-action-size) * 2) + var(--ui-grid-pin-menu-gap) +
+      (var(--ui-grid-pin-menu-padding) * 2)
+  );
   opacity: 1;
   pointer-events: auto;
   transform: scale(1);

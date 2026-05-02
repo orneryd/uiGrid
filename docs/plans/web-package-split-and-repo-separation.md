@@ -83,6 +83,7 @@ Must NOT peer-depend on:
 Purpose:
 
 - Framework-free custom element package consuming `@ornery/ui-grid-core`.
+- Long-term source of truth for the DOM/web-component implementation that Angular and React wrappers adapt to.
 
 Depends on:
 
@@ -95,6 +96,12 @@ Peer dependencies:
 Must NOT depend on:
 
 - Angular runtime.
+
+Wrapper direction:
+
+- React and Angular should eventually become adapter layers over the standalone custom element plus `@ornery/ui-grid-core`.
+- Framework wrappers should only handle property mapping, lifecycle integration, and framework-specific template conversion.
+- The custom element should own DOM behavior, keyboard interaction, accessibility, and event dispatch semantics.
 
 ## Execution Order
 
@@ -159,7 +166,9 @@ Exit criteria:
 3. Vanilla package:
 
 - Replace imports from Angular package with core package.
+- Replace the Angular-backed element definition with a standalone custom element implementation in TypeScript.
 - Keep custom element behavior framework-neutral.
+- Make the custom element the canonical DOM implementation for all web-facing adapters.
 
 4. Verify lockfiles/package manifests:
 
@@ -169,6 +178,31 @@ Exit criteria:
 
 - All three adapters build/test using core.
 - React and Vanilla published metadata show no Angular peers.
+
+## Phase 3A: Standalone Custom Element Extraction
+
+1. Build a framework-neutral controller:
+
+- Extract state, commands, event raising, and pipeline orchestration from the React implementation into a reusable TypeScript controller.
+- Keep controller inputs/outputs aligned with `GridOptions`, `UiGridApi`, and current event contracts.
+
+2. Implement `@ornery/ui-grid-vanilla` as a real custom element:
+
+- Own custom element registration in the vanilla package.
+- Render directly from the controller using DOM APIs, not Angular runtime.
+- Preserve shadow DOM, keyboard editing, grouping, sorting, filtering, pinning, pagination, virtualization, tree view, expandable rows, CSV export, benchmark hooks, and wasm engine registration.
+
+3. Migrate wrappers to adapters:
+
+- React wrapper becomes prop/event/template bridge over the controller and/or custom element.
+- Angular wrapper becomes Angular input/output/template bridge over the same controller and/or custom element.
+- Framework-only responsibilities stay in wrappers: React render props, Angular `TemplateRef`, forms integration, and framework-specific change detection.
+
+Exit criteria:
+
+- `@ornery/ui-grid-vanilla` registers and owns the custom element with no Angular imports.
+- Existing feature coverage is preserved against parity tests.
+- Angular and React wrappers no longer own the canonical DOM behavior.
 
 ## Phase 4: CI/CD and Independent Release Triggers
 
@@ -185,6 +219,7 @@ Required workflows:
   - Trigger paths: `projects/ui-grid-react/**`
 - Vanilla publish workflow:
   - Trigger paths: `projects/ui-grid-vanilla/**`
+  - Publishes the standalone custom element package independently.
 
 Cross-package release rules:
 

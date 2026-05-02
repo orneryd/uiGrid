@@ -5,11 +5,11 @@ export default defineConfig({
   root: path.resolve(__dirname, 'demo'),
   resolve: {
     alias: {
-      '@ornery/ui-grid': path.resolve(__dirname, '../../dist/ui-grid/fesm2022/ornery-ui-grid.mjs'),
+      '@ornery/ui-grid-core': path.resolve(__dirname, '../ui-grid-core/src/index.ts'),
     },
   },
   optimizeDeps: {
-    exclude: ['@ornery/ui-grid'],
+    exclude: ['@ornery/ui-grid-core'],
   },
   server: {
     fs: {

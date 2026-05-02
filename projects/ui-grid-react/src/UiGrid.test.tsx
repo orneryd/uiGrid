@@ -3,8 +3,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UiGrid } from './UiGrid';
 import type { UiGridProps } from './UiGrid';
-import type { GridOptions, UiGridApi, GridExpandableTemplateContext } from '@ornery/ui-grid';
-import { SORT_DIRECTIONS, FILTER_CONDITIONS } from '@ornery/ui-grid';
+import type { GridOptions, UiGridApi, GridExpandableTemplateContext } from '@ornery/ui-grid-core';
+import { SORT_DIRECTIONS, FILTER_CONDITIONS } from '@ornery/ui-grid-core';
 
 const baseData = [
   {
@@ -35,7 +35,7 @@ const baseData = [
 
 function createOptions(
   overrides: Partial<GridOptions> = {},
-  onRegisterApi?: (api: UiGridApi) => void
+  onRegisterApi?: (api: UiGridApi) => void,
 ): GridOptions {
   return {
     id: 'spec-grid',
@@ -72,7 +72,7 @@ function createOptions(
 
 function renderGrid(
   overrides: Partial<GridOptions> = {},
-  props: Partial<Omit<UiGridProps, 'options'>> = {}
+  props: Partial<Omit<UiGridProps, 'options'>> = {},
 ): { container: HTMLElement; gridApi: UiGridApi } {
   let gridApi!: UiGridApi;
   const options = createOptions(overrides, (api) => {
@@ -81,7 +81,7 @@ function renderGrid(
   });
 
   const { container } = render(
-    <UiGrid options={options} onRegisterApi={options.onRegisterApi as any} {...props} />
+    <UiGrid options={options} onRegisterApi={options.onRegisterApi as any} {...props} />,
   );
 
   return { container, gridApi };
@@ -96,11 +96,11 @@ describe('UiGrid React component', () => {
   it('registers the API and renders headers and rows', () => {
     const { container, gridApi } = renderGrid();
 
-    const headers = Array.from(container.querySelectorAll('.header-label')).map(
-      (el) => el.textContent?.trim()
+    const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
+      el.textContent?.trim(),
     );
-    const bodyCells = Array.from(container.querySelectorAll('.body-cell')).map(
-      (el) => el.textContent?.trim()
+    const bodyCells = Array.from(container.querySelectorAll('.body-cell')).map((el) =>
+      el.textContent?.trim(),
     );
 
     expect(gridApi).toBeTruthy();
@@ -132,7 +132,7 @@ describe('UiGrid React component', () => {
 
     expect(gridApi.core.getVisibleRows()).toEqual([]);
     expect(container.querySelector('.empty-state strong')?.textContent).toContain(
-      'Nothing to show'
+      'Nothing to show',
     );
   });
 
@@ -199,7 +199,7 @@ describe('UiGrid React component', () => {
     });
 
     const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
-      el.textContent?.trim()
+      el.textContent?.trim(),
     );
 
     expect(headers).toEqual(['Customer', 'Badge', 'Status', 'Revenue', 'Owner']);
@@ -221,7 +221,7 @@ describe('UiGrid React component', () => {
     expect(container.querySelectorAll('.body-cell')).toHaveLength(15);
 
     const activeGroup = Array.from(initialGroups).find((node) =>
-      node.textContent?.includes('status: Active')
+      node.textContent?.includes('status: Active'),
     );
     expect(activeGroup).toBeTruthy();
 
@@ -237,13 +237,9 @@ describe('UiGrid React component', () => {
     const anchor = document.createElement('a');
     const originalCreateElement = document.createElement.bind(document);
     const clickSpy = vi.spyOn(anchor, 'click').mockImplementation(() => {});
-    vi.spyOn(document, 'createElement').mockImplementation(
-      ((tagName: string) =>
-        tagName === 'a' ? anchor : originalCreateElement(tagName)) as typeof document.createElement
-    );
-    const createObjectUrlSpy = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:spec-grid');
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) =>
+      tagName === 'a' ? anchor : originalCreateElement(tagName)) as typeof document.createElement);
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:spec-grid');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     act(() => {
@@ -328,7 +324,7 @@ describe('UiGrid React component', () => {
     gridApi.edit.on.cancelCellEdit(cancelCellEdit);
 
     const firstNameCell = container.querySelector(
-      '.body-cell[data-row-id="row-1"][data-col-name="name"]'
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
     ) as HTMLElement;
 
     await act(async () => {
@@ -337,7 +333,7 @@ describe('UiGrid React component', () => {
     });
 
     let editor = container.querySelector(
-      '.cell-editor[data-row-id="row-1"][data-col-name="name"]'
+      '.cell-editor[data-row-id="row-1"][data-col-name="name"]',
     ) as HTMLInputElement;
     expect(editor).toBeTruthy();
     expect(beginCellEdit).toHaveBeenCalled();
@@ -350,7 +346,7 @@ describe('UiGrid React component', () => {
     expect(afterCellEdit).toHaveBeenCalled();
 
     const ownerCell = container.querySelector(
-      '.body-cell[data-row-id="row-1"][data-col-name="owner"]'
+      '.body-cell[data-row-id="row-1"][data-col-name="owner"]',
     ) as HTMLElement;
 
     await act(async () => {
@@ -359,7 +355,7 @@ describe('UiGrid React component', () => {
     });
 
     editor = container.querySelector(
-      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]'
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
     ) as HTMLInputElement;
     expect(editor).toBeTruthy();
 
@@ -401,8 +397,8 @@ describe('UiGrid React component', () => {
       ],
     });
 
-    const headers = Array.from(container.querySelectorAll('.header-label')).map(
-      (el) => el.textContent?.trim()
+    const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
+      el.textContent?.trim(),
     );
     expect(headers).toEqual(['Status', 'Owner']);
     expect(container.querySelector('.filter-grid')).toBeNull();

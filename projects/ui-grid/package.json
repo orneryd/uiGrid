@@ -7,6 +7,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "@ornery/ui-grid-core": "^0.1.6"
+  },
   "peerDependencies": {
     "@angular/cdk": "^21.2.8",
     "@angular/common": "^21.2.0",

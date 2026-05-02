@@ -1,40 +1,19 @@
-import '@angular/compiler';
-
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  SORT_DIRECTIONS,
   activeGridEngineBackend,
   clearRustWasmGridEngine,
-} from '../../../dist/ui-grid/fesm2022/ornery-ui-grid.mjs';
+} from '@ornery/ui-grid-core';
 import {
   mountVanillaUiGrid,
   registerVanillaUiGridRustModule,
   type GridOptions,
+  type UiGridIconOverrides,
+  type UiGridRustWebModule,
   type UiGridApi,
 } from './index';
-import * as uiGridRustWebModule from '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
-
-function keyDown(el: HTMLElement, init: KeyboardEventInit): KeyboardEvent {
-  const evt = el.ownerDocument.createEvent('KeyboardEvent');
-  evt.initEvent('keydown', init.bubbles ?? false, init.cancelable ?? false);
-  Object.defineProperties(evt, {
-    key: { get: () => init.key ?? '' },
-    shiftKey: { get: () => init.shiftKey ?? false },
-    ctrlKey: { get: () => init.ctrlKey ?? false },
-    altKey: { get: () => init.altKey ?? false },
-    metaKey: { get: () => init.metaKey ?? false },
-  });
-  return evt as KeyboardEvent;
-}
-
-function inputEvent(el: HTMLElement): Event {
-  const evt = el.ownerDocument.createEvent('Event');
-  evt.initEvent('input', false, false);
-  return evt;
-}
+import { createVanillaGridController } from './grid-controller';
 
 async function waitFor<T>(resolve: () => T | null | undefined, timeoutMs = 10000): Promise<T> {
   const startedAt = Date.now();
@@ -61,7 +40,7 @@ describe('mountVanillaUiGrid integration', () => {
     document.body.innerHTML = '';
   });
 
-  it('runs keyboard edit flow through the registered Rust/WASM engine', async () => {
+  it('mounts the standalone element and handles header sort interaction', async () => {
     let gridApi: UiGridApi | undefined;
     const target = document.getElementById('app');
     if (!target) {
@@ -70,9 +49,9 @@ describe('mountVanillaUiGrid integration', () => {
 
     const options: GridOptions = {
       id: 'vanilla-rust-keyboard-grid',
-      enableGrouping: false,
-      enableCellEdit: true,
-      enableCellEditOnFocus: true,
+      enableGrouping: true,
+      enableSorting: true,
+      enableFiltering: true,
       virtualizationThreshold: 99,
       data: [
         {
@@ -88,84 +67,179 @@ describe('mountVanillaUiGrid integration', () => {
           account: { owner: 'Jordan Silva' },
         },
       ],
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', enableCellEdit: true },
-        { name: 'status' },
-        { name: 'owner', field: 'account.owner', enableCellEdit: true },
-      ],
+      columnDefs: [{ name: 'name', displayName: 'Customer' }, { name: 'status' }],
       onRegisterApi: (api) => {
         gridApi = api as UiGridApi;
       },
     };
 
-    const beginCellEdit = vi.fn();
-    const afterCellEdit = vi.fn();
-    const cancelCellEdit = vi.fn();
+    const grid = await mountVanillaUiGrid(
+      target,
+      options,
+      undefined,
+      'ui-grid-element-vanilla-test',
+    );
 
-    const wasmPath = resolve(process.cwd(), '../../dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm');
-    const wasmBytes = await readFile(wasmPath);
-    await registerVanillaUiGridRustModule(uiGridRustWebModule, { module_or_path: wasmBytes });
+    await waitFor(() => gridApi);
+    if (!gridApi) {
+      throw new Error('Expected grid API registration');
+    }
+    const shadowRoot = await waitFor(() => grid.shadowRoot);
+    const sortButton = await waitFor(
+      () =>
+        shadowRoot.querySelector('.header-action[data-column="name"]') as HTMLButtonElement | null,
+    );
 
+    sortButton.click();
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'Beta',
+      'Gamma',
+    ]);
+
+    const sortButtonAfterFirstClick = await waitFor(
+      () =>
+        shadowRoot.querySelector('.header-action[data-column="name"]') as HTMLButtonElement | null,
+    );
+    sortButtonAfterFirstClick.click();
+    expect(gridApi.core.getVisibleRows().map((row) => row.entity['name'])).toEqual([
+      'Gamma',
+      'Beta',
+    ]);
+  }, 15000);
+
+  it('registers Rust/WASM bindings through the vanilla API', async () => {
+    const module: UiGridRustWebModule = {
+      default: vi.fn(async () => undefined),
+      build_pipeline_js: vi.fn((context) => ({
+        visibleRows: context.options.data,
+        displayItems: [],
+        virtualizationEnabled: false,
+        pipelineMs: 0,
+        totalItems: context.options.data.length,
+      })),
+    };
+
+    await registerVanillaUiGridRustModule(module);
+    expect(module.default).toHaveBeenCalledTimes(1);
     expect(activeGridEngineBackend()).toBe('rust-wasm');
+  });
+
+  it('controller API exposes subscribe and action methods', () => {
+    const controller = createVanillaGridController({
+      id: 'controller-smoke',
+      data: [
+        { id: 'r1', name: 'Gamma' },
+        { id: 'r2', name: 'Alpha' },
+      ],
+      columnDefs: [{ name: 'name' }],
+      enableSorting: true,
+      enableFiltering: true,
+    });
+
+    const changes: number[] = [];
+    const unsubscribe = controller.subscribe((snapshot) => {
+      changes.push(snapshot.pipeline.visibleRows.length);
+    });
+
+    controller.setFilter('name', 'Alpha');
+    controller.sortColumn('name', SORT_DIRECTIONS.asc);
+    unsubscribe();
+
+    expect(changes.length).toBeGreaterThan(1);
+    expect(controller.getSnapshot().pipeline.visibleRows.map((row) => row.entity['name'])).toEqual([
+      'Alpha',
+    ]);
+  });
+
+  it('applies overridable SVG icons for controls', async () => {
+    const target = document.getElementById('app');
+    if (!target) {
+      throw new Error('Expected test root element');
+    }
+
+    const options: GridOptions = {
+      id: 'vanilla-icon-grid',
+      enableSorting: true,
+      data: [{ id: 'row-1', name: 'Gamma' }],
+      columnDefs: [{ name: 'name', displayName: 'Customer' }],
+    };
 
     const grid = await mountVanillaUiGrid(
       target,
       options,
       undefined,
-      'ui-grid-element-vanilla-rust-test',
+      'ui-grid-element-vanilla-test',
     );
+    const overrides: UiGridIconOverrides = {
+      sortNone: { path: 'M3 3h18v18H3z' },
+    };
 
-    await waitFor(() => gridApi);
-    gridApi!.edit.on.beginCellEdit(beginCellEdit);
-    gridApi!.edit.on.afterCellEdit(afterCellEdit);
-    gridApi!.edit.on.cancelCellEdit(cancelCellEdit);
-
-    const firstRenderedRowId = await waitFor(() => gridApi!.core.getVisibleRows()[0]?.id);
+    (grid as unknown as { controlIcons: UiGridIconOverrides }).controlIcons = overrides;
 
     const shadowRoot = await waitFor(() => grid.shadowRoot);
-    const firstNameCell = await waitFor(() =>
-      shadowRoot.querySelector(`.body-cell[data-row-id="${firstRenderedRowId}"][data-col-name="name"]`) as HTMLElement | null,
+    const iconPath = shadowRoot.querySelector('.header-action .control-icon path');
+
+    expect(iconPath?.getAttribute('d')).toBe('M3 3h18v18H3z');
+  });
+
+  it('renders native template slots for cells and expandable rows', async () => {
+    const target = document.getElementById('app');
+    if (!target) {
+      throw new Error('Expected test root element');
+    }
+
+    const options: GridOptions = {
+      id: 'vanilla-slot-grid',
+      enableSorting: true,
+      enableExpandable: true,
+      data: [
+        {
+          id: 'row-1',
+          name: 'Gamma',
+          status: 'Active',
+          account: { owner: 'Mina Patel' },
+        },
+      ],
+      columnDefs: [
+        { name: 'name', displayName: 'Customer' },
+        { name: 'status', displayName: 'Status' },
+      ],
+    };
+
+    const grid = await mountVanillaUiGrid(
+      target,
+      options,
+      undefined,
+      'ui-grid-element-vanilla-test',
     );
 
-    firstNameCell.focus();
-    firstNameCell.dispatchEvent(keyDown(firstNameCell, { key: 'Z' }));
+    const statusTemplate = document.createElement('template');
+    statusTemplate.slot = 'cell-status';
+    statusTemplate.innerHTML =
+      '<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>';
 
-    let editor = await waitFor(() =>
-      shadowRoot.querySelector(`.cell-editor[data-row-id="${firstRenderedRowId}"][data-col-name="name"]`) as HTMLInputElement | null,
-    );
-    expect(editor.value).toBe('Z');
-    expect(beginCellEdit).toHaveBeenCalled();
+    const expandableTemplate = document.createElement('template');
+    expandableTemplate.slot = 'expandable-row';
+    expandableTemplate.innerHTML = '<div class="detail-card">Owner {{row.account.owner}}</div>';
 
-    editor.dispatchEvent(keyDown(editor, { key: 'Tab' }));
+    grid.append(statusTemplate, expandableTemplate);
 
-    expect(options.data[0]?.name).toBe('Z');
-    expect(afterCellEdit).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'row-1', name: 'Z' }),
-      expect.objectContaining({ name: 'name' }),
-      'Z',
-      'Gamma',
+    const statusPill = await waitFor(
+      () => grid.shadowRoot?.querySelector('.status-pill-active') as HTMLElement | null,
     );
 
-    const statusCell = await waitFor(() =>
-      shadowRoot.querySelector(`.body-cell[data-row-id="${firstRenderedRowId}"][data-col-name="status"]`) as HTMLElement | null,
+    expect(statusPill.textContent).toContain('Active');
+
+    const expandButton = await waitFor(
+      () => grid.shadowRoot?.querySelector('.row-toggle-expand') as HTMLButtonElement | null,
     );
-    expect(shadowRoot.activeElement).toBe(statusCell);
 
-    statusCell.dispatchEvent(keyDown(statusCell, { key: 'Tab' }));
+    expandButton.click();
 
-    editor = await waitFor(() =>
-      shadowRoot.querySelector(`.cell-editor[data-row-id="${firstRenderedRowId}"][data-col-name="owner"]`) as HTMLInputElement | null,
+    const detailCard = await waitFor(
+      () => grid.shadowRoot?.querySelector('.detail-card') as HTMLElement | null,
     );
-    expect(editor.value).toBe('Mina Patel');
 
-    editor.value = 'Taylor Morgan';
-    editor.dispatchEvent(inputEvent(editor));
-    editor.dispatchEvent(keyDown(editor, { key: 'Escape' }));
-
-    expect(options.data[0]?.account).toEqual({ owner: 'Mina Patel' });
-    expect(cancelCellEdit).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'row-1', name: 'Z' }),
-      expect.objectContaining({ name: 'owner' }),
-    );
-  }, 15000);
+    expect(detailCard.textContent).toContain('Owner Mina Patel');
+  });
 });

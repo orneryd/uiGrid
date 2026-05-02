@@ -11,6 +11,7 @@ import {
   FILTER_CONDITIONS,
   GridCellTemplateContext,
   GridOptions,
+  GridSavedState,
   UiGridApi,
   UiGridComponent,
 } from '@ornery/ui-grid';
@@ -27,7 +28,9 @@ import { createDemoData } from '../shared/demo-data';
 export class HomeComponent {
   private readonly statusTemplate =
     viewChild<TemplateRef<GridCellTemplateContext>>('statusTemplate');
+  private savedGridState: GridSavedState | null = null;
   protected readonly gridApi = signal<UiGridApi | null>(null);
+  protected readonly savedStateJson = signal('No saved state captured yet.');
   protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
     title: 'UI Grid Modernized',
@@ -93,4 +96,22 @@ export class HomeComponent {
     ],
     data: createDemoData(),
   }));
+
+  protected captureState(): void {
+    const api = this.gridApi();
+    if (!api) {
+      return;
+    }
+
+    this.savedGridState = api.saveState.save();
+    this.savedStateJson.set(JSON.stringify(this.savedGridState, null, 2));
+  }
+
+  protected restoreState(): void {
+    if (!this.savedGridState) {
+      return;
+    }
+
+    this.gridApi()?.saveState.restore(this.savedGridState);
+  }
 }

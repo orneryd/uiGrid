@@ -1,14 +1,14 @@
 import type { BuildGridPipelineContext, PipelineResult } from './grid.core';
 import { registerRustWasmGridEngine } from './ui-grid.engine';
 
-type UiGridWasmModule = typeof import('../../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
-const uiGridWasmModulePath = '../../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
+type UiGridWasmModule = typeof import('../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
+const uiGridWasmModulePath = '../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
 
 export function registerUiGridWasmEngineFromModule(module: UiGridWasmModule): void {
   registerRustWasmGridEngine({
     buildPipeline(context: BuildGridPipelineContext): PipelineResult {
       return module.build_pipeline_js(context);
-    }
+    },
   });
 }
 

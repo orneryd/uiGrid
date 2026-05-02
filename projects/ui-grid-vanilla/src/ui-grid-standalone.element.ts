@@ -1,0 +1,972 @@
+import {
+  GRID_CORE_CSS,
+  SORT_DIRECTIONS,
+  canGridMoveColumns,
+  downloadGridCsvFile,
+  exportCsvRows,
+  getCellValue,
+  sanitizeDownloadFilename,
+  type DisplayItem,
+  type GridColumnDef,
+  type GridOptions,
+  type GridRecord,
+  type GroupItem,
+  type GridRow,
+} from '@ornery/ui-grid-core';
+import {
+  createVanillaGridController,
+  type GridControllerSnapshot,
+  type GridSaveState,
+  type VanillaGridController,
+} from './grid-controller';
+
+function escapeHtml(value: unknown): string {
+  const text = String(value ?? '');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function asGroupItem(item: DisplayItem): GroupItem {
+  return item as GroupItem;
+}
+
+function isRowItem(item: DisplayItem): item is DisplayItem & { kind: 'row'; row: GridRow } {
+  return item.kind === 'row';
+}
+
+export type VanillaUiGridElement = HTMLElement & {
+  options: GridOptions;
+  getState(): GridSaveState | null;
+  setState(state: Partial<GridSaveState>): void;
+};
+
+export type UiGridControlIconKey =
+  | 'sortNone'
+  | 'sortAsc'
+  | 'sortDesc'
+  | 'group'
+  | 'groupExpanded'
+  | 'groupCollapsed'
+  | 'treeExpanded'
+  | 'treeCollapsed'
+  | 'expandExpanded'
+  | 'expandCollapsed'
+  | 'pin'
+  | 'pinLeft'
+  | 'pinRight'
+  | 'paginationPrev'
+  | 'paginationNext';
+
+export interface UiGridIconDefinition {
+  viewBox?: string;
+  path: string;
+}
+
+export type UiGridIconOverrides = Partial<Record<UiGridControlIconKey, UiGridIconDefinition>>;
+
+type VanillaGridOptions = GridOptions & {
+  iconOverrides?: UiGridIconOverrides;
+};
+
+const DEFAULT_ICONS: Record<UiGridControlIconKey, UiGridIconDefinition> = {
+  sortNone: { path: 'M7 6h10v2H7V6Zm0 5h7v2H7v-2Zm0 5h4v2H7v-2Z' },
+  sortAsc: { path: 'M12 5l-6 6h4v8h4v-8h4z' },
+  sortDesc: { path: 'M12 19l6-6h-4V5h-4v8H6z' },
+  group: { path: 'M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z' },
+  groupExpanded: { path: 'M7 10l5 5 5-5z' },
+  groupCollapsed: { path: 'M10 7l5 5-5 5z' },
+  treeExpanded: { path: 'M7 10l5 5 5-5z' },
+  treeCollapsed: { path: 'M10 7l5 5-5 5z' },
+  expandExpanded: { path: 'M7 10l5 5 5-5z' },
+  expandCollapsed: { path: 'M10 7l5 5-5 5z' },
+  pin: { path: 'M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z' },
+  pinLeft: { path: 'M10 6 4 12l6 6v-4h10v-4H10V6z' },
+  pinRight: { path: 'M14 6v4H4v4h10v4l6-6-6-6z' },
+  paginationPrev: { path: 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z' },
+  paginationNext: { path: 'M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z' },
+};
+
+export class UiGridStandaloneElement extends HTMLElement {
+  private controller: VanillaGridController | null = null;
+  private snapshot: GridControllerSnapshot | null = null;
+  private unsubscribe: (() => void) | null = null;
+  private activeOptions: VanillaGridOptions | null = null;
+  private iconOverrides: UiGridIconOverrides = {};
+  private templateObserver: MutationObserver | null = null;
+  private openPinMenuColumn: string | null = null;
+  private focusedCell: { rowId: string; columnName: string } | null = null;
+  private draggedColumnName: string | null = null;
+  private dropTargetColumnName: string | null = null;
+  private scrollPosition = 0;
+  private scrollFrame: number | null = null;
+  private suppressScrollEvent = false;
+  private lastVirtualStartIndex = -1;
+  private measuredHeaderStickyHeight = 0;
+  private measuredFilterStickyHeight = 0;
+  private stickyHeightRelayoutQueued = false;
+  private benchmarkAverage = '—';
+
+  get options(): GridOptions {
+    return (
+      this.activeOptions ?? {
+        id: '__ui-grid-pending__',
+        data: [],
+        columnDefs: [],
+      }
+    );
+  }
+
+  set options(value: GridOptions) {
+    this.activeOptions = value as VanillaGridOptions;
+    this.iconOverrides = this.activeOptions.iconOverrides ?? {};
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions));
+  }
+
+  get controlIcons(): UiGridIconOverrides {
+    return this.iconOverrides;
+  }
+
+  set controlIcons(value: UiGridIconOverrides) {
+    this.iconOverrides = { ...value };
+    this.render();
+  }
+
+  getState(): GridSaveState | null {
+    return this.controller?.getState() ?? null;
+  }
+
+  setState(state: Partial<GridSaveState>): void {
+    this.controller?.setState(state);
+  }
+
+  connectedCallback(): void {
+    this.ensureShadowRoot();
+    this.bindEvents();
+    this.observeTemplateSlots();
+
+    if (this.activeOptions) {
+      this.ensureController(this.buildEffectiveOptions(this.activeOptions));
+    } else {
+      this.render();
+    }
+  }
+
+  disconnectedCallback(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.templateObserver?.disconnect();
+    this.templateObserver = null;
+    if (this.scrollFrame !== null) {
+      cancelAnimationFrame(this.scrollFrame);
+      this.scrollFrame = null;
+    }
+  }
+
+  private ensureShadowRoot(): ShadowRoot {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: 'open' });
+    }
+
+    return this.shadowRoot as ShadowRoot;
+  }
+
+  private ensureController(options: VanillaGridOptions): void {
+    if (this.controller) {
+      this.controller.setOptions(options);
+      return;
+    }
+
+    this.controller = createVanillaGridController(options);
+    this.unsubscribe = this.controller.subscribe((snapshot) => {
+      this.snapshot = snapshot;
+      this.render();
+    });
+  }
+
+  private observeTemplateSlots(): void {
+    if (this.templateObserver) {
+      return;
+    }
+
+    this.templateObserver = new MutationObserver(() => {
+      if (this.activeOptions) {
+        this.ensureController(this.buildEffectiveOptions(this.activeOptions));
+      } else {
+        this.render();
+      }
+    });
+
+    this.templateObserver.observe(this, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['slot'],
+    });
+  }
+
+  private buildEffectiveOptions(options: VanillaGridOptions): VanillaGridOptions {
+    const hasExpandableSlot = this.getTemplateMarkup('expandable-row') !== null;
+    if (options.enableExpandable && hasExpandableSlot && !options.expandableRowTemplate) {
+      return {
+        ...options,
+        expandableRowTemplate: {
+          createEmbeddedView: () => undefined,
+        },
+      };
+    }
+
+    return options;
+  }
+
+  private bindEvents(): void {
+    const root = this.ensureShadowRoot();
+    if ((root as ShadowRoot & { __uiGridBound?: boolean }).__uiGridBound) {
+      return;
+    }
+
+    root.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller || !this.snapshot) {
+        return;
+      }
+
+      const actionNode = target.closest<HTMLElement>('[data-action]');
+      if (!actionNode) {
+        return;
+      }
+
+      const action = actionNode.dataset['action'];
+      if (!action) {
+        return;
+      }
+
+      if (this.openPinMenuColumn && !target.closest('.pin-control')) {
+        this.openPinMenuColumn = null;
+        this.render();
+        return;
+      }
+
+      if (action === 'sort') {
+        const columnName = actionNode.dataset['column'];
+        if (columnName) {
+          this.controller.toggleSort(columnName);
+        }
+        return;
+      }
+
+      if (action === 'group') {
+        const columnName = actionNode.dataset['column'];
+        if (columnName) {
+          this.controller.toggleGrouping(columnName);
+        }
+        return;
+      }
+
+      if (action === 'toggle-group') {
+        const groupId = actionNode.dataset['group'];
+        if (groupId) {
+          const collapsed = actionNode.dataset['collapsed'] !== 'true';
+          this.controller.setCollapsedGroup(groupId, collapsed);
+        }
+        return;
+      }
+
+      if (action === 'pin-trigger') {
+        const columnName = actionNode.dataset['column'];
+        const column = columnName
+          ? this.snapshot.visibleColumns.find((candidate) => candidate.name === columnName)
+          : undefined;
+
+        if (columnName && column) {
+          if (this.controller.isPinned(column)) {
+            this.openPinMenuColumn = null;
+            this.controller.pinColumn(columnName, 'none');
+            return;
+          }
+
+          this.openPinMenuColumn = this.openPinMenuColumn === columnName ? null : columnName;
+          this.render();
+        }
+        return;
+      }
+
+      if (action === 'pin-left' || action === 'pin-right') {
+        const columnName = actionNode.dataset['column'];
+        if (columnName) {
+          this.openPinMenuColumn = null;
+          this.controller.pinColumn(columnName, action === 'pin-left' ? 'left' : 'right');
+        }
+        return;
+      }
+
+      if (action === 'toggle-tree') {
+        const rowId = actionNode.dataset['row'];
+        if (rowId) {
+          this.controller.toggleTreeRow(rowId);
+        }
+        return;
+      }
+
+      if (action === 'toggle-expand') {
+        const rowId = actionNode.dataset['row'];
+        if (rowId) {
+          this.controller.toggleRowExpansion(rowId);
+        }
+        return;
+      }
+
+      if (action === 'page-prev') {
+        this.controller.seekPage(this.snapshot.currentPage - 1);
+        return;
+      }
+
+      if (action === 'page-next') {
+        this.controller.seekPage(this.snapshot.currentPage + 1);
+        return;
+      }
+
+      if (action === 'benchmark') {
+        const result = this.controller.gridApi.core.benchmark();
+        this.benchmarkAverage = result.averageMs.toFixed(2);
+        this.render();
+        return;
+      }
+
+      if (action === 'export-csv') {
+        this.downloadCsv();
+      }
+    });
+
+    root.addEventListener('focusin', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+
+      const cell = target.closest<HTMLElement>('.body-cell[data-row][data-column]');
+      const rowId = cell?.dataset['row'];
+      const columnName = cell?.dataset['column'];
+      if (rowId && columnName) {
+        this.focusedCell = { rowId, columnName };
+      }
+    });
+
+    root.addEventListener('focusout', (event) => {
+      const relatedTarget = (event as FocusEvent).relatedTarget as HTMLElement | null;
+      if (!relatedTarget?.closest('.body-cell[data-row][data-column]')) {
+        this.focusedCell = null;
+      }
+    });
+
+    root.addEventListener('input', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller) {
+        return;
+      }
+
+      if (target instanceof HTMLInputElement && target.dataset['role'] === 'filter') {
+        const columnName = target.dataset['column'];
+        if (columnName) {
+          this.controller.setFilter(columnName, target.value);
+        }
+      }
+
+      if (target instanceof HTMLInputElement && target.dataset['role'] === 'editor') {
+        this.controller.updateEditingValue(target.value);
+      }
+    });
+
+    root.addEventListener('change', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller) {
+        return;
+      }
+
+      if (target instanceof HTMLSelectElement && target.dataset['role'] === 'page-size') {
+        const value = Number.parseInt(target.value, 10);
+        this.controller.setPageSize(value);
+      }
+    });
+
+    root.addEventListener('dblclick', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller) {
+        return;
+      }
+
+      const cell = target.closest<HTMLElement>('.body-cell');
+      if (!cell) {
+        return;
+      }
+
+      const rowId = cell.dataset['row'];
+      const columnName = cell.dataset['column'];
+      if (rowId && columnName) {
+        this.controller.beginCellEdit(rowId, columnName, event);
+      }
+    });
+
+    root.addEventListener('keydown', (event) => {
+      const keyboardEvent = event as KeyboardEvent;
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller) {
+        return;
+      }
+
+      if (target instanceof HTMLInputElement && target.dataset['role'] === 'editor') {
+        if (keyboardEvent.key === 'Enter') {
+          event.preventDefault();
+          this.controller.commitCellEdit();
+          return;
+        }
+
+        if (keyboardEvent.key === 'Escape') {
+          event.preventDefault();
+          this.controller.cancelCellEdit();
+        }
+
+        return;
+      }
+
+      const cell = target.closest<HTMLElement>('.body-cell');
+      if (!cell) {
+        return;
+      }
+
+      const rowId = cell.dataset['row'];
+      const columnName = cell.dataset['column'];
+      if (!rowId || !columnName) {
+        return;
+      }
+
+      if (keyboardEvent.key === 'Enter' || keyboardEvent.key === 'F2') {
+        event.preventDefault();
+        this.controller.beginCellEdit(rowId, columnName, event);
+        return;
+      }
+
+      if (
+        keyboardEvent.key.length === 1 &&
+        !keyboardEvent.ctrlKey &&
+        !keyboardEvent.metaKey &&
+        !keyboardEvent.altKey
+      ) {
+        event.preventDefault();
+        this.controller.beginCellEdit(rowId, columnName, event);
+        this.controller.updateEditingValue(keyboardEvent.key);
+      }
+    });
+
+    root.addEventListener(
+      'blur',
+      (event) => {
+        const target = event.target as HTMLElement | null;
+        if (!target || !this.controller) {
+          return;
+        }
+
+        if (target instanceof HTMLInputElement && target.dataset['role'] === 'editor') {
+          this.controller.commitCellEdit();
+        }
+      },
+      true,
+    );
+
+    root.addEventListener('dragstart', (event) => {
+      const dragEvent = event as DragEvent;
+      const target = event.target as HTMLElement | null;
+      const headerCell = target?.closest<HTMLElement>('.header-cell[data-column]');
+
+      if (!headerCell || !this.snapshot || !canGridMoveColumns(this.snapshot.options)) {
+        event.preventDefault();
+        return;
+      }
+
+      const columnName = headerCell.dataset['column'];
+      if (!columnName || !dragEvent.dataTransfer) {
+        event.preventDefault();
+        return;
+      }
+
+      this.draggedColumnName = columnName;
+      this.dropTargetColumnName = null;
+      dragEvent.dataTransfer.effectAllowed = 'move';
+      dragEvent.dataTransfer.setData('text/plain', columnName);
+      headerCell.classList.add('is-dragging');
+    });
+
+    root.addEventListener('dragover', (event) => {
+      const dragEvent = event as DragEvent;
+      const target = event.target as HTMLElement | null;
+      const headerCell = target?.closest<HTMLElement>('.header-cell[data-column]');
+
+      if (!headerCell || !this.draggedColumnName || !dragEvent.dataTransfer) {
+        return;
+      }
+
+      const columnName = headerCell.dataset['column'];
+      if (!columnName || columnName === this.draggedColumnName) {
+        return;
+      }
+
+      event.preventDefault();
+      dragEvent.dataTransfer.dropEffect = 'move';
+
+      if (this.dropTargetColumnName !== columnName) {
+        root
+          .querySelectorAll('.header-cell.is-drag-target')
+          .forEach((element) => element.classList.remove('is-drag-target'));
+        this.dropTargetColumnName = columnName;
+        headerCell.classList.add('is-drag-target');
+      }
+    });
+
+    root.addEventListener('dragleave', (event) => {
+      const target = event.target as HTMLElement | null;
+      const headerCell = target?.closest<HTMLElement>('.header-cell[data-column]');
+      if (headerCell && headerCell.dataset['column'] === this.dropTargetColumnName) {
+        headerCell.classList.remove('is-drag-target');
+      }
+    });
+
+    root.addEventListener('drop', (event) => {
+      event.preventDefault();
+      const dragEvent = event as DragEvent;
+      const target = event.target as HTMLElement | null;
+      const headerCell = target?.closest<HTMLElement>('.header-cell[data-column]');
+      const targetColumn = headerCell?.dataset['column'];
+      const sourceColumn =
+        this.draggedColumnName ?? dragEvent.dataTransfer?.getData('text/plain') ?? null;
+
+      this.draggedColumnName = null;
+      this.dropTargetColumnName = null;
+
+      root
+        .querySelectorAll('.header-cell.is-dragging, .header-cell.is-drag-target')
+        .forEach((element) => element.classList.remove('is-dragging', 'is-drag-target'));
+
+      if (!sourceColumn || !targetColumn || sourceColumn === targetColumn || !this.controller) {
+        return;
+      }
+
+      this.controller.moveVisibleColumn(sourceColumn, targetColumn);
+    });
+
+    root.addEventListener('dragend', () => {
+      this.draggedColumnName = null;
+      this.dropTargetColumnName = null;
+      root
+        .querySelectorAll('.header-cell.is-dragging, .header-cell.is-drag-target')
+        .forEach((element) => element.classList.remove('is-dragging', 'is-drag-target'));
+    });
+
+    root.addEventListener(
+      'scroll',
+      (event) => {
+        const target = event.target as HTMLElement | null;
+        if (!target?.classList.contains('grid-table') || this.suppressScrollEvent) {
+          return;
+        }
+
+        this.scrollPosition = target.scrollTop;
+        if (!this.snapshot?.pipeline.virtualizationEnabled) {
+          return;
+        }
+
+        const stickyChromeHeight =
+          this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+        const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+        const overscan = 4;
+        const nextStartIndex = Math.max(
+          0,
+          Math.floor(bodyScrollTop / this.snapshot.rowSize) - overscan,
+        );
+        if (nextStartIndex === this.lastVirtualStartIndex) {
+          return;
+        }
+
+        if (this.scrollFrame !== null) {
+          cancelAnimationFrame(this.scrollFrame);
+        }
+
+        this.scrollFrame = requestAnimationFrame(() => {
+          this.scrollFrame = null;
+          this.render();
+        });
+      },
+      true,
+    );
+
+    (root as ShadowRoot & { __uiGridBound?: boolean }).__uiGridBound = true;
+  }
+
+  private render(): void {
+    const root = this.ensureShadowRoot();
+    const snapshot = this.snapshot;
+    const previousGridTable = root.querySelector<HTMLElement>('.grid-table');
+    if (previousGridTable && !this.suppressScrollEvent) {
+      this.scrollPosition = previousGridTable.scrollTop;
+    }
+
+    if (!snapshot) {
+      root.innerHTML = `<style>${GRID_CORE_CSS}</style><section class="grid-shell ui-grid-shell"><div class="empty-state ui-grid-no-row-overlay"><strong>No grid options provided.</strong></div></section>`;
+      return;
+    }
+
+    const controller = this.controller!;
+    const options = snapshot.options;
+    const labels = snapshot.labels;
+    const templateColumns = snapshot.gridTemplateColumns;
+    const sortEnabled = controller.isSortingEnabled();
+    const filterEnabled = controller.isFilteringEnabled();
+    const groupingEnabled = controller.isGroupingEnabled();
+    const pinningEnabled = controller.isPinningEnabled();
+    const paginationEnabled = controller.isPaginationEnabled();
+    const showPagination = controller.shouldShowPaginationControls();
+    const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
+    const viewportHeight = options.viewportHeight ?? 560;
+    const headerStickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
+    const visibleRowCount = snapshot.pipeline.visibleRows.length;
+    const totalRows = options.data.length;
+    const pinnedCount = Object.keys(snapshot.pinnedColumns).length;
+
+    let startIndex = 0;
+    let itemsToRender = snapshot.pipeline.displayItems;
+    let virtualOffset = 0;
+    const totalVirtualHeight = snapshot.pipeline.displayItems.length * snapshot.rowSize;
+
+    if (virtualizationEnabled) {
+      const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+      const overscan = 4;
+      startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+      this.lastVirtualStartIndex = startIndex;
+      const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
+      itemsToRender = snapshot.pipeline.displayItems.slice(
+        startIndex,
+        Math.min(snapshot.pipeline.displayItems.length, startIndex + visibleCount),
+      );
+      virtualOffset = startIndex * snapshot.rowSize;
+    } else {
+      this.lastVirtualStartIndex = -1;
+    }
+
+    const slotRegistry = this.renderSlotRegistry(snapshot.visibleColumns);
+    const header = snapshot.visibleColumns
+      .map((column) =>
+        this.renderHeaderCell(column, sortEnabled, groupingEnabled, pinningEnabled, options),
+      )
+      .join('');
+
+    const filterRow = filterEnabled
+      ? `<div class="filter-grid ui-grid-header" style="grid-template-columns:${templateColumns}">${snapshot.visibleColumns
+          .map((column) => this.renderFilterCell(column))
+          .join('')}</div>`
+      : '';
+
+    const bodyContent = itemsToRender
+      .map((item, index) => this.renderDisplayItem(item, startIndex + index))
+      .join('');
+
+    const body =
+      snapshot.pipeline.displayItems.length > 0
+        ? virtualizationEnabled
+          ? `<div class="grid-virtual-spacer" style="height:${totalVirtualHeight}px"><div class="body-grid ui-grid-canvas grid-virtual-body" style="grid-template-columns:${templateColumns};top:${virtualOffset}px">${bodyContent}</div></div>`
+          : `<div class="body-grid ui-grid-canvas" style="grid-template-columns:${templateColumns}">${bodyContent}</div>`
+        : `<div class="empty-state ui-grid-no-row-overlay"><strong>${escapeHtml(options.emptyMessage ?? labels.emptyHeading)}</strong><p>${escapeHtml(labels.emptyDescription)}</p></div>`;
+
+    const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
+    const hero = `<header class="grid-hero"><div><p class="eyebrow">Vanilla web component</p><h1>${escapeHtml(options.title ?? 'UI Grid')}</h1><p class="deck">Framework-neutral custom element with Shadow DOM styling, slot templates, pinning, virtualization, editing, tree view, grouping, and state restore.</p></div><div class="hero-actions"><button type="button" class="action action-secondary" data-action="benchmark">Benchmark</button><button type="button" class="action action-secondary" data-action="export-csv">Export CSV</button><div class="stats-card"><span>${visibleRowCount}</span><small>${escapeHtml(labels.statsVisibleRows)}</small></div></div></header>`;
+    const metrics = `<section class="metrics-strip" aria-label="Grid metrics"><article><strong>${snapshot.pipeline.pipelineMs.toFixed(2)} ms</strong><span>pipeline</span></article><article><strong>${virtualizationEnabled ? 'On' : 'Off'}</strong><span>virtualization</span></article><article><strong>${pinnedCount}</strong><span>pinned columns</span></article><article><strong>${escapeHtml(this.benchmarkAverage)}</strong><span>benchmark avg</span></article></section>`;
+    const toolbar = `<div class="grid-toolbar"><div><strong>${visibleRowCount}</strong><span>${escapeHtml(labels.toolbarOf)} ${totalRows} ${escapeHtml(labels.toolbarRows)}</span></div><p>${escapeHtml(options.id)}</p></div>`;
+    const gridTableStyle = `${virtualizationEnabled ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
+
+    root.innerHTML = `<style>${GRID_CORE_CSS}</style><section class="grid-shell ui-grid-shell">${slotRegistry}${hero}${metrics}<section class="grid-frame ui-grid" role="grid" aria-label="${escapeHtml(options.title ?? 'Data grid')}">${toolbar}<div class="grid-table ui-grid-contents-wrapper" style="${gridTableStyle}"><div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${templateColumns}">${header}</div>${filterRow}${body}</div>${pagination}</section></section>`;
+
+    const gridTable = root.querySelector<HTMLElement>('.grid-table');
+    if (gridTable && this.scrollPosition > 0 && virtualizationEnabled) {
+      this.suppressScrollEvent = true;
+      gridTable.scrollTop = this.scrollPosition;
+      requestAnimationFrame(() => {
+        this.suppressScrollEvent = false;
+      });
+    }
+
+    const headerGrid = root.querySelector<HTMLElement>('.header-grid');
+    const filterGrid = root.querySelector<HTMLElement>('.filter-grid');
+    const nextHeaderStickyHeight = headerGrid?.offsetHeight ?? 0;
+    const nextFilterStickyHeight = filterGrid?.offsetHeight ?? 0;
+    const stickyHeightsChanged =
+      nextHeaderStickyHeight !== this.measuredHeaderStickyHeight ||
+      nextFilterStickyHeight !== this.measuredFilterStickyHeight;
+
+    this.measuredHeaderStickyHeight = nextHeaderStickyHeight;
+    this.measuredFilterStickyHeight = nextFilterStickyHeight;
+
+    if (stickyHeightsChanged && !this.stickyHeightRelayoutQueued) {
+      this.stickyHeightRelayoutQueued = true;
+      requestAnimationFrame(() => {
+        this.stickyHeightRelayoutQueued = false;
+        if (!this.snapshot) {
+          return;
+        }
+        this.render();
+      });
+    }
+  }
+
+  private renderHeaderCell(
+    column: GridColumnDef,
+    sortEnabled: boolean,
+    groupingEnabled: boolean,
+    pinningEnabled: boolean,
+    options: GridOptions,
+  ): string {
+    const controller = this.controller!;
+    const sortDirection = controller.getSortDirection(column);
+    const sortLabel = controller.sortButtonLabel(column);
+    const groupingLabel = controller.groupingButtonLabel(column);
+    const canSort = sortEnabled && controller.isColumnSortable(column);
+    const canGroup = groupingEnabled && column.enableGrouping !== false;
+    const canPin = pinningEnabled && controller.isColumnPinnable(column);
+    const isPinned = controller.isPinned(column);
+    const pinOffset = isPinned ? controller.pinnedOffset(column) : null;
+    const isPinnedLeftLast = controller.isPinnedLeftLast(column);
+    const isPinnedRightFirst = controller.isPinnedRightFirst(column);
+    const isDragTarget = this.dropTargetColumnName === column.name;
+    const isDragging = this.draggedColumnName === column.name;
+    const classes = [
+      'header-cell',
+      sortDirection !== SORT_DIRECTIONS.none ? 'is-active' : '',
+      isPinned ? 'is-pinned' : '',
+      isPinnedLeftLast ? 'is-pinned-left-last' : '',
+      isPinnedRightFirst ? 'is-pinned-right-first' : '',
+      this.openPinMenuColumn === column.name ? 'is-pin-menu-open' : '',
+      isDragTarget ? 'is-drag-target' : '',
+      isDragging ? 'is-dragging' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+
+    const sortIconKey =
+      sortDirection === SORT_DIRECTIONS.asc
+        ? 'sortAsc'
+        : sortDirection === SORT_DIRECTIONS.desc
+          ? 'sortDesc'
+          : 'sortNone';
+
+    const draggable = canGridMoveColumns(options) ? 'draggable="true"' : '';
+    const pinLabel = isPinned
+      ? (this.snapshot?.labels.unpin ?? 'Unpin')
+      : (this.snapshot?.labels.pinColumn ?? 'Pin');
+
+    return `<div class="${classes}" data-column="${escapeHtml(column.name)}" ${draggable} style="${stickyStyle}"><span class="header-label">${escapeHtml(controller.headerLabel(column))}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span></div>`;
+  }
+
+  private renderFilterCell(column: GridColumnDef): string {
+    const value = this.snapshot?.activeFilters[column.name] ?? '';
+    const controller = this.controller!;
+    const canFilter = controller.isColumnFilterable(column);
+    const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
+    const classes = [
+      'filter-cell',
+      controller.isPinned(column) ? 'is-pinned' : '',
+      controller.isPinnedLeftLast(column) ? 'is-pinned-left-last' : '',
+      controller.isPinnedRightFirst(column) ? 'is-pinned-right-first' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+    return `<label class="${classes}" style="${stickyStyle}"><input class="ui-grid-filter-input" data-role="filter" data-column="${escapeHtml(column.name)}" placeholder="${escapeHtml(controller.filterPlaceholder(column))}" value="${escapeHtml(value)}" ${canFilter ? '' : 'disabled'}></label>`;
+  }
+
+  private renderDisplayItem(item: DisplayItem, displayIndex: number): string {
+    if (!this.snapshot || !this.controller) {
+      return '';
+    }
+
+    if (item.kind === 'group') {
+      const group = asGroupItem(item);
+      const iconKey = group.collapsed ? 'groupCollapsed' : 'groupExpanded';
+      const disclosureLabel = this.controller.groupDisclosureLabel(group);
+      return `<button type="button" class="group-row ui-grid-row ui-grid-group-row" data-action="toggle-group" data-group="${escapeHtml(group.id)}" data-collapsed="${group.collapsed ? 'true' : 'false'}" style="grid-column: 1 / -1; padding-inline-start:${group.depth * 20 + 10}px">${this.renderIconWithClass('toggle-icon group-disclosure-icon', iconKey)}<span class="sr-only">${escapeHtml(disclosureLabel)}</span><strong>${escapeHtml(group.field)}: ${escapeHtml(group.label)}</strong><span>${group.count} ${escapeHtml(this.snapshot.labels.groupRowsSuffix)}</span></button>`;
+    }
+
+    if (item.kind === 'expandable') {
+      const row = (item as DisplayItem & { row: GridRow }).row;
+      return `<div class="expandable-row ui-grid-row ui-grid-expandable-row" style="grid-column:1 / -1">${this.renderExpandableTemplate(row)}</div>`;
+    }
+
+    if (!isRowItem(item)) {
+      return '';
+    }
+
+    return this.snapshot.visibleColumns
+      .map((column) => this.renderBodyCell(item.row, column, displayIndex))
+      .join('');
+  }
+
+  private renderBodyCell(row: GridRow, column: GridColumnDef, displayIndex: number): string {
+    if (!this.snapshot || !this.controller) {
+      return '';
+    }
+
+    const controller = this.controller;
+    const rowId = row.id;
+    const columnName = column.name;
+    const editing = controller.isEditingCell(rowId, columnName);
+    const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
+    const treeToggle = controller.showTreeToggle(row, column)
+      ? `<button type="button" class="row-toggle" data-action="toggle-tree" data-row="${escapeHtml(rowId)}" aria-label="${escapeHtml(controller.treeToggleLabel(row))}">${this.renderIconWithClass('toggle-icon', controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed')}<span class="sr-only">${escapeHtml(controller.treeToggleLabel(row))}</span></button>`
+      : '';
+    const expandToggle = controller.showExpandToggle(row, column)
+      ? `<button type="button" class="row-toggle row-toggle-expand" data-action="toggle-expand" data-row="${escapeHtml(rowId)}" aria-label="${escapeHtml(controller.expandToggleLabel(row))}">${this.renderIconWithClass('toggle-icon', row.expanded ? 'expandExpanded' : 'expandCollapsed')}<span class="sr-only">${escapeHtml(controller.expandToggleLabel(row))}</span></button>`
+      : '';
+
+    const content = editing
+      ? `<input class="cell-editor" data-role="editor" data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" type="${escapeHtml(controller.editorInputType(column))}" value="${escapeHtml(this.snapshot.editingValue)}">`
+      : this.renderCellTemplate(row, column, displayIndex);
+
+    const classes = [
+      'body-cell',
+      'ui-grid-cell',
+      displayIndex % 2 !== 0 ? 'body-cell-odd' : '',
+      column.align === 'center' ? 'align-center' : '',
+      column.align === 'end' ? 'align-end' : '',
+      controller.isPinned(column) ? 'is-pinned' : '',
+      controller.isPinnedLeftLast(column) ? 'is-pinned-left-last' : '',
+      controller.isPinnedRightFirst(column) ? 'is-pinned-right-first' : '',
+      this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName
+        ? 'cell-focused'
+        : '',
+      editing ? 'cell-editing' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+    return `<div class="${classes}" tabindex="0" data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" style="${stickyStyle}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}${content}</div></div>`;
+  }
+
+  private renderPagination(snapshot: GridControllerSnapshot): string {
+    const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
+    return `<footer class="pagination-bar ui-grid-pagination"><p>${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}</p><div class="pagination-controls"><button type="button" class="action action-secondary pagination-button" data-action="page-prev" aria-label="${escapeHtml(snapshot.labels.paginationPrevious)}" ${snapshot.currentPage <= 1 ? 'disabled' : ''}>${this.renderIconWithClass('pagination-icon', 'paginationPrev')}<span class="sr-only">${escapeHtml(snapshot.labels.paginationPrevious)}</span></button><span>${escapeHtml(snapshot.labels.paginationPage)} ${snapshot.currentPage} ${escapeHtml(snapshot.labels.paginationOf)} ${snapshot.totalPages}</span><button type="button" class="action action-secondary pagination-button" data-action="page-next" aria-label="${escapeHtml(snapshot.labels.paginationNext)}" ${snapshot.currentPage >= snapshot.totalPages ? 'disabled' : ''}>${this.renderIconWithClass('pagination-icon', 'paginationNext')}<span class="sr-only">${escapeHtml(snapshot.labels.paginationNext)}</span></button><label class="pagination-size"><span class="sr-only">${escapeHtml(snapshot.labels.paginationRows)}</span><select class="page-size" data-role="page-size">${pageSizes
+      .map(
+        (size) =>
+          `<option value="${size}" ${size === snapshot.pageSize ? 'selected' : ''}>${size}</option>`,
+      )
+      .join('')}</select></label></div></footer>`;
+  }
+
+  private renderSlotRegistry(columns: readonly GridColumnDef[]): string {
+    const cellSlots = columns
+      .map((column) => `<slot name="${escapeHtml(this.cellSlotName(column))}"></slot>`)
+      .join('');
+    return `<div hidden class="slot-registry">${cellSlots}<slot name="expandable-row"></slot></div>`;
+  }
+
+  private renderCellTemplate(row: GridRow, column: GridColumnDef, displayIndex: number): string {
+    const templateMarkup = this.getTemplateMarkup(this.cellSlotName(column));
+    if (!templateMarkup) {
+      return `<span class="cell-value">${escapeHtml(this.controller?.displayValue(row, column) ?? '')}</span>`;
+    }
+
+    const rawRow = row.entity as GridRecord;
+    const rawValue = getCellValue(rawRow, column);
+    const valueText = rawValue == null ? '' : String(rawValue);
+    return this.interpolateTemplate(templateMarkup, {
+      $implicit: rawValue,
+      value: rawValue,
+      valueText,
+      valueLower: valueText.toLowerCase(),
+      row: rawRow,
+      column,
+      rowIndex: this.rowIndexFor(row, displayIndex),
+    });
+  }
+
+  private renderExpandableTemplate(row: GridRow): string {
+    const templateMarkup = this.getTemplateMarkup('expandable-row');
+    if (!templateMarkup) {
+      return `<p>${escapeHtml(String(row.entity['name'] ?? row.id))}</p>`;
+    }
+
+    return this.interpolateTemplate(templateMarkup, {
+      $implicit: row.entity,
+      row: row.entity,
+      expanded: row.expanded,
+      rowIndex: this.rowIndexFor(row),
+    });
+  }
+
+  private getTemplateMarkup(slotName: string): string | null {
+    const template = this.querySelector<HTMLTemplateElement>(`template[slot="${slotName}"]`);
+    return template?.innerHTML ?? null;
+  }
+
+  private interpolateTemplate(templateMarkup: string, context: Record<string, unknown>): string {
+    return templateMarkup.replace(/{{\s*([^}]+?)\s*}}/g, (_match, expression) => {
+      const value = this.resolveTemplateValue(context, String(expression).trim());
+      return escapeHtml(value);
+    });
+  }
+
+  private resolveTemplateValue(context: Record<string, unknown>, expression: string): unknown {
+    const segments = expression.split('.').filter(Boolean);
+    let current: unknown = context;
+
+    for (const segment of segments) {
+      if (current == null || typeof current !== 'object') {
+        return '';
+      }
+      current = (current as Record<string, unknown>)[segment];
+    }
+
+    return current ?? '';
+  }
+
+  private rowIndexFor(row: GridRow, fallback = 0): number {
+    return (
+      this.snapshot?.pipeline.visibleRows.findIndex((candidate) => candidate.id === row.id) ??
+      fallback
+    );
+  }
+
+  private cellSlotName(column: GridColumnDef): string {
+    return `cell-${column.name}`;
+  }
+
+  private downloadCsv(): void {
+    if (!this.snapshot) {
+      return;
+    }
+
+    const csv = exportCsvRows(this.snapshot.visibleColumns, this.snapshot.pipeline.visibleRows);
+    const filename = sanitizeDownloadFilename(`${this.snapshot.options.id}.csv`);
+    downloadGridCsvFile(csv, filename);
+  }
+
+  private renderControlIcon(key: UiGridControlIconKey): string {
+    return this.renderIconWithClass('control-icon', key);
+  }
+
+  private renderIconWithClass(svgClass: string, key: UiGridControlIconKey): string {
+    const icon = this.iconOverrides[key] ?? DEFAULT_ICONS[key];
+    const viewBox = escapeHtml(icon.viewBox ?? '0 0 24 24');
+    const path = escapeHtml(icon.path);
+    return `<svg class="${svgClass}" viewBox="${viewBox}" aria-hidden="true" focusable="false"><path d="${path}"></path></svg>`;
+  }
+}
+
+export async function defineStandaloneUiGridElement(tagName = 'ui-grid-element'): Promise<void> {
+  if (!customElements.get(tagName)) {
+    customElements.define(tagName, UiGridStandaloneElement);
+  }
+}
