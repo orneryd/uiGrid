@@ -1,9 +1,13 @@
 use crate::{
     constants::SortDirection,
-    models::{GridColumnDef, GridLabels, GridOptions, GridRow},
+    models::{GridColumnDef, GridIcon, GridIcons, GridLabels, GridOptions, GridRow},
 };
 
 pub fn resolve_grid_labels(overrides: Option<&GridLabels>) -> GridLabels {
+    overrides.cloned().unwrap_or_default()
+}
+
+pub fn resolve_grid_icons(overrides: Option<&GridIcons>) -> GridIcons {
     overrides.cloned().unwrap_or_default()
 }
 
@@ -86,6 +90,14 @@ pub fn grid_sort_button_label(direction: SortDirection, labels: &GridLabels) -> 
     }
 }
 
+pub fn grid_sort_button_icon(direction: SortDirection, icons: &GridIcons) -> GridIcon {
+    match direction {
+        SortDirection::Asc => icons.sort_asc.clone(),
+        SortDirection::Desc => icons.sort_desc.clone(),
+        SortDirection::None => icons.sort_default.clone(),
+    }
+}
+
 pub fn grid_sort_aria_sort(direction: SortDirection) -> String {
     match direction {
         SortDirection::Asc => "ascending".to_string(),
@@ -102,6 +114,14 @@ pub fn grid_grouping_button_label(is_grouped: bool, labels: &GridLabels) -> Stri
     }
 }
 
+pub fn grid_grouping_button_icon(is_grouped: bool, icons: &GridIcons) -> GridIcon {
+    if is_grouped {
+        icons.ungroup_column.clone()
+    } else {
+        icons.group_column.clone()
+    }
+}
+
 pub fn grid_filter_placeholder(is_filterable: bool, labels: &GridLabels) -> String {
     if is_filterable {
         labels.filter_placeholder.clone()
@@ -115,6 +135,14 @@ pub fn grid_group_disclosure_label(collapsed: bool, labels: &GridLabels) -> Stri
         labels.group_expand.clone()
     } else {
         labels.group_collapse.clone()
+    }
+}
+
+pub fn grid_group_disclosure_icon(collapsed: bool, icons: &GridIcons) -> GridIcon {
+    if collapsed {
+        icons.group_expand.clone()
+    } else {
+        icons.group_collapse.clone()
     }
 }
 
@@ -156,12 +184,52 @@ pub fn grid_tree_toggle_label(expanded: bool, labels: &GridLabels) -> String {
     }
 }
 
+pub fn grid_tree_toggle_icon(expanded: bool, icons: &GridIcons) -> GridIcon {
+    if expanded {
+        icons.tree_collapse.clone()
+    } else {
+        icons.tree_expand.clone()
+    }
+}
+
 pub fn grid_expand_toggle_label(expanded: bool, labels: &GridLabels) -> String {
     if expanded {
         labels.collapse_detail.clone()
     } else {
         labels.expand_detail.clone()
     }
+}
+
+pub fn grid_expand_toggle_icon(expanded: bool, icons: &GridIcons) -> GridIcon {
+    if expanded {
+        icons.collapse_detail.clone()
+    } else {
+        icons.expand_detail.clone()
+    }
+}
+
+pub fn grid_drag_handle_icon(icons: &GridIcons) -> GridIcon {
+    icons.drag_handle.clone()
+}
+
+pub fn grid_move_left_icon(icons: &GridIcons) -> GridIcon {
+    icons.move_left.clone()
+}
+
+pub fn grid_move_right_icon(icons: &GridIcons) -> GridIcon {
+    icons.move_right.clone()
+}
+
+pub fn grid_pin_left_icon(icons: &GridIcons) -> GridIcon {
+    icons.pin_left.clone()
+}
+
+pub fn grid_pin_right_icon(icons: &GridIcons) -> GridIcon {
+    icons.pin_right.clone()
+}
+
+pub fn grid_unpin_icon(icons: &GridIcons) -> GridIcon {
+    icons.unpin.clone()
 }
 
 pub fn is_grid_column_grouped(group_by_columns: &[String], column: &GridColumnDef) -> bool {

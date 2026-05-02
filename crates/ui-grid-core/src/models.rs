@@ -53,7 +53,7 @@ pub struct GridSortDescriptor {
     pub ignore_sort: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridColumnDef {
     pub name: String,
@@ -95,6 +95,32 @@ pub struct GridColumnDef {
     pub filter: Option<GridFilterDescriptor>,
 }
 
+impl Default for GridColumnDef {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            display_name: None,
+            field: None,
+            r#type: GridColumnType::default(),
+            visible: true,
+            sortable: true,
+            filterable: true,
+            enable_sorting: true,
+            enable_filtering: true,
+            enable_grouping: true,
+            enable_cell_edit: false,
+            enable_cell_edit_on_focus: false,
+            pinned_left: false,
+            pinned_right: false,
+            enable_pinning: true,
+            width: None,
+            align: None,
+            sort: None,
+            filter: None,
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -106,6 +132,69 @@ pub struct GridGroupingOptions {
     pub group_by: Vec<String>,
     #[serde(default)]
     pub start_collapsed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GridIcon {
+    Grip,
+    Sort,
+    SortAsc,
+    SortDesc,
+    Group,
+    Ungroup,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    PinLeft,
+    PinRight,
+    Unpin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridIcons {
+    pub sort_default: GridIcon,
+    pub sort_asc: GridIcon,
+    pub sort_desc: GridIcon,
+    pub group_column: GridIcon,
+    pub ungroup_column: GridIcon,
+    pub group_collapse: GridIcon,
+    pub group_expand: GridIcon,
+    pub tree_collapse: GridIcon,
+    pub tree_expand: GridIcon,
+    pub expand_detail: GridIcon,
+    pub collapse_detail: GridIcon,
+    pub drag_handle: GridIcon,
+    pub move_left: GridIcon,
+    pub move_right: GridIcon,
+    pub pin_left: GridIcon,
+    pub pin_right: GridIcon,
+    pub unpin: GridIcon,
+}
+
+impl Default for GridIcons {
+    fn default() -> Self {
+        Self {
+            sort_default: GridIcon::Sort,
+            sort_asc: GridIcon::SortAsc,
+            sort_desc: GridIcon::SortDesc,
+            group_column: GridIcon::Group,
+            ungroup_column: GridIcon::Ungroup,
+            group_collapse: GridIcon::ChevronDown,
+            group_expand: GridIcon::ChevronRight,
+            tree_collapse: GridIcon::ChevronDown,
+            tree_expand: GridIcon::ChevronRight,
+            expand_detail: GridIcon::ChevronDown,
+            collapse_detail: GridIcon::ChevronDown,
+            drag_handle: GridIcon::Grip,
+            move_left: GridIcon::ChevronLeft,
+            move_right: GridIcon::ChevronRight,
+            pin_left: GridIcon::PinLeft,
+            pin_right: GridIcon::PinRight,
+            unpin: GridIcon::Unpin,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -203,6 +292,8 @@ pub struct GridOptions {
     pub column_defs: Vec<GridColumnDef>,
     #[serde(default)]
     pub labels: GridLabels,
+    #[serde(default)]
+    pub icons: GridIcons,
     #[serde(default = "default_true")]
     pub enable_sorting: bool,
     #[serde(default = "default_true")]
@@ -275,15 +366,16 @@ impl Default for GridOptions {
             data: Vec::new(),
             column_defs: Vec::new(),
             labels: GridLabels::default(),
+            icons: GridIcons::default(),
             enable_sorting: true,
-            enable_filtering: true,
+            enable_filtering: false,
             enable_grouping: false,
             enable_column_moving: false,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
             enable_virtualization: true,
             enable_pagination: false,
-            enable_pagination_controls: true,
+            enable_pagination_controls: false,
             use_external_pagination: false,
             pagination_page_sizes: Vec::new(),
             pagination_page_size: None,
@@ -295,13 +387,13 @@ impl Default for GridOptions {
             enable_tree_view: false,
             tree_children_field: None,
             tree_indent: None,
-            show_tree_expand_no_children: true,
+            show_tree_expand_no_children: false,
             tree_row_header_always_visible: false,
             enable_auto_resize: false,
             infinite_scroll_rows_from_end: None,
             infinite_scroll_up: false,
             infinite_scroll_down: None,
-            virtualization_threshold: Some(40),
+            virtualization_threshold: None,
             viewport_height: None,
             grouping: None,
             enable_pinning: false,

@@ -8,10 +8,13 @@ use ui_grid_core::{
         clear_grid_edit_session, find_next_grid_cell, parse_grid_edited_value,
         should_grid_edit_on_focus, stringify_grid_editor_value,
     },
-    export::export_csv_rows,
+    export::{
+        build_csv_export_payload, build_csv_export_payload_with, build_grid_export_context,
+        export_csv_rows, export_csv_rows_with,
+    },
     models::{
         BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef, GridColumnType,
-        GridGroupingOptions, GridOptions, GridRow, SortState,
+        GridGroupingOptions, GridIcon, GridIcons, GridLabels, GridOptions, GridRow, SortState,
     },
     pipeline::build_grid_pipeline,
     row_state::{
@@ -20,10 +23,13 @@ use ui_grid_core::{
         toggle_grid_row_expanded, toggle_grid_tree_row_expanded,
     },
     state::{
-        BuildGridSavedStateContext, build_grid_saved_state, normalize_grid_saved_state,
-        sanitize_download_filename,
+        BuildGridSavedStateContext, build_grid_saved_state, create_grid_restore_mutation_plan,
+        deserialize_grid_saved_state, deserialize_grid_saved_state_with,
+        normalize_grid_saved_state, sanitize_download_filename, serialize_grid_saved_state,
+        serialize_grid_saved_state_with,
     },
     tree::build_grid_rows,
+    viewmodel::{resolve_grid_icons, resolve_grid_labels},
 };
 use ui_grid_fixtures::{sample_rows, sample_tree_rows};
 
@@ -144,7 +150,7 @@ fn display_summary(items: &[DisplayItem]) -> Vec<String> {
 }
 
 #[test]
-fn pipeline_filters_sorts_groups_and_paginates_deterministically() {
+fn pipeline_filters_sorts_groups_and_paginates() {
     let options = base_options();
     let context = BuildGridPipelineContext {
         options: options.clone(),
@@ -160,6 +166,43 @@ fn pipeline_filters_sorts_groups_and_paginates_deterministically() {
         row_size: 44,
         ..Default::default()
     };
+
+        #[test]
+        fn grid_column_default_keeps_global_features_enabled() {
+            let column = GridColumnDef::default();
+
+            assert!(column.visible);
+            assert!(column.sortable);
+            assert!(column.filterable);
+            assert!(column.enable_sorting);
+            assert!(column.enable_filtering);
+            assert!(column.enable_grouping);
+            assert!(column.enable_pinning);
+        }
+
+        #[test]
+        fn grid_options_default_only_enables_sorting() {
+            let options = GridOptions::default();
+
+            assert!(options.enable_sorting);
+            assert!(!options.enable_filtering);
+            assert!(!options.enable_grouping);
+            assert!(!options.enable_column_moving);
+            assert!(!options.enable_cell_edit);
+            assert!(!options.enable_cell_edit_on_focus);
+            assert!(options.enable_virtualization);
+            assert!(!options.enable_pagination);
+            assert!(!options.enable_pagination_controls);
+            assert!(!options.use_external_pagination);
+            assert!(!options.enable_expandable);
+            assert!(!options.enable_tree_view);
+            assert!(!options.show_tree_expand_no_children);
+            assert!(!options.tree_row_header_always_visible);
+            assert!(!options.enable_auto_resize);
+            assert!(!options.infinite_scroll_up);
+            assert!(!options.enable_pinning);
+            assert_eq!(options.virtualization_threshold, None);
+        }
 
     let result = build_grid_pipeline(&context);
 
@@ -236,6 +279,29 @@ fn csv_export_quotes_and_sanitizes_formula_like_values() {
 }
 
 #[test]
+fn custom_export_formatters_and_payloads() {
+    let rows = build_grid_rows(&base_options(), 44, &BTreeMap::new(), &BTreeMap::new());
+    let columns = base_columns();
+    let context = build_grid_export_context("accounts/grid", &columns[..2], &rows[..1]);
+
+    let csv = export_csv_rows_with(context.columns, context.rows, |row, column| {
+        format!("{}={}", column.name, row.entity[column.field.as_deref().unwrap_or(&column.name)])
+    });
+    assert_eq!(csv, "Owner,Status\n\"owner=\"\"Alice\"\"\",\"status=\"\"Active\"\"\"");
+
+    let default_payload = build_csv_export_payload(&context);
+    assert_eq!(default_payload.filename, "accounts_grid.csv");
+    assert_eq!(default_payload.mime_type, "text/csv;charset=utf-8");
+    assert!(default_payload.contents.starts_with("Owner,Status\n"));
+
+    let custom_payload = build_csv_export_payload_with(&context, |row, column| {
+        format!("{}:{}", column.name, row.id)
+    });
+    assert_eq!(custom_payload.filename, "accounts_grid.csv");
+    assert_eq!(custom_payload.contents, "Owner,Status\nowner:row-1,status:row-1");
+}
+
+#[test]
 fn save_state_and_normalization_deeply_assert_results() {
     let saved = build_grid_saved_state(BuildGridSavedStateContext {
         column_order: vec!["owner".to_string(), "status".to_string()],
@@ -298,6 +364,93 @@ fn save_state_and_normalization_deeply_assert_results() {
         sanitize_download_filename("Quarterly / Revenue: 2026.csv"),
         "Quarterly___Revenue__2026.csv"
     );
+
+    let serialized = serialize_grid_saved_state(&saved).expect("serialize saved state");
+    let deserialized = deserialize_grid_saved_state(&serialized).expect("deserialize saved state");
+    assert_eq!(deserialized, saved);
+
+    let custom_serialized = serialize_grid_saved_state_with(&saved, |state| {
+        state.column_order.join("|")
+    });
+    assert_eq!(custom_serialized, "owner|status");
+
+    let custom_deserialized = deserialize_grid_saved_state_with("owner|status", |value| {
+        Ok::<_, &'static str>(ui_grid_core::models::GridSavedState {
+            column_order: value.split('|').map(str::to_string).collect(),
+            ..Default::default()
+        })
+    })
+    .expect("deserialize custom saved state");
+    assert_eq!(custom_deserialized.column_order, vec!["owner", "status"]);
+
+    let restore_plan = create_grid_restore_mutation_plan(&saved);
+    assert_eq!(restore_plan.column_order, Some(vec!["owner".to_string(), "status".to_string()]));
+    assert_eq!(restore_plan.filters.as_ref().unwrap().get("owner"), Some(&"Ali*".to_string()));
+    assert_eq!(restore_plan.sort.as_ref().unwrap().direction, SortDirection::Desc);
+    assert_eq!(restore_plan.grouping, Some(vec!["status".to_string()]));
+    assert_eq!(restore_plan.pagination.as_ref().unwrap().pagination_current_page, 3);
+}
+
+#[test]
+fn label_resolution_supports_i18n_overrides() {
+    let spanish = GridLabels {
+        sort_default: "Ordenar".to_string(),
+        sort_asc: "Orden ascendente".to_string(),
+        sort_desc: "Orden descendente".to_string(),
+        group_column: "Agrupar por esta columna".to_string(),
+        ungroup_column: "Quitar agrupacion".to_string(),
+        group_collapse: "Contraer grupo".to_string(),
+        group_expand: "Expandir grupo".to_string(),
+        tree_collapse: "Contraer fila".to_string(),
+        tree_expand: "Expandir fila".to_string(),
+        expand_detail: "Expandir detalles".to_string(),
+        collapse_detail: "Contraer detalles".to_string(),
+        filter_placeholder: "Filtrar…".to_string(),
+        filter_disabled: "Filtro deshabilitado".to_string(),
+        filter_column: "Filtro".to_string(),
+        pagination_previous: "Pagina anterior".to_string(),
+        pagination_next: "Pagina siguiente".to_string(),
+        pagination_page: "Pagina".to_string(),
+        pagination_of: "de".to_string(),
+        pagination_rows: "Filas por pagina".to_string(),
+        empty_heading: "Sin filas coincidentes".to_string(),
+        empty_description: "Ajusta filtros, agrupacion o orden.".to_string(),
+        toolbar_of: "de".to_string(),
+        toolbar_rows: "filas".to_string(),
+        stats_visible_rows: "filas visibles".to_string(),
+        group_rows_suffix: "filas".to_string(),
+        pin_column: "Fijar columna".to_string(),
+        pin_left: "Fijar a la izquierda".to_string(),
+        pin_right: "Fijar a la derecha".to_string(),
+        unpin: "Desfijar".to_string(),
+    };
+
+    let labels = resolve_grid_labels(Some(&spanish));
+    assert_eq!(labels.sort_default, "Ordenar");
+    assert_eq!(labels.pagination_rows, "Filas por pagina");
+    assert_eq!(labels.pin_left, "Fijar a la izquierda");
+
+    let icons = resolve_grid_icons(Some(&GridIcons {
+        sort_default: GridIcon::Grip,
+        sort_asc: GridIcon::SortAsc,
+        sort_desc: GridIcon::SortDesc,
+        group_column: GridIcon::Group,
+        ungroup_column: GridIcon::Ungroup,
+        group_collapse: GridIcon::ChevronDown,
+        group_expand: GridIcon::ChevronRight,
+        tree_collapse: GridIcon::ChevronDown,
+        tree_expand: GridIcon::ChevronRight,
+        expand_detail: GridIcon::ChevronDown,
+        collapse_detail: GridIcon::ChevronDown,
+        drag_handle: GridIcon::Grip,
+        move_left: GridIcon::ChevronLeft,
+        move_right: GridIcon::ChevronRight,
+        pin_left: GridIcon::PinLeft,
+        pin_right: GridIcon::PinRight,
+        unpin: GridIcon::Unpin,
+    }));
+    assert_eq!(icons.drag_handle, GridIcon::Grip);
+    assert_eq!(icons.pin_right, GridIcon::PinRight);
 }
 
 #[test]
@@ -481,7 +634,7 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
 }
 
 #[test]
-fn row_state_transitions_are_deterministic() {
+fn row_state_transitions() {
     let rows = build_grid_rows(&base_options(), 44, &BTreeMap::new(), &BTreeMap::new());
     let (expanded, expanded_rows) = toggle_grid_row_expanded(&BTreeMap::new(), "row-1");
     assert!(expanded);

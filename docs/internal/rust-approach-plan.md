@@ -174,7 +174,7 @@ Deliverables:
 
 Exit criteria:
 
-- the TypeScript engine can produce deterministic outputs for the fixture corpus
+- the TypeScript engine can produce outputs for the fixture corpus
 
 ## Phase 2: Implement `ui-grid-core` in Rust
 

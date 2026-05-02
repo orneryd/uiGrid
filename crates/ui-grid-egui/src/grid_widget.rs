@@ -2,30 +2,58 @@
 
 use std::collections::BTreeMap;
 
-use egui::{Color32, Key, Pos2, Ui, Vec2};
+use egui::{Color32, Key, Pos2, Response, Ui, Vec2, WidgetInfo, WidgetType};
 use egui_extras::{Column, TableBuilder};
 use serde_json::Value;
 use ui_grid_core::{
     constants::SortDirection,
     display::format_grid_cell_display_value,
+    export::{
+        GridExportContext, GridExportPayload, build_csv_export_payload,
+        build_grid_export_context, header_label,
+    },
     edit::{
         GridEditSession, GridMoveDirection, begin_grid_edit_session, find_next_grid_cell,
         parse_grid_edited_value, stringify_grid_editor_value,
     },
     models::{
-        BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef,
+        BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef, GridIcon,
         GridGroupingOptions, GridOptions, PipelineResult, RowItem, SortState,
     },
     pagination::get_total_pages_value,
     pipeline::build_grid_pipeline,
+    pinning::{
+        PinDirection, PinnedColumnState, build_initial_pinned_state, get_column_pin_direction,
+        is_column_pinnable, pin_column_state,
+    },
+    state::{
+        BuildGridSavedStateContext, create_grid_restore_mutation_plan,
+        deserialize_grid_saved_state, deserialize_grid_saved_state_with,
+        serialize_grid_saved_state, serialize_grid_saved_state_with,
+    },
     utils::get_cell_value,
+    viewmodel::{
+        can_grid_move_columns, grid_expand_toggle_label_for_row, grid_filter_placeholder,
+        grid_group_disclosure_icon, grid_group_disclosure_label, grid_grouping_button_icon,
+        grid_grouping_button_label, grid_pin_left_icon, grid_pin_right_icon,
+        grid_sort_button_icon, grid_sort_button_label, grid_tree_toggle_icon,
+        grid_tree_toggle_label_for_row, grid_unpin_icon, is_grid_column_grouped,
+    },
 };
 
-use crate::column_ext::{EguiColumnExt, GridCellContext, find_column_ext, find_column_ext_mut};
+use crate::column_ext::{
+    EguiColumnExt, EguiHeaderAction, GridCellContext, GridHeaderControlsContext,
+    find_column_ext, find_column_ext_mut,
+};
 use crate::grid_theme::GridTheme;
 
 fn paint_triangle(painter: &egui::Painter, center: Pos2, half: f32, dir: TriDir, color: Color32) {
     let points = match dir {
+        TriDir::Left => vec![
+            Pos2::new(center.x + half * 0.5, center.y - half),
+            Pos2::new(center.x - half * 0.7, center.y),
+            Pos2::new(center.x + half * 0.5, center.y + half),
+        ],
         TriDir::Right => vec![
             Pos2::new(center.x - half * 0.5, center.y - half),
             Pos2::new(center.x + half * 0.7, center.y),
@@ -47,6 +75,160 @@ fn paint_triangle(painter: &egui::Painter, center: Pos2, half: f32, dir: TriDir,
         color,
         egui::Stroke::NONE,
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use ui_grid_core::models::{
+        GridColumnDef, GridColumnType, GridOptions, GridRow, GridSavedState,
+    };
+
+    use super::EguiGrid;
+    use ui_grid_core::pinning::PinDirection;
+
+    fn test_columns() -> Vec<GridColumnDef> {
+        vec![
+            GridColumnDef {
+                name: "owner".to_string(),
+                display_name: Some("Owner".to_string()),
+                field: Some("owner".to_string()),
+                r#type: GridColumnType::String,
+                ..GridColumnDef::default()
+            },
+            GridColumnDef {
+                name: "status".to_string(),
+                display_name: Some("Status".to_string()),
+                field: Some("status".to_string()),
+                r#type: GridColumnType::String,
+                ..GridColumnDef::default()
+            },
+        ]
+    }
+
+    fn test_options() -> GridOptions {
+        GridOptions {
+            id: "desk-grid/spec".to_string(),
+            column_defs: test_columns(),
+            data: vec![json!({"id": "row-1", "owner": "Alicia", "status": "Activo"})],
+            enable_pinning: true,
+            enable_column_moving: true,
+            ..GridOptions::default()
+        }
+    }
+
+    fn test_row() -> GridRow {
+        GridRow::new(
+            "row-1".to_string(),
+            json!({"id": "row-1", "owner": "Alicia", "status": "Activo"}),
+            0,
+            44,
+        )
+    }
+
+    #[test]
+    fn egui_grid_exports_visible_rows_without_io() {
+        let options = test_options();
+        let columns = test_columns();
+        let mut grid = EguiGrid::new();
+        grid.cached_result.visible_rows = vec![test_row()];
+
+        let payload = grid.export_csv(&options, &columns);
+        assert_eq!(payload.filename, "desk-grid_spec.csv");
+        assert!(payload.contents.contains("Owner,Status"));
+        assert!(payload.contents.contains("Alicia,Activo"));
+
+        let custom = grid.export_with(&options, &columns, |context| {
+            context
+                .rows
+                .iter()
+                .map(|row| row.id.clone())
+                .collect::<Vec<_>>()
+                .join("|")
+        });
+        assert_eq!(custom, "row-1");
+    }
+
+    #[test]
+    fn egui_grid_save_and_restore_state_are_storage_agnostic() {
+        let mut grid = EguiGrid::new();
+        grid.column_order = vec!["status".to_string(), "owner".to_string()];
+        grid.active_filters.insert("owner".to_string(), "Ali*".to_string());
+        grid.group_by_columns = vec!["status".to_string()];
+        grid.current_page = 3;
+        grid.page_size = 25;
+        grid.expanded_rows.insert("row-1".to_string(), true);
+        grid.expanded_tree_rows.insert("tree-1".to_string(), true);
+        grid.pinned_columns.insert("owner".to_string(), "left".to_string());
+        grid.cached_result.total_items = 80;
+
+        let saved = grid.save_state();
+        let json = grid.serialize_state().expect("serialize state");
+        let custom = grid.serialize_state_with(|state| state.column_order.join("|"));
+        assert_eq!(custom, "status|owner");
+
+        let mut restored = EguiGrid::new();
+        restored.restore_state(&saved);
+        assert_eq!(restored.column_order(), ["status", "owner"]);
+        assert_eq!(restored.group_by_columns(), ["status"]);
+        assert_eq!(restored.pinned_columns().get("owner"), Some(&"left".to_string()));
+
+        let mut restored_from_json = EguiGrid::new();
+        restored_from_json
+            .deserialize_state(&json)
+            .expect("restore json state");
+        assert_eq!(restored_from_json.column_order(), ["status", "owner"]);
+        assert_eq!(restored_from_json.pinned_columns().get("owner"), Some(&"left".to_string()));
+
+        let mut restored_custom = EguiGrid::new();
+        restored_custom
+            .deserialize_state_with("status|owner", |value| {
+                Ok::<GridSavedState, &'static str>(GridSavedState {
+                    column_order: value.split('|').map(str::to_string).collect(),
+                    ..GridSavedState::default()
+                })
+            })
+            .expect("restore custom state");
+        assert_eq!(restored_custom.column_order(), ["status", "owner"]);
+    }
+
+    #[test]
+    fn egui_grid_supports_programmatic_pinning_and_reorder() {
+        let mut grid = EguiGrid::new();
+        grid.column_order = vec!["owner".to_string(), "status".to_string()];
+
+        grid.pin_column("owner", PinDirection::Left);
+        assert_eq!(grid.pinned_columns().get("owner"), Some(&"left".to_string()));
+
+        grid.move_column_before("status", "owner");
+        assert_eq!(grid.column_order(), ["status", "owner"]);
+    }
+
+    #[test]
+    fn egui_grid_restore_normalizes_unsafe_state() {
+        let mut grid = EguiGrid::new();
+        grid.restore_state(&GridSavedState {
+            column_order: vec!["owner".to_string(), "__proto__".to_string()],
+            filters: std::collections::BTreeMap::from([
+                ("owner".to_string(), "Ali*".to_string()),
+                ("constructor".to_string(), "bad".to_string()),
+            ]),
+            sort: None,
+            grouping: vec!["status".to_string(), "prototype".to_string()],
+            pagination: None,
+            expandable: Default::default(),
+            tree_view: Default::default(),
+            pinning: std::collections::BTreeMap::from([
+                ("owner".to_string(), "left".to_string()),
+                ("prototype".to_string(), "right".to_string()),
+            ]),
+        });
+
+        assert_eq!(grid.column_order(), ["owner"]);
+        assert_eq!(grid.group_by_columns(), ["status"]);
+        assert_eq!(grid.pinned_columns().get("owner"), Some(&"left".to_string()));
+        assert!(!grid.pinned_columns().contains_key("prototype"));
+    }
 }
 
 fn paint_hamburger(painter: &egui::Painter, center: Pos2, half: f32, color: Color32) {
@@ -72,54 +254,155 @@ fn paint_grid_icon(painter: &egui::Painter, center: Pos2, half: f32, color: Colo
     }
 }
 
-fn icon_button(ui: &mut Ui, icon: IconKind, color: Color32) -> egui::Response {
+fn paint_pin_icon(
+    painter: &egui::Painter,
+    center: Pos2,
+    half: f32,
+    color: Color32,
+    side: PinDirection,
+) {
+    let stem_top = Pos2::new(center.x, center.y - half * 0.8);
+    let stem_bottom = Pos2::new(center.x, center.y + half * 0.9);
+    painter.line_segment([stem_top, stem_bottom], egui::Stroke::new(1.5, color));
+    let head = [
+        Pos2::new(center.x - half * 0.7, center.y - half * 0.25),
+        Pos2::new(center.x + half * 0.7, center.y - half * 0.25),
+        Pos2::new(center.x, center.y + half * 0.25),
+    ];
+    painter.add(egui::Shape::convex_polygon(head.to_vec(), color, egui::Stroke::NONE));
+
+    let guide_x = match side {
+        PinDirection::Left => center.x - half * 1.35,
+        PinDirection::Right => center.x + half * 1.35,
+        PinDirection::None => center.x,
+    };
+    painter.line_segment(
+        [Pos2::new(guide_x, center.y - half), Pos2::new(guide_x, center.y + half)],
+        egui::Stroke::new(1.5, color),
+    );
+}
+
+fn paint_unpin_icon(painter: &egui::Painter, center: Pos2, half: f32, color: Color32) {
+    paint_pin_icon(painter, center, half, color, PinDirection::Left);
+    painter.line_segment(
+        [
+            Pos2::new(center.x - half, center.y + half),
+            Pos2::new(center.x + half, center.y - half),
+        ],
+        egui::Stroke::new(1.5, color),
+    );
+}
+
+fn paint_sort_icon(painter: &egui::Painter, center: Pos2, half: f32, color: Color32) {
+    paint_triangle(
+        painter,
+        Pos2::new(center.x, center.y - half * 0.4),
+        half * 0.55,
+        TriDir::Up,
+        color,
+    );
+    paint_triangle(
+        painter,
+        Pos2::new(center.x, center.y + half * 0.45),
+        half * 0.55,
+        TriDir::Down,
+        color,
+    );
+}
+
+fn paint_semantic_icon(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    icon: &GridIcon,
+    color: Color32,
+) {
+    let c = rect.center();
+    let h = 5.0;
+    match icon {
+        GridIcon::Grip => paint_hamburger(painter, c, h, color),
+        GridIcon::Sort => paint_sort_icon(painter, c, h, color),
+        GridIcon::SortAsc => paint_triangle(painter, c, h, TriDir::Up, color),
+        GridIcon::SortDesc => paint_triangle(painter, c, h, TriDir::Down, color),
+        GridIcon::Group => paint_grid_icon(painter, c, h, color),
+        GridIcon::Ungroup => {
+            paint_grid_icon(painter, c, h, color);
+            painter.line_segment(
+                [Pos2::new(c.x - h, c.y + h), Pos2::new(c.x + h, c.y - h)],
+                egui::Stroke::new(1.5, color),
+            );
+        }
+        GridIcon::ChevronLeft => paint_triangle(painter, c, h * 0.8, TriDir::Left, color),
+        GridIcon::ChevronRight => paint_triangle(painter, c, h * 0.8, TriDir::Right, color),
+        GridIcon::ChevronDown => paint_triangle(painter, c, h * 0.8, TriDir::Down, color),
+        GridIcon::PinLeft => paint_pin_icon(painter, c, h, color, PinDirection::Left),
+        GridIcon::PinRight => paint_pin_icon(painter, c, h, color, PinDirection::Right),
+        GridIcon::Unpin => paint_unpin_icon(painter, c, h, color),
+    }
+}
+
+fn icon_button(
+    ui: &mut Ui,
+    icon: &GridIcon,
+    theme: &GridTheme,
+    color: Color32,
+    active: bool,
+) -> egui::Response {
     let size = Vec2::splat(16.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     if ui.is_rect_visible(rect) {
-        let c = rect.center();
-        let h = 5.0;
-        match icon {
-            IconKind::SortNone => paint_hamburger(ui.painter(), c, h, color),
-            IconKind::SortAsc => paint_triangle(ui.painter(), c, h, TriDir::Up, color),
-            IconKind::SortDesc => paint_triangle(ui.painter(), c, h, TriDir::Down, color),
-            IconKind::Group => paint_grid_icon(ui.painter(), c, h, color),
-            IconKind::ExpandRight => paint_triangle(ui.painter(), c, h * 0.8, TriDir::Right, color),
-            IconKind::ExpandDown => paint_triangle(ui.painter(), c, h * 0.8, TriDir::Down, color),
+        let background = if active {
+            Some(theme.control_active_background)
+        } else if response.hovered() {
+            Some(theme.control_hover_background)
+        } else {
+            None
+        };
+        if let Some(background) = background {
+            ui.painter().rect_filled(rect.expand(2.0), 4.0, background);
         }
+        paint_semantic_icon(ui.painter(), rect, icon, color);
     }
     response
 }
 
+fn icon_button_labeled(
+    ui: &mut Ui,
+    icon: &GridIcon,
+    theme: &GridTheme,
+    color: Color32,
+    label: &str,
+    active: bool,
+) -> Response {
+    let response = icon_button(ui, icon, theme, color, active);
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
+    response.on_hover_text(label)
+}
+
 /// Paint an expand/collapse icon without registering interaction.
 /// Returns the allocated rect (with padding) so the caller can do hit-testing.
-fn expand_icon_passive(ui: &mut Ui, expanded: bool, color: Color32) -> egui::Rect {
+fn expand_icon_passive(
+    ui: &mut Ui,
+    icon: &GridIcon,
+    color: Color32,
+) -> egui::Rect {
     let size = Vec2::new(24.0, 24.0);
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     if ui.is_rect_visible(rect) {
-        let c = rect.center();
-        let h = 5.0 * 0.8;
-        if expanded {
-            paint_triangle(ui.painter(), c, h, TriDir::Down, color);
-        } else {
-            paint_triangle(ui.painter(), c, h, TriDir::Right, color);
-        }
+        paint_semantic_icon(ui.painter(), rect, icon, color);
     }
     rect
 }
 
 enum TriDir {
+    Left,
     Right,
     Down,
     Up,
 }
 
-enum IconKind {
-    SortNone,
-    SortAsc,
-    SortDesc,
-    Group,
-    ExpandRight,
-    ExpandDown,
+struct HeaderRowLayout {
+    label_id: egui::Id,
+    controls_left_x: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +444,13 @@ pub enum EguiGridEventKind {
     SelectionChanged {
         selected_ids: Vec<String>,
     },
+    ColumnPinned {
+        column: String,
+        direction: PinDirection,
+    },
+    ColumnsReordered {
+        order: Vec<String>,
+    },
     RenderingComplete {
         pipeline_ms: f64,
         total_items: usize,
@@ -184,6 +474,9 @@ pub struct EguiGrid {
     focused_cell: Option<GridCellPosition>,
     selected_row_ids: Vec<String>,
     last_clicked_row_id: Option<String>,
+    column_order: Vec<String>,
+    pinned_columns: PinnedColumnState,
+    dragged_column: Option<String>,
 }
 
 impl Default for EguiGrid {
@@ -213,6 +506,9 @@ impl EguiGrid {
             focused_cell: None,
             selected_row_ids: Vec::new(),
             last_clicked_row_id: None,
+            column_order: Vec::new(),
+            pinned_columns: PinnedColumnState::new(),
+            dragged_column: None,
         }
     }
 
@@ -238,9 +534,290 @@ impl EguiGrid {
         &self.group_by_columns
     }
 
+    pub fn column_order(&self) -> &[String] {
+        &self.column_order
+    }
+
+    pub fn pinned_columns(&self) -> &PinnedColumnState {
+        &self.pinned_columns
+    }
+
+    pub fn pin_column(&mut self, column_name: &str, direction: PinDirection) {
+        self.set_column_pin_direction(column_name, direction);
+    }
+
+    pub fn move_column_before(&mut self, column_name: &str, target_column_name: &str) {
+        self.reorder_column_before(column_name, target_column_name);
+    }
+
+    pub fn export_context<'a>(
+        &'a self,
+        options: &'a GridOptions,
+        columns: &'a [GridColumnDef],
+    ) -> GridExportContext<'a> {
+        build_grid_export_context(&options.id, columns, &self.cached_result.visible_rows)
+    }
+
+    pub fn export_csv(
+        &self,
+        options: &GridOptions,
+        columns: &[GridColumnDef],
+    ) -> GridExportPayload {
+        build_csv_export_payload(&self.export_context(options, columns))
+    }
+
+    pub fn export_with<'a, T>(
+        &'a self,
+        options: &'a GridOptions,
+        columns: &'a [GridColumnDef],
+        exporter: impl FnOnce(GridExportContext<'a>) -> T,
+    ) -> T {
+        exporter(self.export_context(options, columns))
+    }
+
     pub fn set_group_by(&mut self, columns: Vec<String>) {
         self.group_by_columns = columns;
         self.pipeline_dirty = true;
+    }
+
+    pub fn save_state(&self) -> ui_grid_core::models::GridSavedState {
+        ui_grid_core::state::build_grid_saved_state(BuildGridSavedStateContext {
+            column_order: self.column_order.clone(),
+            active_filters: self.active_filters.clone(),
+            sort_state: self.sort_state.clone(),
+            group_by_columns: self.group_by_columns.clone(),
+            current_page: self.current_page,
+            page_size: self.page_size,
+            total_items: self.cached_result.total_items,
+            expanded_rows: self.expanded_rows.clone(),
+            expanded_tree_rows: self.expanded_tree_rows.clone(),
+            pinned_columns: self.pinned_columns.clone(),
+        })
+    }
+
+    pub fn serialize_state(&self) -> Result<String, serde_json::Error> {
+        serialize_grid_saved_state(&self.save_state())
+    }
+
+    pub fn serialize_state_with<T>(
+        &self,
+        serializer: impl FnOnce(&ui_grid_core::models::GridSavedState) -> T,
+    ) -> T {
+        serialize_grid_saved_state_with(&self.save_state(), serializer)
+    }
+
+    pub fn restore_state(&mut self, state: &ui_grid_core::models::GridSavedState) {
+        let plan = create_grid_restore_mutation_plan(state);
+
+        if let Some(column_order) = plan.column_order {
+            self.column_order = column_order;
+        }
+        if let Some(filters) = plan.filters {
+            self.active_filters = filters;
+        }
+        if let Some(sort) = plan.sort {
+            self.sort_state = sort;
+        }
+        if let Some(grouping) = plan.grouping {
+            self.group_by_columns = grouping;
+        }
+        if let Some(pagination) = plan.pagination {
+            self.current_page = pagination.pagination_current_page;
+            self.page_size = pagination.pagination_page_size;
+        }
+        if let Some(expandable) = plan.expandable {
+            self.expanded_rows = expandable;
+        }
+        if let Some(tree_view) = plan.tree_view {
+            self.expanded_tree_rows = tree_view;
+        }
+        if let Some(pinning) = plan.pinning {
+            self.pinned_columns = pinning;
+        }
+
+        self.pipeline_dirty = true;
+    }
+
+    pub fn deserialize_state(&mut self, value: &str) -> Result<(), serde_json::Error> {
+        let state = deserialize_grid_saved_state(value)?;
+        self.restore_state(&state);
+        Ok(())
+    }
+
+    pub fn deserialize_state_with<T, E>(
+        &mut self,
+        value: T,
+        deserializer: impl FnOnce(T) -> Result<ui_grid_core::models::GridSavedState, E>,
+    ) -> Result<(), E> {
+        let state = deserialize_grid_saved_state_with(value, deserializer)?;
+        self.restore_state(&state);
+        Ok(())
+    }
+
+    fn sync_column_state(&mut self, columns: &[GridColumnDef]) {
+        let current_names = columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect::<Vec<_>>();
+
+        self.column_order.retain(|name| current_names.contains(name));
+        for name in &current_names {
+            if !self.column_order.contains(name) {
+                self.column_order.push(name.clone());
+            }
+        }
+
+        self.pinned_columns
+            .retain(|name, _| current_names.iter().any(|current| current == name));
+        for (name, direction) in build_initial_pinned_state(columns) {
+            self.pinned_columns.entry(name).or_insert(direction);
+        }
+    }
+
+    fn resolve_columns(&self, columns: &[GridColumnDef]) -> Vec<GridColumnDef> {
+        let by_name = columns
+            .iter()
+            .cloned()
+            .map(|column| (column.name.clone(), column))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut ordered = Vec::with_capacity(columns.len());
+        for name in &self.column_order {
+            if let Some(column) = by_name.get(name) {
+                ordered.push(column.clone());
+            }
+        }
+
+        let mut left = Vec::new();
+        let mut center = Vec::new();
+        let mut right = Vec::new();
+
+        for column in ordered {
+            match get_column_pin_direction(&self.pinned_columns, &column) {
+                PinDirection::Left => left.push(column),
+                PinDirection::Right => right.push(column),
+                PinDirection::None => center.push(column),
+            }
+        }
+
+        left.into_iter().chain(center).chain(right).collect()
+    }
+
+    fn cycle_sort_for_column(&mut self, column_name: &str) {
+        let is_active = self.sort_state.column_name.as_deref() == Some(column_name);
+        let next_direction = if is_active {
+            match self.sort_state.direction {
+                SortDirection::Asc => SortDirection::Desc,
+                SortDirection::Desc => SortDirection::None,
+                SortDirection::None => SortDirection::Asc,
+            }
+        } else {
+            SortDirection::Asc
+        };
+
+        self.sort_state = SortState {
+            column_name: if next_direction == SortDirection::None {
+                None
+            } else {
+                Some(column_name.to_string())
+            },
+            direction: next_direction,
+        };
+        self.current_page = 1;
+        self.pipeline_dirty = true;
+
+        self.events.push(EguiGridEvent {
+            kind: EguiGridEventKind::SortChanged {
+                column: column_name.to_string(),
+                direction: next_direction,
+            },
+        });
+    }
+
+    fn set_column_pin_direction(&mut self, column_name: &str, direction: PinDirection) {
+        let previous = self.pinned_columns.clone();
+        self.pinned_columns = pin_column_state(&self.pinned_columns, column_name, direction);
+        if self.pinned_columns != previous {
+            self.pipeline_dirty = true;
+            self.events.push(EguiGridEvent {
+                kind: EguiGridEventKind::ColumnPinned {
+                    column: column_name.to_string(),
+                    direction,
+                },
+            });
+        }
+    }
+
+    fn move_column_relative(&mut self, column_name: &str, delta: isize) {
+        let Some(index) = self.column_order.iter().position(|name| name == column_name) else {
+            return;
+        };
+        let next_index = (index as isize + delta).clamp(0, self.column_order.len() as isize - 1);
+        let next_index = next_index as usize;
+        if index == next_index {
+            return;
+        }
+
+        let column = self.column_order.remove(index);
+        self.column_order.insert(next_index, column);
+        self.pipeline_dirty = true;
+        self.events.push(EguiGridEvent {
+            kind: EguiGridEventKind::ColumnsReordered {
+                order: self.column_order.clone(),
+            },
+        });
+    }
+
+    fn reorder_column_before(&mut self, dragged: &str, target: &str) {
+        if dragged == target {
+            return;
+        }
+
+        let Some(from_index) = self.column_order.iter().position(|name| name == dragged) else {
+            return;
+        };
+        let Some(mut to_index) = self.column_order.iter().position(|name| name == target) else {
+            return;
+        };
+
+        let column = self.column_order.remove(from_index);
+        if from_index < to_index {
+            to_index -= 1;
+        }
+        self.column_order.insert(to_index, column);
+        self.pipeline_dirty = true;
+        self.events.push(EguiGridEvent {
+            kind: EguiGridEventKind::ColumnsReordered {
+                order: self.column_order.clone(),
+            },
+        });
+    }
+
+    fn reorder_column_after(&mut self, dragged: &str, target: &str) {
+        if dragged == target {
+            return;
+        }
+
+        let Some(from_index) = self.column_order.iter().position(|name| name == dragged) else {
+            return;
+        };
+        let Some(target_index) = self.column_order.iter().position(|name| name == target) else {
+            return;
+        };
+
+        let column = self.column_order.remove(from_index);
+        let insert_index = if from_index < target_index {
+            target_index
+        } else {
+            target_index + 1
+        };
+        self.column_order.insert(insert_index, column);
+        self.pipeline_dirty = true;
+        self.events.push(EguiGridEvent {
+            kind: EguiGridEventKind::ColumnsReordered {
+                order: self.column_order.clone(),
+            },
+        });
     }
 
     pub fn reset(&mut self) {
@@ -258,16 +835,34 @@ impl EguiGrid {
         column_ext: &mut [EguiColumnExt],
         theme: &GridTheme,
     ) {
-        self.handle_keyboard_navigation(ui, options, columns);
-        self.refresh_pipeline(options, columns);
+        self.sync_column_state(columns);
+        let ordered_columns = self.resolve_columns(columns);
 
-        if columns.is_empty() {
+        self.handle_keyboard_navigation(ui, options, &ordered_columns);
+        self.refresh_pipeline(options, &ordered_columns);
+
+        if ordered_columns.is_empty() {
             ui.label("No columns defined.");
             return;
         }
 
         let total_items = self.cached_result.total_items;
         let display_items = std::mem::take(&mut self.cached_result.display_items);
+
+        let mut left_columns = Vec::new();
+        let mut center_columns = Vec::new();
+        let mut right_columns = Vec::new();
+        for column in &ordered_columns {
+            match get_column_pin_direction(&self.pinned_columns, column) {
+                PinDirection::Left => left_columns.push(column.clone()),
+                PinDirection::Right => right_columns.push(column.clone()),
+                PinDirection::None => center_columns.push(column.clone()),
+            }
+        }
+        let has_pinned = !left_columns.is_empty() || !right_columns.is_empty();
+        const COL_W: f32 = 176.0;
+        let left_w = left_columns.len() as f32 * COL_W;
+        let right_w = right_columns.len() as f32 * COL_W;
 
         egui::Frame::new()
             .fill(theme.surface)
@@ -282,7 +877,103 @@ impl EguiGrid {
                         });
                 }
 
-                self.draw_table(ui, options, columns, column_ext, &display_items, theme);
+                if !has_pinned {
+                    egui::ScrollArea::horizontal()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.set_min_width(
+                                (ordered_columns.len() as f32 * COL_W).max(ui.available_width()),
+                            );
+                            self.draw_table(
+                                ui,
+                                options,
+                                &ordered_columns,
+                                column_ext,
+                                &display_items,
+                                theme,
+                                true,
+                            );
+                        });
+                    return;
+                }
+
+                // Sticky pinned layout: shared vertical scroll, three side-by-side regions.
+                egui::ScrollArea::vertical()
+                    .id_salt("grid_pinned_vscroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let total_w = ui.available_width();
+                        let avail_h = ui.available_height();
+                        let center_w = (total_w - left_w - right_w).max(80.0);
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.horizontal_top(|ui| {
+                            if !left_columns.is_empty() {
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(left_w, avail_h),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        ui.set_min_width(left_w);
+                                        self.draw_table(
+                                            ui,
+                                            options,
+                                            &left_columns,
+                                            column_ext,
+                                            &display_items,
+                                            theme,
+                                            false,
+                                        );
+                                    },
+                                );
+                            }
+
+                            if !center_columns.is_empty() {
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(center_w, avail_h),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        egui::ScrollArea::horizontal()
+                                            .id_salt("grid_center_hscroll")
+                                            .auto_shrink([false, false])
+                                            .min_scrolled_width(0.0)
+                                            .show(ui, |ui| {
+                                                let inner_w = (center_columns.len() as f32
+                                                    * COL_W)
+                                                    .max(center_w);
+                                                ui.set_min_width(inner_w);
+                                                self.draw_table(
+                                                    ui,
+                                                    options,
+                                                    &center_columns,
+                                                    column_ext,
+                                                    &display_items,
+                                                    theme,
+                                                    false,
+                                                );
+                                            });
+                                    },
+                                );
+                            }
+
+                            if !right_columns.is_empty() {
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(right_w, avail_h),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        ui.set_min_width(right_w);
+                                        self.draw_table(
+                                            ui,
+                                            options,
+                                            &right_columns,
+                                            column_ext,
+                                            &display_items,
+                                            theme,
+                                            false,
+                                        );
+                                    },
+                                );
+                            }
+                        });
+                    });
             });
 
         self.cached_result.display_items = display_items;
@@ -485,6 +1176,7 @@ impl EguiGrid {
         column_ext: &mut [EguiColumnExt],
         display_items: &[DisplayItem],
         theme: &GridTheme,
+        vscroll: bool,
     ) {
         let show_filters = options.enable_filtering;
         let label_row_h = theme.header_padding_y + 20.0;
@@ -496,6 +1188,7 @@ impl EguiGrid {
 
         let mut table = TableBuilder::new(ui)
             .striped(false)
+            .vscroll(vscroll)
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
 
@@ -512,7 +1205,13 @@ impl EguiGrid {
                 for col in columns.iter() {
                     header.col(|ui| {
                         let rect = ui.max_rect();
-                        ui.painter().rect_filled(rect, 0.0, theme.header_background);
+                        let pin_direction = get_column_pin_direction(&self.pinned_columns, col);
+                        let header_background = if pin_direction == PinDirection::None {
+                            theme.header_background
+                        } else {
+                            theme.pinned_header_background
+                        };
+                        ui.painter().rect_filled(rect, 0.0, header_background);
 
                         let is_sort_active = self.sort_state.column_name.as_ref()
                             == Some(&col.name)
@@ -529,13 +1228,37 @@ impl EguiGrid {
                         );
                         ui.painter().rect_filled(bottom, 0.0, theme.border_color);
 
+                        if pin_direction != PinDirection::None {
+                            let x = if pin_direction == PinDirection::Left {
+                                rect.min.x
+                            } else {
+                                rect.max.x - 3.0
+                            };
+                            let pin_indicator = egui::Rect::from_min_size(
+                                egui::pos2(x, rect.min.y),
+                                Vec2::new(3.0, rect.height()),
+                            );
+                            ui.painter()
+                                .rect_filled(pin_indicator, 0.0, theme.pinned_indicator);
+                        }
+
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 2.0;
                             ui.add_space(theme.header_padding_y * 0.5);
-                            self.draw_header_row(ui, options, col, theme);
+                            let header_label_id = self.draw_header_row(
+                                ui,
+                                options,
+                                col,
+                                find_column_ext_mut(column_ext, &col.name),
+                                theme,
+                                egui::Rect::from_min_max(
+                                    rect.min,
+                                    egui::pos2(rect.max.x, rect.min.y + label_row_h),
+                                ),
+                            );
                             if show_filters {
                                 ui.add_space(2.0);
-                                self.draw_filter_input(ui, options, col, theme);
+                                self.draw_filter_input(ui, options, col, theme, header_label_id);
                             }
                         });
                     });
@@ -577,6 +1300,10 @@ impl EguiGrid {
                     });
                 }
             });
+
+        if ui.input(|input| input.pointer.any_released()) {
+            self.dragged_column = None;
+        }
     }
 
     fn refresh_pipeline(&mut self, options: &GridOptions, columns: &[GridColumnDef]) {
@@ -627,99 +1354,280 @@ impl EguiGrid {
         ui: &mut Ui,
         options: &GridOptions,
         column: &GridColumnDef,
+        column_ext: Option<&mut EguiColumnExt>,
         theme: &GridTheme,
-    ) {
+        header_row_rect: egui::Rect,
+    ) -> egui::Id {
+        let can_move = can_grid_move_columns(options);
+
+        // Drop-zone painting / drop handling for THIS column when another column is being dragged.
+        // We paint the indicator BEFORE the content so children render on top.
+        let active_payload = egui::DragAndDrop::payload::<String>(ui.ctx());
+        let pointer_pos = ui.input(|input| input.pointer.hover_pos());
+        let mut pending_drop: Option<(String, bool)> = None;
+        if can_move {
+            if let Some(payload) = active_payload.as_deref() {
+                if payload == column.name.as_str() {
+                    ui.painter().rect_stroke(
+                        header_row_rect.shrink2(Vec2::splat(2.0)),
+                        4.0,
+                        egui::Stroke::new(1.0, theme.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                } else if let Some(pos) = pointer_pos
+                    && header_row_rect.contains(pos)
+                {
+                    let drop_after = pos.x >= header_row_rect.center().x;
+                    let drop_zone_rect = header_row_rect.shrink2(Vec2::new(2.0, 3.0));
+                    ui.painter().rect_filled(
+                        drop_zone_rect,
+                        4.0,
+                        theme.control_hover_background,
+                    );
+                    let marker_x = if drop_after {
+                        header_row_rect.max.x - 2.0
+                    } else {
+                        header_row_rect.min.x
+                    };
+                    let drop_marker = egui::Rect::from_min_size(
+                        egui::pos2(marker_x, header_row_rect.min.y + 4.0),
+                        Vec2::new(2.0, header_row_rect.height() - 8.0),
+                    );
+                    ui.painter().rect_filled(drop_marker, 1.0, theme.accent);
+
+                    if ui.input(|input| input.pointer.any_released()) {
+                        pending_drop = Some((payload.clone(), drop_after));
+                    }
+                }
+            }
+        }
+
+        let layout = self.draw_header_row_content(ui, options, column, column_ext, theme);
+
+        if can_move {
+            let drag_rect = egui::Rect::from_min_max(
+                header_row_rect.min,
+                egui::pos2(
+                    layout
+                        .controls_left_x
+                        .clamp(header_row_rect.min.x + 12.0, header_row_rect.max.x),
+                    header_row_rect.max.y,
+                ),
+            );
+            let drag_id = ui.id().with(("header_drag", &column.name));
+            let dnd_response = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(drag_rect), |ui| {
+                    ui.dnd_drag_source(drag_id, column.name.clone(), |ui| {
+                        ui.allocate_rect(ui.max_rect(), egui::Sense::hover())
+                    })
+                })
+                .inner;
+            if dnd_response.response.drag_started() {
+                self.dragged_column = Some(column.name.clone());
+            }
+        }
+
+        if let Some((dragged, drop_after)) = pending_drop {
+            // Consume the payload so other columns don't also try to drop.
+            let _ = egui::DragAndDrop::take_payload::<String>(ui.ctx());
+            if drop_after {
+                self.reorder_column_after(&dragged, &column.name);
+            } else {
+                self.reorder_column_before(&dragged, &column.name);
+            }
+        }
+
+        layout.label_id
+    }
+
+    fn draw_header_row_content(
+        &mut self,
+        ui: &mut Ui,
+        options: &GridOptions,
+        column: &GridColumnDef,
+        column_ext: Option<&mut EguiColumnExt>,
+        theme: &GridTheme,
+    ) -> HeaderRowLayout {
+        let label_text = header_label(column);
+        let can_sort = options.enable_sorting && column.sortable && column.enable_sorting;
+        let can_group = options.enable_grouping && column.enable_grouping;
+        let can_pin = is_column_pinnable(options, column);
+        let can_move = can_grid_move_columns(options);
+        let is_grouped = is_grid_column_grouped(&self.group_by_columns, column);
+        let pin_direction = get_column_pin_direction(&self.pinned_columns, column);
+        let sort_direction = if self.sort_state.column_name.as_ref() == Some(&column.name) {
+            self.sort_state.direction
+        } else {
+            SortDirection::None
+        };
+        let mut controls_left_x: Option<f32> = None;
+
         ui.horizontal(|ui| {
             ui.add_space(theme.header_padding_x);
 
-            let label = column.display_name.as_deref().unwrap_or(&column.name);
-            ui.label(egui::RichText::new(label).color(theme.cell_color).strong());
+            let label_response = ui.add(
+                egui::Label::new(egui::RichText::new(&label_text).color(theme.cell_color).strong())
+                    .sense(egui::Sense::hover()),
+            );
+            label_response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &label_text)
+            });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(theme.header_padding_x);
 
-                // Group toggle button
-                if options.enable_grouping && column.enable_grouping {
-                    let is_grouped = self.group_by_columns.contains(&column.name);
-                    let group_color = if is_grouped {
-                        theme.accent
-                    } else {
-                        theme.muted_color
-                    };
-                    let group_response = icon_button(ui, IconKind::Group, group_color);
-                    if group_response.clicked() {
-                        if is_grouped {
-                            self.group_by_columns.retain(|c| c != &column.name);
-                        } else {
-                            self.group_by_columns.push(column.name.clone());
-                        }
-                        self.pipeline_dirty = true;
-                    }
-                    group_response.on_hover_text(if is_grouped {
-                        "Ungroup by this column"
-                    } else {
-                        "Group by this column"
-                    });
+                let mut actions = Vec::new();
+                let context = GridHeaderControlsContext {
+                    column,
+                    labels: &options.labels,
+                    icons: &options.icons,
+                    theme,
+                    is_grouped,
+                    sort_direction,
+                    pin_direction,
+                    can_sort,
+                    can_group,
+                    can_pin,
+                    can_move,
+                };
+
+                let mut handled = false;
+                if let Some(column_ext) = column_ext
+                    && let Some(renderer) = column_ext.header_controls_renderer.as_mut()
+                {
+                    renderer(ui, &context, &mut actions);
+                    handled = true;
                 }
 
-                // Sort button
-                if options.enable_sorting && column.sortable && column.enable_sorting {
-                    let is_active = self.sort_state.column_name.as_ref() == Some(&column.name);
-                    let (icon, color) = if is_active {
-                        match self.sort_state.direction {
-                            SortDirection::Asc => (IconKind::SortAsc, theme.accent),
-                            SortDirection::Desc => (IconKind::SortDesc, theme.accent),
-                            SortDirection::None => (IconKind::SortNone, theme.muted_color),
+                if !handled {
+                    if can_pin {
+                        match pin_direction {
+                            PinDirection::Left | PinDirection::Right => {
+                                if icon_button_labeled(
+                                    ui,
+                                    &grid_unpin_icon(&options.icons),
+                                    theme,
+                                    theme.accent,
+                                    &options.labels.unpin,
+                                    true,
+                                )
+                                    .clicked()
+                                {
+                                    actions.push(EguiHeaderAction::Unpin);
+                                }
+                            }
+                            PinDirection::None => {
+                                if icon_button_labeled(
+                                    ui,
+                                    &grid_pin_right_icon(&options.icons),
+                                    theme,
+                                    theme.muted_color,
+                                    &options.labels.pin_right,
+                                    false,
+                                )
+                                .clicked()
+                                {
+                                    actions.push(EguiHeaderAction::PinRight);
+                                }
+                                if icon_button_labeled(
+                                    ui,
+                                    &grid_pin_left_icon(&options.icons),
+                                    theme,
+                                    theme.muted_color,
+                                    &options.labels.pin_left,
+                                    false,
+                                )
+                                .clicked()
+                                {
+                                    actions.push(EguiHeaderAction::PinLeft);
+                                }
+                            }
                         }
-                    } else {
-                        (IconKind::SortNone, theme.muted_color)
-                    };
+                    }
 
-                    let sort_response = icon_button(ui, icon, color);
+                    if can_group {
+                        let group_color = if is_grouped {
+                            theme.accent
+                        } else {
+                            theme.muted_color
+                        };
+                        let group_label = grid_grouping_button_label(is_grouped, &options.labels);
+                        if icon_button_labeled(
+                            ui,
+                            &grid_grouping_button_icon(is_grouped, &options.icons),
+                            theme,
+                            group_color,
+                            &group_label,
+                            is_grouped,
+                        )
+                            .clicked()
+                        {
+                            actions.push(EguiHeaderAction::ToggleGrouping);
+                        }
+                    }
 
-                    if sort_response.clicked() {
-                        let next_direction = if is_active {
+                    if can_sort {
+                        let is_active = self.sort_state.column_name.as_ref() == Some(&column.name);
+                        let (color, direction) = if is_active {
                             match self.sort_state.direction {
-                                SortDirection::Asc => SortDirection::Desc,
-                                SortDirection::Desc => SortDirection::None,
-                                SortDirection::None => SortDirection::Asc,
+                                SortDirection::Asc => (theme.accent, SortDirection::Asc),
+                                SortDirection::Desc => (theme.accent, SortDirection::Desc),
+                                SortDirection::None => (theme.muted_color, SortDirection::None),
                             }
                         } else {
-                            SortDirection::Asc
+                            (theme.muted_color, SortDirection::None)
                         };
 
-                        self.sort_state = SortState {
-                            column_name: if next_direction == SortDirection::None {
-                                None
-                            } else {
-                                Some(column.name.clone())
-                            },
-                            direction: next_direction,
-                        };
-                        self.current_page = 1;
-                        self.pipeline_dirty = true;
-
-                        self.events.push(EguiGridEvent {
-                            kind: EguiGridEventKind::SortChanged {
-                                column: column.name.clone(),
-                                direction: next_direction,
-                            },
-                        });
-                    }
-
-                    let tooltip = if is_active {
-                        match self.sort_state.direction {
-                            SortDirection::Asc => "Sorted ascending — click for descending",
-                            SortDirection::Desc => "Sorted descending — click to clear",
-                            SortDirection::None => "Click to sort ascending",
+                        let sort_label = grid_sort_button_label(direction, &options.labels);
+                        if icon_button_labeled(
+                            ui,
+                            &grid_sort_button_icon(direction, &options.icons),
+                            theme,
+                            color,
+                            &sort_label,
+                            is_active,
+                        )
+                        .clicked()
+                        {
+                            actions.push(EguiHeaderAction::CycleSort);
                         }
-                    } else {
-                        "Click to sort ascending"
-                    };
-                    sort_response.on_hover_text(tooltip);
+                    }
                 }
+
+                for action in actions {
+                    match action {
+                        EguiHeaderAction::ToggleGrouping => {
+                            if is_grouped {
+                                self.group_by_columns.retain(|name| name != &column.name);
+                            } else {
+                                self.group_by_columns.push(column.name.clone());
+                            }
+                            self.pipeline_dirty = true;
+                        }
+                        EguiHeaderAction::CycleSort => self.cycle_sort_for_column(&column.name),
+                        EguiHeaderAction::PinLeft => {
+                            self.set_column_pin_direction(&column.name, PinDirection::Left)
+                        }
+                        EguiHeaderAction::PinRight => {
+                            self.set_column_pin_direction(&column.name, PinDirection::Right)
+                        }
+                        EguiHeaderAction::Unpin => {
+                            self.set_column_pin_direction(&column.name, PinDirection::None)
+                        }
+                        EguiHeaderAction::MoveLeft => self.move_column_relative(&column.name, -1),
+                        EguiHeaderAction::MoveRight => self.move_column_relative(&column.name, 1),
+                    }
+                }
+
+                controls_left_x = Some(ui.min_rect().min.x);
             });
-        });
+
+            HeaderRowLayout {
+                label_id: label_response.id,
+                controls_left_x: controls_left_x.unwrap_or(label_response.rect.max.x),
+            }
+        })
+        .inner
     }
 
     fn draw_filter_input(
@@ -728,6 +1636,7 @@ impl EguiGrid {
         options: &GridOptions,
         column: &GridColumnDef,
         theme: &GridTheme,
+        labelled_by: egui::Id,
     ) {
         if !options.enable_filtering || !column.filterable || !column.enable_filtering {
             return;
@@ -743,12 +1652,15 @@ impl EguiGrid {
                 .unwrap_or_default();
 
             let available = ui.available_width() - theme.header_padding_x * 2.0;
-            let response = egui::TextEdit::singleline(&mut filter_text)
-                .hint_text("Filter...")
+            let text_edit = egui::TextEdit::singleline(&mut filter_text)
+                .hint_text(grid_filter_placeholder(true, &options.labels))
                 .desired_width(available.max(40.0))
                 .text_color(theme.cell_color)
-                .show(ui)
-                .response;
+                .show(ui);
+            let response = <Response as Clone>::clone(&text_edit.response).labelled_by(labelled_by);
+            response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::TextEdit, ui.is_enabled(), &options.labels.filter_column)
+            });
 
             if response.changed() {
                 if filter_text.is_empty() {
@@ -827,7 +1739,7 @@ impl EguiGrid {
     fn draw_group_row(
         &mut self,
         ui: &mut Ui,
-        _options: &GridOptions,
+        options: &GridOptions,
         _columns: &[GridColumnDef],
         theme: &GridTheme,
         group: &ui_grid_core::models::GroupItem,
@@ -846,12 +1758,15 @@ impl EguiGrid {
             let indent = group.depth as f32 * theme.group_indent_per_depth + theme.cell_padding_x;
             ui.add_space(indent);
 
-            let expand_icon = if group.collapsed {
-                IconKind::ExpandRight
-            } else {
-                IconKind::ExpandDown
-            };
-            let tri_response = icon_button(ui, expand_icon, theme.cell_color);
+            let expand_icon = grid_group_disclosure_icon(group.collapsed, &options.icons);
+            let tri_response = icon_button(ui, &expand_icon, theme, theme.cell_color, false);
+            tri_response.widget_info(|| {
+                WidgetInfo::labeled(
+                    WidgetType::Button,
+                    ui.is_enabled(),
+                    grid_group_disclosure_label(group.collapsed, &options.labels),
+                )
+            });
 
             let label = format!("{}: {} ({})", group.field, group.label, group.count);
             let rich = egui::RichText::new(&label).color(theme.cell_color).strong();
@@ -891,8 +1806,11 @@ impl EguiGrid {
         let rect = ui.max_rect();
 
         let is_selected = self.selected_row_ids.contains(&row_item.row.id);
+        let pin_direction = get_column_pin_direction(&self.pinned_columns, column);
         let bg = if is_selected {
             theme.accent_tint(30)
+        } else if pin_direction != PinDirection::None {
+            theme.pinned_row_background
         } else if row_index.is_multiple_of(2) {
             theme.row_even
         } else {
@@ -910,7 +1828,26 @@ impl EguiGrid {
         let pointer_hovering =
             ui.input(|i| i.pointer.hover_pos().is_some_and(|pos| rect.contains(pos)));
         if !is_selected && pointer_hovering {
-            ui.painter().rect_filled(rect, 0.0, theme.row_hover);
+            let hover_bg = if pin_direction == PinDirection::None {
+                theme.row_hover
+            } else {
+                theme.control_hover_background
+            };
+            ui.painter().rect_filled(rect, 0.0, hover_bg);
+        }
+
+        if pin_direction != PinDirection::None {
+            let x = if pin_direction == PinDirection::Left {
+                rect.min.x
+            } else {
+                rect.max.x - 2.0
+            };
+            let pin_indicator = egui::Rect::from_min_size(
+                egui::pos2(x, rect.min.y),
+                Vec2::new(2.0, rect.height()),
+            );
+            ui.painter()
+                .rect_filled(pin_indicator, 0.0, theme.pinned_indicator);
         }
 
         let is_focused = self
@@ -954,6 +1891,21 @@ impl EguiGrid {
                 ui.id().with(("row_cell", row_index, col_index)),
                 egui::Sense::click(),
             );
+
+            if expand_icon_rect.is_some() {
+                let toggle_label = if options.enable_tree_view {
+                    grid_tree_toggle_label_for_row(
+                        &self.expanded_tree_rows,
+                        &row_item.row,
+                        &options.labels,
+                    )
+                } else {
+                    grid_expand_toggle_label_for_row(&row_item.row, &options.labels)
+                };
+                response.widget_info(|| {
+                    WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), toggle_label.clone())
+                });
+            }
 
             if response.clicked() {
                 // Check if the click landed on the expand icon
@@ -1038,7 +1990,8 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            return Some(expand_icon_passive(ui, expanded, theme.accent));
+            let icon = grid_tree_toggle_icon(expanded, &options.icons);
+            return Some(expand_icon_passive(ui, &icon, theme.accent));
         } else if options.enable_tree_view {
             ui.add_space(24.0);
         }
@@ -1049,7 +2002,12 @@ impl EguiGrid {
                 .get(&row_item.row.id)
                 .copied()
                 .unwrap_or(false);
-            return Some(expand_icon_passive(ui, expanded, theme.accent));
+            let icon = if expanded {
+                options.icons.collapse_detail.clone()
+            } else {
+                options.icons.expand_detail.clone()
+            };
+            return Some(expand_icon_passive(ui, &icon, theme.accent));
         }
 
         None
@@ -1194,25 +2152,41 @@ impl EguiGrid {
         ui.painter().rect_filled(top, 0.0, theme.border_color);
 
         let total_pages = get_total_pages_value(options, total_items, self.page_size);
+        let page_label = format!(
+            "{} {} {} {}",
+            options.labels.pagination_page,
+            self.current_page,
+            options.labels.pagination_of,
+            total_pages,
+        );
+        let total_label = format!("Total: {} {}", total_items, options.labels.toolbar_rows);
 
         ui.horizontal(|ui| {
             ui.add_space(theme.cell_padding_x);
 
-            let btn = |ui: &mut Ui, text: &str| -> egui::Response {
-                ui.add(
+            let btn = |ui: &mut Ui, text: &str, label: &str| -> egui::Response {
+                let response = ui.add(
                     egui::Label::new(egui::RichText::new(text).color(theme.accent))
                         .sense(egui::Sense::click()),
-                )
+                );
+                response.widget_info(|| {
+                    WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label)
+                });
+                response.on_hover_text(label)
             };
 
-            if btn(ui, "\u{00AB} First").clicked() && self.current_page > 1 {
+            if btn(ui, "\u{00AB} First", &options.labels.pagination_previous).clicked()
+                && self.current_page > 1
+            {
                 self.current_page = 1;
                 self.pipeline_dirty = true;
                 self.events.push(EguiGridEvent {
                     kind: EguiGridEventKind::PageChanged { page: 1 },
                 });
             }
-            if btn(ui, "\u{2039} Prev").clicked() && self.current_page > 1 {
+            if btn(ui, "\u{2039} Prev", &options.labels.pagination_previous).clicked()
+                && self.current_page > 1
+            {
                 self.current_page -= 1;
                 self.pipeline_dirty = true;
                 self.events.push(EguiGridEvent {
@@ -1222,12 +2196,14 @@ impl EguiGrid {
                 });
             }
 
-            ui.label(
-                egui::RichText::new(format!("Page {} / {}", self.current_page, total_pages))
-                    .color(theme.cell_color),
-            );
+            let page_response = ui.label(egui::RichText::new(&page_label).color(theme.cell_color));
+            page_response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &page_label)
+            });
 
-            if btn(ui, "Next \u{203A}").clicked() && self.current_page < total_pages {
+            if btn(ui, "Next \u{203A}", &options.labels.pagination_next).clicked()
+                && self.current_page < total_pages
+            {
                 self.current_page += 1;
                 self.pipeline_dirty = true;
                 self.events.push(EguiGridEvent {
@@ -1236,7 +2212,9 @@ impl EguiGrid {
                     },
                 });
             }
-            if btn(ui, "Last \u{00BB}").clicked() && self.current_page < total_pages {
+            if btn(ui, "Last \u{00BB}", &options.labels.pagination_next).clicked()
+                && self.current_page < total_pages
+            {
                 self.current_page = total_pages;
                 self.pipeline_dirty = true;
                 self.events.push(EguiGridEvent {
@@ -1247,9 +2225,12 @@ impl EguiGrid {
             }
 
             ui.separator();
-            ui.label(egui::RichText::new("Rows/page:").color(theme.muted_color));
+            let rows_label_response = ui.label(
+                egui::RichText::new(format!("{}:", options.labels.pagination_rows))
+                    .color(theme.muted_color),
+            );
             let prev_size = self.page_size;
-            egui::ComboBox::from_id_salt(ui.id().with("page_size"))
+            let page_size_response = egui::ComboBox::from_id_salt(ui.id().with("page_size"))
                 .selected_text(
                     egui::RichText::new(self.page_size.to_string()).color(theme.cell_color),
                 )
@@ -1258,16 +2239,18 @@ impl EguiGrid {
                         ui.selectable_value(&mut self.page_size, size, size.to_string());
                     }
                 });
+            page_size_response.response.labelled_by(rows_label_response.id);
             if self.page_size != prev_size {
                 self.current_page = 1;
                 self.pipeline_dirty = true;
             }
 
             ui.separator();
-            ui.label(
-                egui::RichText::new(format!("Total: {} rows", total_items))
-                    .color(theme.muted_color),
-            );
+            let total_response =
+                ui.label(egui::RichText::new(&total_label).color(theme.muted_color));
+            total_response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &total_label)
+            });
         });
     }
 }

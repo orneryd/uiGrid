@@ -24,6 +24,27 @@ pub struct BuildGridSavedStateContext {
     pub pinned_columns: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GridRestoreMutationPlan {
+    #[serde(default)]
+    pub column_order: Option<Vec<String>>,
+    #[serde(default)]
+    pub filters: Option<BTreeMap<String, String>>,
+    #[serde(default)]
+    pub sort: Option<SortState>,
+    #[serde(default)]
+    pub grouping: Option<Vec<String>>,
+    #[serde(default)]
+    pub pagination: Option<GridSavedPaginationState>,
+    #[serde(default)]
+    pub expandable: Option<BTreeMap<String, bool>>,
+    #[serde(default)]
+    pub tree_view: Option<BTreeMap<String, bool>>,
+    #[serde(default)]
+    pub pinning: Option<BTreeMap<String, String>>,
+}
+
 pub fn build_grid_saved_state(context: BuildGridSavedStateContext) -> GridSavedState {
     GridSavedState {
         column_order: context.column_order,
@@ -125,6 +146,46 @@ pub fn normalize_grid_saved_state(value: &Value) -> GridSavedState {
     }
 
     normalized
+}
+
+pub fn create_grid_restore_mutation_plan(state: &GridSavedState) -> GridRestoreMutationPlan {
+    let normalized = normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
+
+    GridRestoreMutationPlan {
+        column_order: (!normalized.column_order.is_empty()).then_some(normalized.column_order),
+        filters: (!normalized.filters.is_empty()).then_some(normalized.filters),
+        sort: normalized.sort,
+        grouping: (!normalized.grouping.is_empty()).then_some(normalized.grouping),
+        pagination: normalized.pagination,
+        expandable: (!normalized.expandable.is_empty()).then_some(normalized.expandable),
+        tree_view: (!normalized.tree_view.is_empty()).then_some(normalized.tree_view),
+        pinning: (!normalized.pinning.is_empty()).then_some(normalized.pinning),
+    }
+}
+
+pub fn serialize_grid_saved_state(state: &GridSavedState) -> Result<String, serde_json::Error> {
+    serde_json::to_string(state)
+}
+
+pub fn deserialize_grid_saved_state(value: &str) -> Result<GridSavedState, serde_json::Error> {
+    let parsed: Value = serde_json::from_str(value)?;
+    Ok(normalize_grid_saved_state(&parsed))
+}
+
+pub fn serialize_grid_saved_state_with<T>(
+    state: &GridSavedState,
+    serializer: impl FnOnce(&GridSavedState) -> T,
+) -> T {
+    serializer(state)
+}
+
+pub fn deserialize_grid_saved_state_with<T, E>(
+    value: T,
+    deserializer: impl FnOnce(T) -> Result<GridSavedState, E>,
+) -> Result<GridSavedState, E> {
+    let state = deserializer(value)?;
+    let normalized = normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
+    Ok(normalized)
 }
 
 fn current_page_value(current_page: usize) -> usize {

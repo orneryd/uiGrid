@@ -1,6 +1,10 @@
 use egui::Ui;
 use serde_json::Value;
-use ui_grid_core::models::{GridColumnDef, GridRow};
+use ui_grid_core::{
+    constants::SortDirection,
+    models::{GridColumnDef, GridIcons, GridLabels, GridRow},
+    pinning::PinDirection,
+};
 
 use crate::grid_theme::GridTheme;
 
@@ -12,15 +16,43 @@ pub struct GridCellContext<'a> {
     pub row_index: usize,
 }
 
+pub struct GridHeaderControlsContext<'a> {
+    pub column: &'a GridColumnDef,
+    pub labels: &'a GridLabels,
+    pub icons: &'a GridIcons,
+    pub theme: &'a GridTheme,
+    pub is_grouped: bool,
+    pub sort_direction: SortDirection,
+    pub pin_direction: PinDirection,
+    pub can_sort: bool,
+    pub can_group: bool,
+    pub can_pin: bool,
+    pub can_move: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EguiHeaderAction {
+    ToggleGrouping,
+    CycleSort,
+    PinLeft,
+    PinRight,
+    Unpin,
+    MoveLeft,
+    MoveRight,
+}
+
 type Formatter = Box<dyn Fn(&Value, &GridRow) -> String>;
 type CellRenderer = Box<dyn Fn(&mut Ui, &GridCellContext<'_>)>;
 type CellEditor = Box<dyn FnMut(&mut Ui, &mut String, &GridTheme) -> bool>;
+type HeaderControlsRenderer =
+    Box<dyn FnMut(&mut Ui, &GridHeaderControlsContext<'_>, &mut Vec<EguiHeaderAction>)>;
 
 pub struct EguiColumnExt {
     pub column_name: String,
     pub formatter: Option<Formatter>,
     pub cell_renderer: Option<CellRenderer>,
     pub cell_editor: Option<CellEditor>,
+    pub header_controls_renderer: Option<HeaderControlsRenderer>,
 }
 
 impl EguiColumnExt {
@@ -30,6 +62,7 @@ impl EguiColumnExt {
             formatter: None,
             cell_renderer: None,
             cell_editor: None,
+            header_controls_renderer: None,
         }
     }
 
@@ -51,6 +84,14 @@ impl EguiColumnExt {
         f: impl FnMut(&mut Ui, &mut String, &GridTheme) -> bool + 'static,
     ) -> Self {
         self.cell_editor = Some(Box::new(f));
+        self
+    }
+
+    pub fn with_header_controls_renderer(
+        mut self,
+        f: impl FnMut(&mut Ui, &GridHeaderControlsContext<'_>, &mut Vec<EguiHeaderAction>) + 'static,
+    ) -> Self {
+        self.header_controls_renderer = Some(Box::new(f));
         self
     }
 }
