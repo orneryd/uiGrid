@@ -964,8 +964,8 @@ impl EguiGrid {
                                     .auto_shrink([false, false])
                                     .min_scrolled_width(0.0)
                                     .show(ui, |ui| {
-                                        let inner_w = (center_columns.len() as f32 * COL_W)
-                                            .max(center_w);
+                                        let inner_w =
+                                            (center_columns.len() as f32 * COL_W).max(center_w);
                                         ui.set_min_width(inner_w);
                                         if let Some(out) = self.draw_table(
                                             ui,
@@ -1244,7 +1244,8 @@ impl EguiGrid {
             table = table.vertical_scroll_offset(offset);
         }
         if !scroll_bar_visible {
-            table = table.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
+            table =
+                table.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
         }
 
         for _ in columns {
