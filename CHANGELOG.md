@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.1.7 — 2026-05-01
+
+### Added
+
+- **`@ornery/ui-grid-core` package** — shared logic (grid engine, state, filtering, sorting, grouping, pagination, pinning, infinite scroll, tree, WASM bridge) is now published as a standalone package with zero Angular and zero React peer dependencies. React, Angular, and the new Vanilla/Web Component builds all consume it.
+- **Vanilla / Web Component build (`@ornery/ui-grid-vanilla`)** — full-featured grid delivered as native Custom Elements with no framework runtime requirement. Reaches feature parity with the Angular and React wrappers.
+- **Drag-and-drop column reordering** — column headers in the React wrapper can now be dragged to reorder columns interactively.
+- New CI workflows for Vanilla (`ci-vanilla.yml`) and Rust (`rust.yml`). The Rust workflow triggers only on changes to Rust source files.
+- Single unified release workflow (`publish.yml`) triggered by a `v*` tag: publishes `ui-grid-core` first, then React, Vanilla, and Web in parallel once the core version is available on the npm registry.
+
+### Changed
+
+- **React install no longer pulls in Angular peer dependencies.** Angular-specific deps (`@angular/core`, `@angular/common`, `rxjs`) were runtime-polluting React installs; they now live only in the Angular (`@ornery/ui-grid`) package.
+- Grid business logic extracted from `@ornery/ui-grid` (Angular) and `@ornery/ui-grid-react` into `@ornery/ui-grid-core`. All three framework packages are now thin wrappers over the shared core.
+- Individual package publish workflows (`publish-core.yml`, `publish-react.yml`, `publish-vanilla.yml`) are manual-only fallbacks; the `v*` tag drives the full release suite automatically.
+
+### Fixed
+
+- Vanilla package manifest no longer ships with a `file:` dependency on `ui-grid-core`; uses a proper semver range so the published package resolves correctly.
+
 ## v0.1.6 (web) — 2026-04-30
 
 ### Added
