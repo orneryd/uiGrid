@@ -6,7 +6,7 @@
     "declarationMap": true,
     "inlineSources": true,
     "paths": {
-      "@ornery/ui-grid-core": ["../ui-grid-core/src/index.ts"]
+      "@ornery/ui-grid-core": ["projects/ui-grid-core/src/index.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []

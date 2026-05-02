@@ -43,7 +43,54 @@ export type {
 
 export type { PinDirection, PinnedColumnState } from './grid.core.pinning';
 
-type UiGridWasmCoreModule = typeof import('../../../../dist/ui-grid-wasm/ui_grid_wasm.js');
+type CalculateVirtualWindowRequest = Parameters<typeof tsPagination.calculateVirtualWindow>[0];
+type CalculateVirtualWindowResult = ReturnType<typeof tsPagination.calculateVirtualWindow>;
+type SortGridRowsInput = {
+  rows: Parameters<typeof tsSorting.sortGridRows>[0];
+  columns: Parameters<typeof tsSorting.sortGridRows>[1];
+  options: Parameters<typeof tsSorting.sortGridRows>[2];
+  sortState: Parameters<typeof tsSorting.sortGridRows>[3];
+};
+type SortGridRowsResult = ReturnType<typeof tsSorting.sortGridRows>;
+type BuildGridRowsInput = {
+  options: Parameters<typeof tsTree.buildGridRows>[0];
+  rowSize: Parameters<typeof tsTree.buildGridRows>[1];
+  hiddenRowReasons: Parameters<typeof tsTree.buildGridRows>[2];
+  expandedRows: Parameters<typeof tsTree.buildGridRows>[3];
+};
+type BuildGridRowsResult = ReturnType<typeof tsTree.buildGridRows>;
+type IsTreeEnabledOptions = Parameters<typeof tsTree.isTreeEnabled>[0];
+type FilterAndFlattenGridTreeRowsInput = {
+  rows: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[0];
+  columns: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[1];
+  options: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[2];
+  activeFilters: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[3];
+  expandedTreeRows: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[4];
+  sortState: Parameters<typeof tsTree.filterAndFlattenGridTreeRows>[5];
+};
+type FilterAndFlattenGridTreeRowsResult = ReturnType<typeof tsTree.filterAndFlattenGridTreeRows>;
+type BuildGridDisplayItemsInput = {
+  rows: Parameters<typeof tsGrouping.buildGridDisplayItems>[0];
+  columns: Parameters<typeof tsGrouping.buildGridDisplayItems>[1];
+  options: Parameters<typeof tsGrouping.buildGridDisplayItems>[2];
+  groupBy: Parameters<typeof tsGrouping.buildGridDisplayItems>[3];
+  collapsedGroups: Parameters<typeof tsGrouping.buildGridDisplayItems>[4];
+};
+type BuildGridDisplayItemsResult = ReturnType<typeof tsGrouping.buildGridDisplayItems>;
+type ExportCsvRowsColumns = Parameters<typeof tsExport.exportCsvRows>[0];
+type ExportCsvRowsRows = Parameters<typeof tsExport.exportCsvRows>[1];
+type ExportCsvRowsResult = ReturnType<typeof tsExport.exportCsvRows>;
+type UiGridWasmCoreModule = {
+  calculate_virtual_window_js(request: CalculateVirtualWindowRequest): CalculateVirtualWindowResult;
+  sort_grid_rows_js(input: SortGridRowsInput): SortGridRowsResult;
+  build_grid_rows_js(input: BuildGridRowsInput): BuildGridRowsResult;
+  is_tree_enabled_js(options: IsTreeEnabledOptions): ReturnType<typeof tsTree.isTreeEnabled>;
+  filter_and_flatten_grid_tree_rows_js(
+    input: FilterAndFlattenGridTreeRowsInput,
+  ): FilterAndFlattenGridTreeRowsResult;
+  build_grid_display_items_js(input: BuildGridDisplayItemsInput): BuildGridDisplayItemsResult;
+  export_csv_rows_js(columns: ExportCsvRowsColumns, rows: ExportCsvRowsRows): ExportCsvRowsResult;
+};
 const uiGridWasmCoreModulePath = '../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
 
 let wasmCore: UiGridWasmCoreModule | null = null;
