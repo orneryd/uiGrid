@@ -16,11 +16,12 @@ import {
   UiGridComponent,
 } from '@ornery/ui-grid';
 import { GridBrowserHarnessComponent } from '../../grid-browser-harness.component';
+import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
 
 @Component({
   selector: 'app-page-home',
-  imports: [UiGridComponent, GridBrowserHarnessComponent, RouterLink],
+  imports: [UiGridComponent, GridBrowserHarnessComponent, RouterLink, CodeBlockComponent],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +32,68 @@ export class HomeComponent {
   private savedGridState: GridSavedState | null = null;
   protected readonly gridApi = signal<UiGridApi | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly angularDemoSnippet = `import { Component, computed, signal } from '@angular/core';
+import {
+  FILTER_CONDITIONS,
+  type GridOptions,
+  type UiGridApi,
+  UiGridComponent,
+} from '@ornery/ui-grid';
+
+@Component({
+  selector: 'app-accounts-grid',
+  imports: [UiGridComponent],
+  template: '<app-ui-grid [options]="options()" />',
+})
+export class AccountsGridComponent {
+  private readonly gridApi = signal<UiGridApi | null>(null);
+
+  protected readonly options = computed<GridOptions>(() => ({
+    id: 'ui-grid-modern',
+    data: createDemoData(),
+    rowHeight: 48,
+    viewportHeight: 620,
+    enableSorting: true,
+    enableFiltering: true,
+    enableGrouping: true,
+    enableColumnMoving: true,
+    enableVirtualization: true,
+    enableCellEditOnFocus: true,
+    virtualizationThreshold: 25,
+    grouping: { groupBy: ['status'] },
+    rowIdentity: (row) => String(row['id']),
+    onRegisterApi: (api) => this.gridApi.set(api as UiGridApi),
+    columnDefs: [
+      { name: 'name', displayName: 'Customer', enableCellEdit: true },
+      { name: 'company', enableCellEdit: true },
+      {
+        name: 'revenue',
+        type: 'number',
+        align: 'end',
+        filter: { condition: FILTER_CONDITIONS.greaterThan },
+      },
+      { name: 'status', filter: { condition: FILTER_CONDITIONS.exact } },
+      { name: 'renewalDate', type: 'date', displayName: 'Renewal' },
+      { name: 'owner', field: 'account.owner', displayName: 'Account Owner' },
+    ],
+  }));
+}`;
+  protected readonly angularStateSnippet = `captureState(): void {
+  const api = this.gridApi();
+  if (!api) {
+    return;
+  }
+
+  this.savedGridState = api.saveState.save();
+}
+
+restoreState(): void {
+  if (!this.savedGridState) {
+    return;
+  }
+
+  this.gridApi()?.saveState.restore(this.savedGridState);
+}`;
   protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
     title: 'UI Grid Modernized',

@@ -149,7 +149,8 @@ pub fn normalize_grid_saved_state(value: &Value) -> GridSavedState {
 }
 
 pub fn create_grid_restore_mutation_plan(state: &GridSavedState) -> GridRestoreMutationPlan {
-    let normalized = normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
+    let normalized =
+        normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
 
     GridRestoreMutationPlan {
         column_order: (!normalized.column_order.is_empty()).then_some(normalized.column_order),
@@ -184,7 +185,8 @@ pub fn deserialize_grid_saved_state_with<T, E>(
     deserializer: impl FnOnce(T) -> Result<GridSavedState, E>,
 ) -> Result<GridSavedState, E> {
     let state = deserializer(value)?;
-    let normalized = normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
+    let normalized =
+        normalize_grid_saved_state(&serde_json::to_value(state).unwrap_or(Value::Null));
     Ok(normalized)
 }
 

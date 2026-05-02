@@ -28,7 +28,7 @@ describe('App', () => {
     const themeButtons = compiled.querySelectorAll('.nav-theme-btn');
 
     expect(brand?.textContent).toContain('UI Grid');
-    expect(links).toEqual(expect.arrayContaining(['Demo', 'Docs', 'Themes']));
+    expect(links).toEqual(expect.arrayContaining(['Demo', 'Rust', 'Docs', 'Themes']));
     expect(themeButtons).toHaveLength(2);
   });
 

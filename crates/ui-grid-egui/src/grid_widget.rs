@@ -8,24 +8,24 @@ use serde_json::Value;
 use ui_grid_core::{
     constants::SortDirection,
     display::format_grid_cell_display_value,
-    export::{
-        GridExportContext, GridExportPayload, build_csv_export_payload,
-        build_grid_export_context, header_label,
-    },
     edit::{
         GridEditSession, GridMoveDirection, begin_grid_edit_session, find_next_grid_cell,
         parse_grid_edited_value, stringify_grid_editor_value,
     },
+    export::{
+        GridExportContext, GridExportPayload, build_csv_export_payload, build_grid_export_context,
+        header_label,
+    },
     models::{
-        BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef, GridIcon,
-        GridGroupingOptions, GridOptions, PipelineResult, RowItem, SortState,
+        BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef,
+        GridGroupingOptions, GridIcon, GridOptions, PipelineResult, RowItem, SortState,
     },
     pagination::get_total_pages_value,
-    pipeline::build_grid_pipeline,
     pinning::{
         PinDirection, PinnedColumnState, build_initial_pinned_state, get_column_pin_direction,
         is_column_pinnable, pin_column_state,
     },
+    pipeline::build_grid_pipeline,
     state::{
         BuildGridSavedStateContext, create_grid_restore_mutation_plan,
         deserialize_grid_saved_state, deserialize_grid_saved_state_with,
@@ -35,15 +35,15 @@ use ui_grid_core::{
     viewmodel::{
         can_grid_move_columns, grid_expand_toggle_label_for_row, grid_filter_placeholder,
         grid_group_disclosure_icon, grid_group_disclosure_label, grid_grouping_button_icon,
-        grid_grouping_button_label, grid_pin_left_icon, grid_pin_right_icon,
-        grid_sort_button_icon, grid_sort_button_label, grid_tree_toggle_icon,
-        grid_tree_toggle_label_for_row, grid_unpin_icon, is_grid_column_grouped,
+        grid_grouping_button_label, grid_pin_left_icon, grid_pin_right_icon, grid_sort_button_icon,
+        grid_sort_button_label, grid_tree_toggle_icon, grid_tree_toggle_label_for_row,
+        grid_unpin_icon, is_grid_column_grouped,
     },
 };
 
 use crate::column_ext::{
-    EguiColumnExt, EguiHeaderAction, GridCellContext, GridHeaderControlsContext,
-    find_column_ext, find_column_ext_mut,
+    EguiColumnExt, EguiHeaderAction, GridCellContext, GridHeaderControlsContext, find_column_ext,
+    find_column_ext_mut,
 };
 use crate::grid_theme::GridTheme;
 
@@ -153,13 +153,15 @@ mod tests {
     fn egui_grid_save_and_restore_state_are_storage_agnostic() {
         let mut grid = EguiGrid::new();
         grid.column_order = vec!["status".to_string(), "owner".to_string()];
-        grid.active_filters.insert("owner".to_string(), "Ali*".to_string());
+        grid.active_filters
+            .insert("owner".to_string(), "Ali*".to_string());
         grid.group_by_columns = vec!["status".to_string()];
         grid.current_page = 3;
         grid.page_size = 25;
         grid.expanded_rows.insert("row-1".to_string(), true);
         grid.expanded_tree_rows.insert("tree-1".to_string(), true);
-        grid.pinned_columns.insert("owner".to_string(), "left".to_string());
+        grid.pinned_columns
+            .insert("owner".to_string(), "left".to_string());
         grid.cached_result.total_items = 80;
 
         let saved = grid.save_state();
@@ -171,14 +173,20 @@ mod tests {
         restored.restore_state(&saved);
         assert_eq!(restored.column_order(), ["status", "owner"]);
         assert_eq!(restored.group_by_columns(), ["status"]);
-        assert_eq!(restored.pinned_columns().get("owner"), Some(&"left".to_string()));
+        assert_eq!(
+            restored.pinned_columns().get("owner"),
+            Some(&"left".to_string())
+        );
 
         let mut restored_from_json = EguiGrid::new();
         restored_from_json
             .deserialize_state(&json)
             .expect("restore json state");
         assert_eq!(restored_from_json.column_order(), ["status", "owner"]);
-        assert_eq!(restored_from_json.pinned_columns().get("owner"), Some(&"left".to_string()));
+        assert_eq!(
+            restored_from_json.pinned_columns().get("owner"),
+            Some(&"left".to_string())
+        );
 
         let mut restored_custom = EguiGrid::new();
         restored_custom
@@ -198,7 +206,10 @@ mod tests {
         grid.column_order = vec!["owner".to_string(), "status".to_string()];
 
         grid.pin_column("owner", PinDirection::Left);
-        assert_eq!(grid.pinned_columns().get("owner"), Some(&"left".to_string()));
+        assert_eq!(
+            grid.pinned_columns().get("owner"),
+            Some(&"left".to_string())
+        );
 
         grid.move_column_before("status", "owner");
         assert_eq!(grid.column_order(), ["status", "owner"]);
@@ -226,7 +237,10 @@ mod tests {
 
         assert_eq!(grid.column_order(), ["owner"]);
         assert_eq!(grid.group_by_columns(), ["status"]);
-        assert_eq!(grid.pinned_columns().get("owner"), Some(&"left".to_string()));
+        assert_eq!(
+            grid.pinned_columns().get("owner"),
+            Some(&"left".to_string())
+        );
         assert!(!grid.pinned_columns().contains_key("prototype"));
     }
 }
@@ -269,7 +283,11 @@ fn paint_pin_icon(
         Pos2::new(center.x + half * 0.7, center.y - half * 0.25),
         Pos2::new(center.x, center.y + half * 0.25),
     ];
-    painter.add(egui::Shape::convex_polygon(head.to_vec(), color, egui::Stroke::NONE));
+    painter.add(egui::Shape::convex_polygon(
+        head.to_vec(),
+        color,
+        egui::Stroke::NONE,
+    ));
 
     let guide_x = match side {
         PinDirection::Left => center.x - half * 1.35,
@@ -277,7 +295,10 @@ fn paint_pin_icon(
         PinDirection::None => center.x,
     };
     painter.line_segment(
-        [Pos2::new(guide_x, center.y - half), Pos2::new(guide_x, center.y + half)],
+        [
+            Pos2::new(guide_x, center.y - half),
+            Pos2::new(guide_x, center.y + half),
+        ],
         egui::Stroke::new(1.5, color),
     );
 }
@@ -310,12 +331,7 @@ fn paint_sort_icon(painter: &egui::Painter, center: Pos2, half: f32, color: Colo
     );
 }
 
-fn paint_semantic_icon(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    icon: &GridIcon,
-    color: Color32,
-) {
+fn paint_semantic_icon(painter: &egui::Painter, rect: egui::Rect, icon: &GridIcon, color: Color32) {
     let c = rect.center();
     let h = 5.0;
     match icon {
@@ -380,11 +396,7 @@ fn icon_button_labeled(
 
 /// Paint an expand/collapse icon without registering interaction.
 /// Returns the allocated rect (with padding) so the caller can do hit-testing.
-fn expand_icon_passive(
-    ui: &mut Ui,
-    icon: &GridIcon,
-    color: Color32,
-) -> egui::Rect {
+fn expand_icon_passive(ui: &mut Ui, icon: &GridIcon, color: Color32) -> egui::Rect {
     let size = Vec2::new(24.0, 24.0);
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     if ui.is_rect_visible(rect) {
@@ -477,6 +489,7 @@ pub struct EguiGrid {
     column_order: Vec<String>,
     pinned_columns: PinnedColumnState,
     dragged_column: Option<String>,
+    pinned_scroll_offset_y: f32,
 }
 
 impl Default for EguiGrid {
@@ -509,6 +522,7 @@ impl EguiGrid {
             column_order: Vec::new(),
             pinned_columns: PinnedColumnState::new(),
             dragged_column: None,
+            pinned_scroll_offset_y: 0.0,
         }
     }
 
@@ -660,7 +674,8 @@ impl EguiGrid {
             .map(|column| column.name.clone())
             .collect::<Vec<_>>();
 
-        self.column_order.retain(|name| current_names.contains(name));
+        self.column_order
+            .retain(|name| current_names.contains(name));
         for name in &current_names {
             if !self.column_order.contains(name) {
                 self.column_order.push(name.clone());
@@ -749,7 +764,11 @@ impl EguiGrid {
     }
 
     fn move_column_relative(&mut self, column_name: &str, delta: isize) {
-        let Some(index) = self.column_order.iter().position(|name| name == column_name) else {
+        let Some(index) = self
+            .column_order
+            .iter()
+            .position(|name| name == column_name)
+        else {
             return;
         };
         let next_index = (index as isize + delta).clamp(0, self.column_order.len() as isize - 1);
@@ -892,88 +911,110 @@ impl EguiGrid {
                                 &display_items,
                                 theme,
                                 true,
+                                None,
+                                None,
+                                true,
                             );
                         });
                     return;
                 }
 
-                // Sticky pinned layout: shared vertical scroll, three side-by-side regions.
-                egui::ScrollArea::vertical()
-                    .id_salt("grid_pinned_vscroll")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        let total_w = ui.available_width();
-                        let avail_h = ui.available_height();
-                        let center_w = (total_w - left_w - right_w).max(80.0);
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.horizontal_top(|ui| {
-                            if !left_columns.is_empty() {
-                                ui.allocate_ui_with_layout(
-                                    Vec2::new(left_w, avail_h),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        ui.set_min_width(left_w);
-                                        self.draw_table(
+                // Sticky pinned layout: three side-by-side regions, each with its own
+                // sticky header (via TableBuilder vscroll). Vertical scroll is synchronized
+                // across all three regions via a shared offset stored on `self`.
+                let total_w = ui.available_width();
+                let avail_h = ui.available_height();
+                let center_w = (total_w - left_w - right_w).max(80.0);
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let stored_offset = self.pinned_scroll_offset_y;
+                let mut new_offset = stored_offset;
+                ui.horizontal_top(|ui| {
+                    if !left_columns.is_empty() {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(left_w, avail_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_min_width(left_w);
+                                if let Some(out) = self.draw_table(
+                                    ui,
+                                    options,
+                                    &left_columns,
+                                    column_ext,
+                                    &display_items,
+                                    theme,
+                                    true,
+                                    Some("grid_left_table"),
+                                    Some(stored_offset),
+                                    false,
+                                ) && (out - stored_offset).abs() > 0.5
+                                {
+                                    new_offset = out;
+                                }
+                            },
+                        );
+                    }
+
+                    if !center_columns.is_empty() {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(center_w, avail_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                egui::ScrollArea::horizontal()
+                                    .id_salt("grid_center_hscroll")
+                                    .auto_shrink([false, false])
+                                    .min_scrolled_width(0.0)
+                                    .show(ui, |ui| {
+                                        let inner_w = (center_columns.len() as f32 * COL_W)
+                                            .max(center_w);
+                                        ui.set_min_width(inner_w);
+                                        if let Some(out) = self.draw_table(
                                             ui,
                                             options,
-                                            &left_columns,
+                                            &center_columns,
                                             column_ext,
                                             &display_items,
                                             theme,
-                                            false,
-                                        );
-                                    },
-                                );
-                            }
+                                            true,
+                                            Some("grid_center_table"),
+                                            Some(stored_offset),
+                                            true,
+                                        ) && (out - stored_offset).abs() > 0.5
+                                        {
+                                            new_offset = out;
+                                        }
+                                    });
+                            },
+                        );
+                    }
 
-                            if !center_columns.is_empty() {
-                                ui.allocate_ui_with_layout(
-                                    Vec2::new(center_w, avail_h),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        egui::ScrollArea::horizontal()
-                                            .id_salt("grid_center_hscroll")
-                                            .auto_shrink([false, false])
-                                            .min_scrolled_width(0.0)
-                                            .show(ui, |ui| {
-                                                let inner_w = (center_columns.len() as f32
-                                                    * COL_W)
-                                                    .max(center_w);
-                                                ui.set_min_width(inner_w);
-                                                self.draw_table(
-                                                    ui,
-                                                    options,
-                                                    &center_columns,
-                                                    column_ext,
-                                                    &display_items,
-                                                    theme,
-                                                    false,
-                                                );
-                                            });
-                                    },
-                                );
-                            }
-
-                            if !right_columns.is_empty() {
-                                ui.allocate_ui_with_layout(
-                                    Vec2::new(right_w, avail_h),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        ui.set_min_width(right_w);
-                                        self.draw_table(
-                                            ui,
-                                            options,
-                                            &right_columns,
-                                            column_ext,
-                                            &display_items,
-                                            theme,
-                                            false,
-                                        );
-                                    },
-                                );
-                            }
-                        });
-                    });
+                    if !right_columns.is_empty() {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(right_w, avail_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_min_width(right_w);
+                                if let Some(out) = self.draw_table(
+                                    ui,
+                                    options,
+                                    &right_columns,
+                                    column_ext,
+                                    &display_items,
+                                    theme,
+                                    true,
+                                    Some("grid_right_table"),
+                                    Some(stored_offset),
+                                    false,
+                                ) && (out - stored_offset).abs() > 0.5
+                                {
+                                    new_offset = out;
+                                }
+                            },
+                        );
+                    }
+                });
+                if (new_offset - stored_offset).abs() > 0.5 {
+                    self.pinned_scroll_offset_y = new_offset;
+                }
             });
 
         self.cached_result.display_items = display_items;
@@ -1168,6 +1209,7 @@ impl EguiGrid {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_table(
         &mut self,
         ui: &mut Ui,
@@ -1177,7 +1219,10 @@ impl EguiGrid {
         display_items: &[DisplayItem],
         theme: &GridTheme,
         vscroll: bool,
-    ) {
+        id_salt: Option<&str>,
+        scroll_offset_y: Option<f32>,
+        scroll_bar_visible: bool,
+    ) -> Option<f32> {
         let show_filters = options.enable_filtering;
         let label_row_h = theme.header_padding_y + 20.0;
         let header_height = if show_filters {
@@ -1192,6 +1237,16 @@ impl EguiGrid {
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
 
+        if let Some(salt) = id_salt {
+            table = table.id_salt(salt);
+        }
+        if let Some(offset) = scroll_offset_y {
+            table = table.vertical_scroll_offset(offset);
+        }
+        if !scroll_bar_visible {
+            table = table.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
+        }
+
         for _ in columns {
             table = table.column(Column::initial(176.0).resizable(true).clip(true));
         }
@@ -1200,7 +1255,7 @@ impl EguiGrid {
             .iter()
             .any(|item| !matches!(item, DisplayItem::Row(_)));
 
-        table
+        let body_output = table
             .header(header_height, |mut header| {
                 for col in columns.iter() {
                     header.col(|ui| {
@@ -1304,6 +1359,12 @@ impl EguiGrid {
         if ui.input(|input| input.pointer.any_released()) {
             self.dragged_column = None;
         }
+
+        if vscroll {
+            Some(body_output.state.offset.y)
+        } else {
+            None
+        }
     }
 
     fn refresh_pipeline(&mut self, options: &GridOptions, columns: &[GridColumnDef]) {
@@ -1365,39 +1426,34 @@ impl EguiGrid {
         let active_payload = egui::DragAndDrop::payload::<String>(ui.ctx());
         let pointer_pos = ui.input(|input| input.pointer.hover_pos());
         let mut pending_drop: Option<(String, bool)> = None;
-        if can_move {
-            if let Some(payload) = active_payload.as_deref() {
-                if payload == column.name.as_str() {
-                    ui.painter().rect_stroke(
-                        header_row_rect.shrink2(Vec2::splat(2.0)),
-                        4.0,
-                        egui::Stroke::new(1.0, theme.accent),
-                        egui::StrokeKind::Inside,
-                    );
-                } else if let Some(pos) = pointer_pos
-                    && header_row_rect.contains(pos)
-                {
-                    let drop_after = pos.x >= header_row_rect.center().x;
-                    let drop_zone_rect = header_row_rect.shrink2(Vec2::new(2.0, 3.0));
-                    ui.painter().rect_filled(
-                        drop_zone_rect,
-                        4.0,
-                        theme.control_hover_background,
-                    );
-                    let marker_x = if drop_after {
-                        header_row_rect.max.x - 2.0
-                    } else {
-                        header_row_rect.min.x
-                    };
-                    let drop_marker = egui::Rect::from_min_size(
-                        egui::pos2(marker_x, header_row_rect.min.y + 4.0),
-                        Vec2::new(2.0, header_row_rect.height() - 8.0),
-                    );
-                    ui.painter().rect_filled(drop_marker, 1.0, theme.accent);
+        if can_move && let Some(payload) = active_payload.as_deref() {
+            if payload == column.name.as_str() {
+                ui.painter().rect_stroke(
+                    header_row_rect.shrink2(Vec2::splat(2.0)),
+                    4.0,
+                    egui::Stroke::new(1.0, theme.accent),
+                    egui::StrokeKind::Inside,
+                );
+            } else if let Some(pos) = pointer_pos
+                && header_row_rect.contains(pos)
+            {
+                let drop_after = pos.x >= header_row_rect.center().x;
+                let drop_zone_rect = header_row_rect.shrink2(Vec2::new(2.0, 3.0));
+                ui.painter()
+                    .rect_filled(drop_zone_rect, 4.0, theme.control_hover_background);
+                let marker_x = if drop_after {
+                    header_row_rect.max.x - 2.0
+                } else {
+                    header_row_rect.min.x
+                };
+                let drop_marker = egui::Rect::from_min_size(
+                    egui::pos2(marker_x, header_row_rect.min.y + 4.0),
+                    Vec2::new(2.0, header_row_rect.height() - 8.0),
+                );
+                ui.painter().rect_filled(drop_marker, 1.0, theme.accent);
 
-                    if ui.input(|input| input.pointer.any_released()) {
-                        pending_drop = Some((payload.clone(), drop_after));
-                    }
+                if ui.input(|input| input.pointer.any_released()) {
+                    pending_drop = Some((payload.clone(), drop_after));
                 }
             }
         }
@@ -1466,8 +1522,12 @@ impl EguiGrid {
             ui.add_space(theme.header_padding_x);
 
             let label_response = ui.add(
-                egui::Label::new(egui::RichText::new(&label_text).color(theme.cell_color).strong())
-                    .sense(egui::Sense::hover()),
+                egui::Label::new(
+                    egui::RichText::new(&label_text)
+                        .color(theme.cell_color)
+                        .strong(),
+                )
+                .sense(egui::Sense::hover()),
             );
             label_response.widget_info(|| {
                 WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &label_text)
@@ -1511,7 +1571,7 @@ impl EguiGrid {
                                     &options.labels.unpin,
                                     true,
                                 )
-                                    .clicked()
+                                .clicked()
                                 {
                                     actions.push(EguiHeaderAction::Unpin);
                                 }
@@ -1560,7 +1620,7 @@ impl EguiGrid {
                             &group_label,
                             is_grouped,
                         )
-                            .clicked()
+                        .clicked()
                         {
                             actions.push(EguiHeaderAction::ToggleGrouping);
                         }
@@ -1659,7 +1719,11 @@ impl EguiGrid {
                 .show(ui);
             let response = <Response as Clone>::clone(&text_edit.response).labelled_by(labelled_by);
             response.widget_info(|| {
-                WidgetInfo::labeled(WidgetType::TextEdit, ui.is_enabled(), &options.labels.filter_column)
+                WidgetInfo::labeled(
+                    WidgetType::TextEdit,
+                    ui.is_enabled(),
+                    &options.labels.filter_column,
+                )
             });
 
             if response.changed() {
@@ -1842,10 +1906,8 @@ impl EguiGrid {
             } else {
                 rect.max.x - 2.0
             };
-            let pin_indicator = egui::Rect::from_min_size(
-                egui::pos2(x, rect.min.y),
-                Vec2::new(2.0, rect.height()),
-            );
+            let pin_indicator =
+                egui::Rect::from_min_size(egui::pos2(x, rect.min.y), Vec2::new(2.0, rect.height()));
             ui.painter()
                 .rect_filled(pin_indicator, 0.0, theme.pinned_indicator);
         }
@@ -2239,7 +2301,9 @@ impl EguiGrid {
                         ui.selectable_value(&mut self.page_size, size, size.to_string());
                     }
                 });
-            page_size_response.response.labelled_by(rows_label_response.id);
+            page_size_response
+                .response
+                .labelled_by(rows_label_response.id);
             if self.page_size != prev_size {
                 self.current_page = 1;
                 self.pipeline_dirty = true;

@@ -102,7 +102,9 @@ impl DemoApp {
         let dataset = Dataset::Flat;
         let language = DemoLanguage::English;
         let columns = columns_for_dataset(dataset);
-        let options = build_options(dataset, &columns, language, false, true, false, false, false);
+        let options = build_options(
+            dataset, &columns, language, false, true, false, false, false,
+        );
         let theme_preset = GridThemePreset::DefaultDark;
 
         Self {
@@ -142,6 +144,7 @@ impl DemoApp {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_options(
     dataset: Dataset,
     columns: &[GridColumnDef],
@@ -175,7 +178,12 @@ fn build_options(
 
 fn with_custom_header_controls(ext: EguiColumnExt) -> EguiColumnExt {
     ext.with_header_controls_renderer(|ui, ctx, actions| {
-        if ctx.can_sort && ui.small_button("Sort").on_hover_text(sort_label(ctx)).clicked() {
+        if ctx.can_sort
+            && ui
+                .small_button("Sort")
+                .on_hover_text(sort_label(ctx))
+                .clicked()
+        {
             actions.push(EguiHeaderAction::CycleSort);
         }
 
@@ -194,15 +202,27 @@ fn with_custom_header_controls(ext: EguiColumnExt) -> EguiColumnExt {
         if ctx.can_pin {
             match ctx.pin_direction {
                 PinDirection::Left | PinDirection::Right => {
-                    if ui.small_button("Unpin").on_hover_text(&ctx.labels.unpin).clicked() {
+                    if ui
+                        .small_button("Unpin")
+                        .on_hover_text(&ctx.labels.unpin)
+                        .clicked()
+                    {
                         actions.push(EguiHeaderAction::Unpin);
                     }
                 }
                 PinDirection::None => {
-                    if ui.small_button("Pin L").on_hover_text(&ctx.labels.pin_left).clicked() {
+                    if ui
+                        .small_button("Pin L")
+                        .on_hover_text(&ctx.labels.pin_left)
+                        .clicked()
+                    {
                         actions.push(EguiHeaderAction::PinLeft);
                     }
-                    if ui.small_button("Pin R").on_hover_text(&ctx.labels.pin_right).clicked() {
+                    if ui
+                        .small_button("Pin R")
+                        .on_hover_text(&ctx.labels.pin_right)
+                        .clicked()
+                    {
                         actions.push(EguiHeaderAction::PinRight);
                     }
                 }
@@ -331,7 +351,8 @@ impl eframe::App for DemoApp {
                 egui::ComboBox::from_id_salt("dataset")
                     .selected_text(self.dataset.label())
                     .show_ui(ui, |ui| {
-                        for dataset in [Dataset::Flat, Dataset::Tree, Dataset::Large, Dataset::Huge] {
+                        for dataset in [Dataset::Flat, Dataset::Tree, Dataset::Large, Dataset::Huge]
+                        {
                             ui.selectable_value(&mut self.dataset, dataset, dataset.label());
                         }
                     });
@@ -344,7 +365,8 @@ impl eframe::App for DemoApp {
                 if ui
                     .checkbox(
                         &mut self.use_custom_header_controls,
-                        self.language.text("Custom controls", "Controles personalizados"),
+                        self.language
+                            .text("Custom controls", "Controles personalizados"),
                     )
                     .changed()
                 {
@@ -352,7 +374,10 @@ impl eframe::App for DemoApp {
                 }
 
                 if ui
-                    .checkbox(&mut self.enable_grouping, self.language.text("Group", "Agrupar"))
+                    .checkbox(
+                        &mut self.enable_grouping,
+                        self.language.text("Group", "Agrupar"),
+                    )
                     .changed()
                 {
                     if self.enable_grouping {
@@ -362,14 +387,20 @@ impl eframe::App for DemoApp {
                 }
 
                 if ui
-                    .checkbox(&mut self.enable_pinning, self.language.text("Pinning", "Fijacion"))
+                    .checkbox(
+                        &mut self.enable_pinning,
+                        self.language.text("Pinning", "Fijacion"),
+                    )
                     .changed()
                 {
                     options_changed = true;
                 }
 
                 if ui
-                    .checkbox(&mut self.enable_tree_view, self.language.text("Tree", "Arbol"))
+                    .checkbox(
+                        &mut self.enable_tree_view,
+                        self.language.text("Tree", "Arbol"),
+                    )
                     .changed()
                 {
                     if self.enable_tree_view {
@@ -453,10 +484,9 @@ impl eframe::App for DemoApp {
                         egui::Button::new(self.language.text("Restore state", "Restaurar estado")),
                     )
                     .clicked()
+                    && let Some(value) = self.serialized_state.as_deref()
                 {
-                    if let Some(value) = self.serialized_state.as_deref() {
-                        let _ = self.grid.deserialize_state(value);
-                    }
+                    let _ = self.grid.deserialize_state(value);
                 }
 
                 if ui
@@ -472,37 +502,43 @@ impl eframe::App for DemoApp {
                 }
 
                 if ui
-                    .button(self.language.text("Export custom", "Exportar personalizado"))
+                    .button(
+                        self.language
+                            .text("Export custom", "Exportar personalizado"),
+                    )
                     .clicked()
                 {
-                    let payload = self.grid.export_with(&self.options, &self.columns, |context| {
-                        let contents = context
-                            .rows
-                            .iter()
-                            .map(|row| {
-                                format!(
-                                    "{} | {}",
-                                    row.id,
-                                    context
-                                        .columns
-                                        .iter()
-                                        .map(|column| {
-                                            let field = column.field.as_deref().unwrap_or(&column.name);
-                                            format!("{}={}", column.name, row.entity[field])
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join("; ")
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n");
+                    let payload = self
+                        .grid
+                        .export_with(&self.options, &self.columns, |context| {
+                            let contents = context
+                                .rows
+                                .iter()
+                                .map(|row| {
+                                    format!(
+                                        "{} | {}",
+                                        row.id,
+                                        context
+                                            .columns
+                                            .iter()
+                                            .map(|column| {
+                                                let field =
+                                                    column.field.as_deref().unwrap_or(&column.name);
+                                                format!("{}={}", column.name, row.entity[field])
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("; ")
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n");
 
-                        build_grid_export_payload(
-                            format!("{}-desktop.txt", context.grid_id.replace('/', "_")),
-                            "text/plain;charset=utf-8",
-                            contents,
-                        )
-                    });
+                            build_grid_export_payload(
+                                format!("{}-desktop.txt", context.grid_id.replace('/', "_")),
+                                "text/plain;charset=utf-8",
+                                contents,
+                            )
+                        });
 
                     self.export_preview = Some(ExportPreview {
                         filename: payload.filename,
@@ -514,7 +550,11 @@ impl eframe::App for DemoApp {
                 ui.separator();
 
                 let result = self.grid.result();
-                let virtualization = if result.virtualization_enabled { "on" } else { "off" };
+                let virtualization = if result.virtualization_enabled {
+                    "on"
+                } else {
+                    "off"
+                };
                 ui.label(format!(
                     "{:.2}ms | {} {} | virt: {}",
                     result.pipeline_ms,
@@ -537,7 +577,8 @@ impl eframe::App for DemoApp {
             if let Some(preview) = &self.export_preview {
                 ui.separator();
                 ui.collapsing(
-                    self.language.text("Export preview", "Vista previa de exportacion"),
+                    self.language
+                        .text("Export preview", "Vista previa de exportacion"),
                     |ui| {
                         ui.label(format!("{} ({})", preview.filename, preview.mime_type));
                         ui.monospace(&preview.contents);

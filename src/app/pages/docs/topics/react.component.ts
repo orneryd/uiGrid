@@ -18,28 +18,13 @@ import {
   GridSavedState,
   UiGridApi,
 } from '@ornery/ui-grid';
+import { mountUiGrid } from '@ornery/ui-grid-react';
+import { CodeBlockComponent } from '../../shared/code-block.component';
 import { createDemoData } from '../../shared/demo-data';
 
-type ReactRoot = {
-  unmount: () => void;
-};
+type ReactRoot = ReturnType<typeof mountUiGrid>;
 
 type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning';
-
-type ReactGridMountProps = {
-  options: GridOptions;
-  className?: string;
-  onRegisterApi?: (api: unknown) => void;
-  cellRenderer?: (context: GridCellTemplateContext) => unknown;
-  expandableRenderer?: (context: GridExpandableTemplateContext) => unknown;
-};
-
-type ReactGridRuntime = {
-  mountUiGrid?: (container: Element | DocumentFragment, props: ReactGridMountProps) => ReactRoot;
-  default?: {
-    mountUiGrid: (container: Element | DocumentFragment, props: ReactGridMountProps) => ReactRoot;
-  };
-};
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -80,7 +65,7 @@ function createTreeRows(): GridRecord[] {
 
 @Component({
   selector: 'app-docs-react',
-  imports: [RouterLink],
+  imports: [RouterLink, CodeBlockComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="react-page-shell">
@@ -95,6 +80,7 @@ function createTreeRows(): GridRecord[] {
           <p class="page-links">
             <a routerLink="/home" class="demo-link">Angular Demo</a>
             <a routerLink="/web-components" class="demo-link demo-link-secondary">Web Components</a>
+            <a routerLink="/rust" class="demo-link demo-link-secondary">Rust</a>
             <a routerLink="/docs" class="demo-link demo-link-secondary">Docs</a>
           </p>
         </div>
@@ -133,6 +119,19 @@ function createTreeRows(): GridRecord[] {
           </p>
         </div>
         <pre>{{ savedStateJson() }}</pre>
+      </section>
+
+      <section class="demo-panel usage-panel">
+        <header class="panel-header">
+          <div>
+            <h2>React Demo Code</h2>
+            <p>These snippets match the live React wrapper demos on this page: the 100K primary grid and the pinning harness.</p>
+          </div>
+        </header>
+        <div class="code-grid">
+          <app-code-block lang="tsx" [code]="reactPrimarySnippet" />
+          <app-code-block lang="tsx" [code]="reactPinningSnippet" />
+        </div>
       </section>
 
       <section class="demo-panel">
@@ -324,6 +323,11 @@ function createTreeRows(): GridRecord[] {
       font-weight: 700;
     }
 
+    .code-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
     @media (max-width: 960px) {
       .react-page-shell {
         width: min(100%, calc(100% - 1rem));
@@ -353,6 +357,64 @@ export class DocsReactComponent {
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly demoError = signal<string | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly reactPrimarySnippet = `import { UiGrid } from '@ornery/ui-grid-react';
+import { FILTER_CONDITIONS, type GridOptions } from '@ornery/ui-grid-core';
+
+const options: GridOptions = {
+  id: 'ui-grid-modern-react',
+  data: createDemoData(),
+  rowHeight: 48,
+  viewportHeight: 620,
+  enableSorting: true,
+  enableFiltering: true,
+  enableGrouping: true,
+  enableColumnMoving: true,
+  enableVirtualization: true,
+  enableCellEditOnFocus: true,
+  virtualizationThreshold: 25,
+  grouping: { groupBy: ['status'] },
+  rowIdentity: (row) => String(row['id']),
+  columnDefs: [
+    { name: 'name', displayName: 'Customer', enableCellEdit: true },
+    { name: 'company', enableCellEdit: true },
+    {
+      name: 'revenue',
+      type: 'number',
+      align: 'end',
+      filter: { condition: FILTER_CONDITIONS.greaterThan },
+    },
+    { name: 'status', filter: { condition: FILTER_CONDITIONS.exact } },
+    { name: 'renewalDate', type: 'date', displayName: 'Renewal' },
+    { name: 'owner', field: 'account.owner', displayName: 'Account Owner' },
+  ],
+};
+
+export function AccountsGrid() {
+  return <UiGrid options={options} className="react-docs-demo-grid" />;
+}`;
+  protected readonly reactPinningSnippet = `const pinningOptions: GridOptions = {
+  id: 'react-demo-pinning',
+  data,
+  rowHeight: 46,
+  viewportHeight: 300,
+  enableSorting: true,
+  enableFiltering: true,
+  enablePinning: true,
+  enableVirtualization: true,
+  virtualizationThreshold: 1,
+  columnDefs: [
+    { name: 'name', displayName: 'Name', width: '160px', pinnedLeft: true },
+    { name: 'department', displayName: 'Department', width: '180px' },
+    { name: 'region', displayName: 'Region', width: '140px' },
+    { name: 'q1', displayName: 'Q1 Revenue', width: '180px', align: 'end' },
+    { name: 'q2', displayName: 'Q2 Revenue', width: '180px', align: 'end' },
+    { name: 'q3', displayName: 'Q3 Revenue', width: '180px', align: 'end' },
+    { name: 'q4', displayName: 'Q4 Revenue', width: '180px', align: 'end' },
+    { name: 'total', displayName: 'Total', width: '150px', align: 'end' },
+    { name: 'growth', displayName: 'Growth', width: '140px', align: 'end' },
+    { name: 'status', displayName: 'Status', width: '150px' },
+  ],
+};`;
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' as const },
     { label: 'Tree', value: 'tree' as const },
@@ -419,18 +481,13 @@ export class DocsReactComponent {
     this.primaryGridApi = null;
 
     try {
-      const reactGridModule =
-        await (import('@ornery/ui-grid-react') as unknown as Promise<ReactGridRuntime>);
-      const resolvedReactGridModule = reactGridModule.default ?? reactGridModule;
-
-      this.primaryReactRoot =
-        resolvedReactGridModule.mountUiGrid?.(host, {
-          options: this.primaryOptions(),
-          className: 'react-docs-demo-grid react-docs-demo-grid-primary',
-          onRegisterApi: (api) => {
-            this.primaryGridApi = api as UiGridApi;
-          },
-        }) ?? null;
+      this.primaryReactRoot = mountUiGrid(host, {
+        options: this.primaryOptions(),
+        className: 'react-docs-demo-grid react-docs-demo-grid-primary',
+        onRegisterApi: (api: UiGridApi) => {
+          this.primaryGridApi = api;
+        },
+      });
       this.demoError.set(null);
     } catch (error) {
       this.demoError.set(error instanceof Error ? error.message : String(error));
@@ -447,17 +504,16 @@ export class DocsReactComponent {
     this.harnessReactRoot = null;
 
     try {
-      const reactGridModule =
-        await (import('@ornery/ui-grid-react') as unknown as Promise<ReactGridRuntime>);
-      const resolvedReactGridModule = reactGridModule.default ?? reactGridModule;
       const mode = this.mode();
-      const props: ReactGridMountProps = {
+      const props = {
         options: this.optionsForMode(mode),
         className: 'react-docs-demo-grid',
+        cellRenderer: undefined as Parameters<typeof mountUiGrid>[1]['cellRenderer'],
+        expandableRenderer: undefined as Parameters<typeof mountUiGrid>[1]['expandableRenderer'],
       };
 
       if (mode === 'templated') {
-        props.cellRenderer = (context) => {
+        props.cellRenderer = (context: GridCellTemplateContext) => {
           if (context.column.name !== 'status') {
             return null;
           }
@@ -468,11 +524,11 @@ export class DocsReactComponent {
 
       if (mode === 'expandable') {
         const rowRecord = (context: GridExpandableTemplateContext): GridRecord => context.row;
-        props.expandableRenderer = (context) =>
+        props.expandableRenderer = (context: GridExpandableTemplateContext) =>
           `Details for ${String(rowRecord(context)['name'])} • Owner: ${String((rowRecord(context)['account'] as Record<string, unknown> | undefined)?.['owner'] ?? 'n/a')}`;
       }
 
-      this.harnessReactRoot = resolvedReactGridModule.mountUiGrid?.(host, props) ?? null;
+      this.harnessReactRoot = mountUiGrid(host, props);
       this.demoError.set(null);
     } catch (error) {
       this.demoError.set(error instanceof Error ? error.message : String(error));

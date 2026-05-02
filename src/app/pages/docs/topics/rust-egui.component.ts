@@ -24,6 +24,16 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
       </p>
       <app-code-block lang="rust" [code]="usageSnippet" />
 
+      <h2>Feature Recipes</h2>
+      <p>
+        These snippets match the current native API surface: feature flags live on
+        <code>GridOptions</code>, while imperative helpers live on <code>EguiGrid</code>.
+      </p>
+      <app-code-block lang="rust" [code]="featureSnippet" />
+      <app-code-block lang="rust" [code]="pinningSnippet" />
+      <app-code-block lang="rust" [code]="stateSnippet" />
+      <app-code-block lang="rust" [code]="exportSnippet" />
+
       <h2>Main Exports</h2>
       <table class="docs-table">
         <thead><tr><th>Export</th><th>Purpose</th></tr></thead>
@@ -87,15 +97,92 @@ export class DocsRustEguiComponent {
 ui-grid-egui = "0.1"
 ui-grid-core = "0.1"`;
 
-  protected readonly usageSnippet = `use ui_grid_egui::{EguiGrid, EguiColumnExt, GridThemePreset};
-use ui_grid_core::models::{GridColumnDef, GridOptions};
+  protected readonly usageSnippet = `use ui_grid_egui::{EguiColumnExt, EguiGrid, GridThemePreset};
+use ui_grid_core::models::{GridColumnDef, GridColumnType, GridOptions};
 
 let mut grid = EguiGrid::new();
 let theme = GridThemePreset::DefaultDark.build();
+let mut options = GridOptions {
+    id: "accounts-egui".into(),
+    title: Some("Accounts".into()),
+    enable_sorting: true,
+    enable_filtering: true,
+    enable_virtualization: true,
+    ..GridOptions::default()
+};
+
+let columns = vec![
+    GridColumnDef {
+        name: "account_id".into(),
+        display_name: Some("Account".into()),
+        r#type: GridColumnType::String,
+        ..GridColumnDef::default()
+    },
+    GridColumnDef {
+        name: "revenue".into(),
+        display_name: Some("Revenue".into()),
+        r#type: GridColumnType::Number,
+        align: Some("end".into()),
+        ..GridColumnDef::default()
+    },
+];
+
 let mut column_ext: Vec<EguiColumnExt> = vec![];
 
 // Inside your egui frame:
 grid.show(ui, &mut options, &columns, &mut column_ext, &theme);`;
+
+  protected readonly featureSnippet = `use ui_grid_core::models::GridGroupingOptions;
+
+let mut options = GridOptions {
+    enable_sorting: true,
+    enable_filtering: true,
+    enable_grouping: true,
+    enable_tree_view: true,
+    enable_expandable: true,
+    enable_virtualization: true,
+    grouping: Some(GridGroupingOptions {
+        group_by: vec!["status".into()],
+    }),
+    tree_children_field: Some("children".into()),
+    ..GridOptions::default()
+};`;
+
+  protected readonly pinningSnippet = `use ui_grid_core::pinning::PinDirection;
+
+let mut options = GridOptions {
+    enable_pinning: true,
+    ..GridOptions::default()
+};
+
+let columns = vec![
+    GridColumnDef {
+        name: "account_id".into(),
+        pinned_left: true,
+        ..GridColumnDef::default()
+    },
+    GridColumnDef {
+        name: "status".into(),
+        ..GridColumnDef::default()
+    },
+];
+
+grid.pin_column("status", PinDirection::Right);`;
+
+  protected readonly stateSnippet = `let json = grid.serialize_state()?;
+
+// later
+grid.deserialize_state(&json)?;
+
+let saved = grid.save_state();
+grid.restore_state(&saved);`;
+
+  protected readonly exportSnippet = `let payload = grid.export_csv(&options, &columns);
+println!("{}", payload.content);
+
+let visible_count = grid.export_with(&options, &columns, |context| {
+    context.visible_rows.len()
+});`;
 
   protected readonly extensionsSnippet = `let ext = vec![
     EguiColumnExt::new("revenue")

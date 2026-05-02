@@ -10,6 +10,7 @@
             <p class="page-links">
                 <a routerLink="/home" class="demo-link">Angular Demo</a>
                 <a routerLink="/react" class="demo-link demo-link-secondary">React Demo</a>
+                <a routerLink="/rust" class="demo-link demo-link-secondary">Rust</a>
                 <a routerLink="/docs/web-component" class="demo-link demo-link-secondary">Docs</a>
             </p>
         </div>
@@ -44,6 +45,19 @@
                 demo.</p>
         </div>
         <pre>{{ savedStateJson() }}</pre>
+    </section>
+
+    <section class="demo-panel usage-panel">
+        <div class="panel-header">
+            <div>
+                <h2>Web Component Demo Code</h2>
+                <p>These snippets match the two live examples on this page: the primary grid and the pinning harness.</p>
+            </div>
+        </div>
+        <div class="code-grid">
+            <app-code-block lang="typescript" [code]="webComponentPrimarySnippet" />
+            <app-code-block lang="typescript" [code]="webComponentPinningSnippet" />
+        </div>
     </section>
 
     <section class="demo-panel">

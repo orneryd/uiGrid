@@ -13,6 +13,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { FILTER_CONDITIONS, type GridOptions, type GridRecord } from '@ornery/ui-grid-core';
 import { defineStandaloneUiGridElement, type VanillaUiGridElement } from '@ornery/ui-grid-vanilla';
+import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
 
 type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning';
@@ -61,7 +62,7 @@ function createTreeRows(): GridRecord[] {
 
 @Component({
   selector: 'app-web-components-page',
-  imports: [RouterLink],
+  imports: [RouterLink, CodeBlockComponent],
   templateUrl: './web-components.component.html',
   styleUrl: './web-components.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -77,6 +78,66 @@ export class WebComponentsComponent {
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly webComponentPrimarySnippet = `import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+import { FILTER_CONDITIONS, type GridOptions } from '@ornery/ui-grid-core';
+
+await defineStandaloneUiGridElement();
+
+const grid = document.querySelector('ui-grid-element');
+
+const options: GridOptions = {
+  id: 'ui-grid-web-components-primary',
+  data: createDemoData(),
+  rowHeight: 48,
+  viewportHeight: 620,
+  enableSorting: true,
+  enableFiltering: true,
+  enableGrouping: true,
+  enableColumnMoving: true,
+  enableVirtualization: true,
+  enableCellEditOnFocus: true,
+  virtualizationThreshold: 25,
+  grouping: { groupBy: ['status'] },
+  rowIdentity: (row) => String(row['id']),
+  columnDefs: [
+    { name: 'name', displayName: 'Customer', enableCellEdit: true },
+    { name: 'company', enableCellEdit: true },
+    {
+      name: 'revenue',
+      type: 'number',
+      align: 'end',
+      filter: { condition: FILTER_CONDITIONS.greaterThan },
+    },
+    { name: 'status', filter: { condition: FILTER_CONDITIONS.exact } },
+    { name: 'renewalDate', type: 'date', displayName: 'Renewal' },
+    { name: 'owner', field: 'account.owner', displayName: 'Account Owner' },
+  ],
+};
+
+grid.options = options;`;
+  protected readonly webComponentPinningSnippet = `grid.options = {
+  id: 'web-components-demo-pinning',
+  data,
+  rowHeight: 46,
+  viewportHeight: 300,
+  enableSorting: true,
+  enableFiltering: true,
+  enablePinning: true,
+  enableVirtualization: true,
+  virtualizationThreshold: 1,
+  columnDefs: [
+    { name: 'name', displayName: 'Name', width: '160px', pinnedLeft: true },
+    { name: 'department', displayName: 'Department', width: '180px' },
+    { name: 'region', displayName: 'Region', width: '140px' },
+    { name: 'q1', displayName: 'Q1 Revenue', width: '180px', align: 'end' },
+    { name: 'q2', displayName: 'Q2 Revenue', width: '180px', align: 'end' },
+    { name: 'q3', displayName: 'Q3 Revenue', width: '180px', align: 'end' },
+    { name: 'q4', displayName: 'Q4 Revenue', width: '180px', align: 'end' },
+    { name: 'total', displayName: 'Total', width: '150px', align: 'end' },
+    { name: 'growth', displayName: 'Growth', width: '140px', align: 'end' },
+    { name: 'status', displayName: 'Status', width: '150px' },
+  ],
+};`;
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' as const },
     { label: 'Tree', value: 'tree' as const },

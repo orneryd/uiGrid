@@ -167,43 +167,6 @@ fn pipeline_filters_sorts_groups_and_paginates() {
         ..Default::default()
     };
 
-        #[test]
-        fn grid_column_default_keeps_global_features_enabled() {
-            let column = GridColumnDef::default();
-
-            assert!(column.visible);
-            assert!(column.sortable);
-            assert!(column.filterable);
-            assert!(column.enable_sorting);
-            assert!(column.enable_filtering);
-            assert!(column.enable_grouping);
-            assert!(column.enable_pinning);
-        }
-
-        #[test]
-        fn grid_options_default_only_enables_sorting() {
-            let options = GridOptions::default();
-
-            assert!(options.enable_sorting);
-            assert!(!options.enable_filtering);
-            assert!(!options.enable_grouping);
-            assert!(!options.enable_column_moving);
-            assert!(!options.enable_cell_edit);
-            assert!(!options.enable_cell_edit_on_focus);
-            assert!(options.enable_virtualization);
-            assert!(!options.enable_pagination);
-            assert!(!options.enable_pagination_controls);
-            assert!(!options.use_external_pagination);
-            assert!(!options.enable_expandable);
-            assert!(!options.enable_tree_view);
-            assert!(!options.show_tree_expand_no_children);
-            assert!(!options.tree_row_header_always_visible);
-            assert!(!options.enable_auto_resize);
-            assert!(!options.infinite_scroll_up);
-            assert!(!options.enable_pinning);
-            assert_eq!(options.virtualization_threshold, None);
-        }
-
     let result = build_grid_pipeline(&context);
 
     assert_eq!(result.total_items, 2);
@@ -285,9 +248,16 @@ fn custom_export_formatters_and_payloads() {
     let context = build_grid_export_context("accounts/grid", &columns[..2], &rows[..1]);
 
     let csv = export_csv_rows_with(context.columns, context.rows, |row, column| {
-        format!("{}={}", column.name, row.entity[column.field.as_deref().unwrap_or(&column.name)])
+        format!(
+            "{}={}",
+            column.name,
+            row.entity[column.field.as_deref().unwrap_or(&column.name)]
+        )
     });
-    assert_eq!(csv, "Owner,Status\n\"owner=\"\"Alice\"\"\",\"status=\"\"Active\"\"\"");
+    assert_eq!(
+        csv,
+        "Owner,Status\n\"owner=\"\"Alice\"\"\",\"status=\"\"Active\"\"\""
+    );
 
     let default_payload = build_csv_export_payload(&context);
     assert_eq!(default_payload.filename, "accounts_grid.csv");
@@ -298,7 +268,10 @@ fn custom_export_formatters_and_payloads() {
         format!("{}:{}", column.name, row.id)
     });
     assert_eq!(custom_payload.filename, "accounts_grid.csv");
-    assert_eq!(custom_payload.contents, "Owner,Status\nowner:row-1,status:row-1");
+    assert_eq!(
+        custom_payload.contents,
+        "Owner,Status\nowner:row-1,status:row-1"
+    );
 }
 
 #[test]
@@ -369,9 +342,8 @@ fn save_state_and_normalization_deeply_assert_results() {
     let deserialized = deserialize_grid_saved_state(&serialized).expect("deserialize saved state");
     assert_eq!(deserialized, saved);
 
-    let custom_serialized = serialize_grid_saved_state_with(&saved, |state| {
-        state.column_order.join("|")
-    });
+    let custom_serialized =
+        serialize_grid_saved_state_with(&saved, |state| state.column_order.join("|"));
     assert_eq!(custom_serialized, "owner|status");
 
     let custom_deserialized = deserialize_grid_saved_state_with("owner|status", |value| {
@@ -384,11 +356,27 @@ fn save_state_and_normalization_deeply_assert_results() {
     assert_eq!(custom_deserialized.column_order, vec!["owner", "status"]);
 
     let restore_plan = create_grid_restore_mutation_plan(&saved);
-    assert_eq!(restore_plan.column_order, Some(vec!["owner".to_string(), "status".to_string()]));
-    assert_eq!(restore_plan.filters.as_ref().unwrap().get("owner"), Some(&"Ali*".to_string()));
-    assert_eq!(restore_plan.sort.as_ref().unwrap().direction, SortDirection::Desc);
+    assert_eq!(
+        restore_plan.column_order,
+        Some(vec!["owner".to_string(), "status".to_string()])
+    );
+    assert_eq!(
+        restore_plan.filters.as_ref().unwrap().get("owner"),
+        Some(&"Ali*".to_string())
+    );
+    assert_eq!(
+        restore_plan.sort.as_ref().unwrap().direction,
+        SortDirection::Desc
+    );
     assert_eq!(restore_plan.grouping, Some(vec!["status".to_string()]));
-    assert_eq!(restore_plan.pagination.as_ref().unwrap().pagination_current_page, 3);
+    assert_eq!(
+        restore_plan
+            .pagination
+            .as_ref()
+            .unwrap()
+            .pagination_current_page,
+        3
+    );
 }
 
 #[test]
@@ -697,4 +685,41 @@ fn row_visibility_reasons_round_trip() {
     row.clear_this_row_invisible("manual");
     assert!(row.visible);
     assert!(row.invisible_reasons.is_empty());
+}
+
+#[test]
+fn grid_column_default_keeps_global_features_enabled() {
+    let column = GridColumnDef::default();
+
+    assert!(column.visible);
+    assert!(column.sortable);
+    assert!(column.filterable);
+    assert!(column.enable_sorting);
+    assert!(column.enable_filtering);
+    assert!(column.enable_grouping);
+    assert!(column.enable_pinning);
+}
+
+#[test]
+fn grid_options_default_only_enables_sorting() {
+    let options = GridOptions::default();
+
+    assert!(options.enable_sorting);
+    assert!(!options.enable_filtering);
+    assert!(!options.enable_grouping);
+    assert!(!options.enable_column_moving);
+    assert!(!options.enable_cell_edit);
+    assert!(!options.enable_cell_edit_on_focus);
+    assert!(options.enable_virtualization);
+    assert!(!options.enable_pagination);
+    assert!(!options.enable_pagination_controls);
+    assert!(!options.use_external_pagination);
+    assert!(!options.enable_expandable);
+    assert!(!options.enable_tree_view);
+    assert!(!options.show_tree_expand_no_children);
+    assert!(!options.tree_row_header_always_visible);
+    assert!(!options.enable_auto_resize);
+    assert!(!options.infinite_scroll_up);
+    assert!(!options.enable_pinning);
+    assert_eq!(options.virtualization_threshold, None);
 }

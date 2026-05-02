@@ -74,9 +74,18 @@ fn enrich_row(mut row: Value, index: usize, depth: usize) -> Value {
         .unwrap_or("Unknown")
         .to_string();
 
-    object.insert("account_id".to_string(), json!(format!("ACCT-{:04}", index + 1)));
-    object.insert("manager".to_string(), json!(MANAGERS[index % MANAGERS.len()]));
-    object.insert("region".to_string(), json!(REGIONS[(index + depth) % REGIONS.len()]));
+    object.insert(
+        "account_id".to_string(),
+        json!(format!("ACCT-{:04}", index + 1)),
+    );
+    object.insert(
+        "manager".to_string(),
+        json!(MANAGERS[index % MANAGERS.len()]),
+    );
+    object.insert(
+        "region".to_string(),
+        json!(REGIONS[(index + depth) % REGIONS.len()]),
+    );
     object.insert(
         "segment".to_string(),
         json!(SEGMENTS[(index + revenue as usize) % SEGMENTS.len()]),
@@ -94,7 +103,11 @@ fn enrich_row(mut row: Value, index: usize, depth: usize) -> Value {
     );
     object.insert(
         "last_touch".to_string(),
-        json!(format!("2026-{:02}-{:02}", (index % 12) + 1, ((index * 3) % 28) + 1)),
+        json!(format!(
+            "2026-{:02}-{:02}",
+            (index % 12) + 1,
+            ((index * 3) % 28) + 1
+        )),
     );
     object.insert(
         "plan".to_string(),
@@ -106,7 +119,9 @@ fn enrich_row(mut row: Value, index: usize, depth: usize) -> Value {
         *children = original_children
             .into_iter()
             .enumerate()
-            .map(|(child_index, child)| enrich_row(child, (index + 1) * 100 + child_index, depth + 1))
+            .map(|(child_index, child)| {
+                enrich_row(child, (index + 1) * 100 + child_index, depth + 1)
+            })
             .collect();
     }
 

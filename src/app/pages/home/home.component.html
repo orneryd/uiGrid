@@ -29,6 +29,23 @@
     <app-ui-grid [options]="options()" />
   </section>
 
+  <section class="state-panel code-panel">
+    <div class="state-header">
+      <div>
+        <h2>Angular Demo Code</h2>
+        <p>The live Angular demo is driven by a computed <code>GridOptions</code> object and the shared grid API.</p>
+      </div>
+      <div class="state-actions">
+        <a routerLink="/rust" class="state-button state-button-secondary">Rust Usage</a>
+        <a routerLink="/docs/getting-started" class="state-button state-button-secondary">Angular Docs</a>
+      </div>
+    </div>
+    <div class="code-grid">
+      <app-code-block lang="typescript" [code]="angularDemoSnippet" />
+      <app-code-block lang="typescript" [code]="angularStateSnippet" />
+    </div>
+  </section>
+
   <section class="state-panel">
     <div class="state-header">
       <div>
