@@ -86,7 +86,13 @@ jobs:
           NODE
 
       - name: Publish core to npm
-        run: npm publish ./projects/ui-grid-core --access public
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          if npm view "@ornery/ui-grid-core@$VERSION" version >/dev/null 2>&1; then
+            echo "@ornery/ui-grid-core@$VERSION already published, skipping"
+          else
+            npm publish ./projects/ui-grid-core --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -151,7 +157,13 @@ jobs:
           fi
 
       - name: Publish React to npm
-        run: npm publish ./projects/ui-grid-react --access public
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          if npm view "@ornery/ui-grid-react@$VERSION" version >/dev/null 2>&1; then
+            echo "@ornery/ui-grid-react@$VERSION already published, skipping"
+          else
+            npm publish ./projects/ui-grid-react --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -228,11 +240,17 @@ jobs:
           NODE
 
       - name: Publish Vanilla to npm
-        run: npm publish ./projects/ui-grid-vanilla --access public
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          if npm view "@ornery/ui-grid-vanilla@$VERSION" version >/dev/null 2>&1; then
+            echo "@ornery/ui-grid-vanilla@$VERSION already published, skipping"
+          else
+            npm publish ./projects/ui-grid-vanilla --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  publish-web:
+  publish-angular:
     needs: [resolve-release, publish-core]
     runs-on: ubuntu-latest
     steps:
@@ -277,18 +295,28 @@ jobs:
           echo "@ornery/ui-grid-core@$VERSION was not available on npm in time" >&2
           exit 1
 
-      - name: Build the full preset library
-        run: npm run build:library:preset -- --preset=full
+      - name: Build the Angular library
+        run: npm run build:library
 
-      - name: Build the web component bundle
-        run: npm run build:element
-
-      - name: Prepare the publishable npm package
+      - name: Set the Angular package version
         run: |
           VERSION="${{ needs.resolve-release.outputs.version }}"
-          node scripts/prepare-release-package.mjs --version "$VERSION" --presets full
 
-      - name: Publish Web to npm
-        run: npm publish ./dist/npm-package --access public
+          cd dist/ui-grid
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$CURRENT_VERSION" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version
+          else
+            echo "Package version already set to $VERSION"
+          fi
+
+      - name: Publish Angular to npm
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          if npm view "@ornery/ui-grid@$VERSION" version >/dev/null 2>&1; then
+            echo "@ornery/ui-grid@$VERSION already published, skipping"
+          else
+            npm publish ./dist/ui-grid --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
