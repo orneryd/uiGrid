@@ -1,6 +1,6 @@
 {
   "name": "ui-grid",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "scripts": {
     "ng": "ng",
     "start": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng serve",
