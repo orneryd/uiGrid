@@ -16,7 +16,7 @@
     }
   },
   "dependencies": {
-    "@ornery/ui-grid-core": "file:../ui-grid-core"
+    "@ornery/ui-grid-core": "^0.1.7"
   },
   "devDependencies": {
     "typescript": "~5.8.0",

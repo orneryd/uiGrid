@@ -1,4 +1,4 @@
-name: Publish React package
+name: Publish Core package
 
 on:
   workflow_dispatch:
@@ -29,43 +29,17 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.95.0
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify core version is published
-        run: |
-          VERSION="${{ inputs.version }}"
-          for attempt in $(seq 1 20); do
-            if npm view "@ornery/ui-grid-core@$VERSION" version >/dev/null 2>&1; then
-              echo "Found @ornery/ui-grid-core@$VERSION on npm"
-              exit 0
-            fi
-
-            echo "Waiting for @ornery/ui-grid-core@$VERSION to appear on npm (attempt $attempt/20)"
-            sleep 15
-          done
-
-          echo "@ornery/ui-grid-core@$VERSION was not available on npm in time" >&2
-          exit 1
-
-      - name: Build the React package
-        run: npm run build --prefix projects/ui-grid-react
+      - name: Build the Core package
+        run: npm run build --prefix projects/ui-grid-core
 
       - name: Set the package version
         run: |
           VERSION="${{ inputs.version }}"
 
-          cd projects/ui-grid-react
+          cd projects/ui-grid-core
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           if [ "$CURRENT_VERSION" != "$VERSION" ]; then
             npm version "$VERSION" --no-git-tag-version
@@ -73,7 +47,22 @@ jobs:
             echo "Package version already set to $VERSION"
           fi
 
+      - name: Verify publish manifest
+        run: |
+          cd projects/ui-grid-core
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const peerDeps = Object.keys(pkg.peerDependencies ?? {});
+          const deps = Object.keys(pkg.dependencies ?? {});
+          const optionalDeps = Object.keys(pkg.optionalDependencies ?? {});
+          const forbidden = [...peerDeps, ...deps, ...optionalDeps].filter((name) => name === 'react' || name === 'react-dom' || name.startsWith('@angular/'));
+          if (forbidden.length > 0) {
+            throw new Error(`ui-grid-core publish manifest unexpectedly references framework packages: ${forbidden.join(', ')}`);
+          }
+          console.log('ui-grid-core publish manifest contains no React or Angular runtime, peer, or optional dependencies');
+          NODE
+
       - name: Publish to npm
-        run: npm publish ./projects/ui-grid-react --access public
+        run: npm publish ./projects/ui-grid-core --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
