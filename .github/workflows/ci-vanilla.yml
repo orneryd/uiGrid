@@ -6,8 +6,8 @@ on:
       - main
     paths:
       - '.github/workflows/ci-vanilla.yml'
+      - 'projects/ui-grid-core/**'
       - 'projects/ui-grid-vanilla/**'
-      - 'projects/ui-grid/src/**'
       - 'dist/ui-grid-wasm-web/**'
       - 'package.json'
       - 'package-lock.json'

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.7-hotfix — 2026-05-02
+
+### Fixed
+
+- **Angular / web components / vanilla horizontal scroll layout** — `.grid-frame` was using `display: flex; flex-direction: column` with `.grid-table` as a `flex: 1 1 auto` child. When scrolled to the far right, the flex sizing model caused column tracks to misalign with their headers. Changed both selectors in `grid.core.styles.scss` to match the React wrapper's simpler approach: `.grid-frame` keeps only `overflow: hidden` and `.grid-table` uses `display: grid`. All three non-React host types (Angular, web components, vanilla) share this file, so all three are fixed by the single change.
+- **React demo `mountUiGrid` import (TS2305)** — `src/types/ornery-ui-grid-react.d.ts` contained an ambient `declare module` block that overrode the tsconfig `paths` alias and resolved `@ornery/ui-grid-react` to the stale `dist/index.d.mts`, which did not export `mountUiGrid`. Deleted the ambient declaration file so the `paths` alias (`projects/ui-grid-react/src/index.ts`) resolves correctly. Added `"jsx": "react-jsx"` to `tsconfig.json` and included the React source in `tsconfig.app.json` includes so the React demo page compiles without errors.
+- **GitHub Pages broken image** — The egui screenshot on the `/rust` page used an absolute path (`/docs/screenshots/pinning-100k.png`) which does not resolve under the Pages sub-path. Changed to a root-relative path (`docs/screenshots/pinning-100k.png`) and copied the asset to `public/docs/screenshots/` so it is bundled with the Angular build output.
+
+### Added
+
+- **`/rust` top-level page** — new hero page at `/rust` with a switchable tab layout: *Rust / WASM* (browser delivery) and *egui Native* (desktop/native delivery). Replaces the previous docs-embedded Rust landing and presents both delivery paths as first-class options.
+- **egui pinned-grid screenshot** — `docs/screenshots/pinning-100k.png` added to the egui tab of the Rust page, showing fixed headers and pinned-column layout at 100 k rows.
+
 ## v0.1.7 — 2026-05-01
 
 ### Rust

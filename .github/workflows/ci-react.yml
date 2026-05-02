@@ -7,7 +7,7 @@ on:
     paths:
       - '.github/workflows/ci-react.yml'
       - 'projects/ui-grid-react/**'
-      - 'projects/ui-grid/src/**'
+      - 'projects/ui-grid-core/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
