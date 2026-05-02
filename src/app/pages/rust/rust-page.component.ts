@@ -109,6 +109,13 @@ type RustSection = 'wasm' | 'egui';
             </div>
           </header>
 
+          <figure class="section-screenshot">
+            <img
+              src="/docs/screenshots/pinning-100k.png"
+              alt="ui-grid-egui demo showing pinned columns with a fixed header and filter row"
+            />
+          </figure>
+
           <div class="topic-body">
             <h3>Install</h3>
             <app-code-block lang="toml" [code]="installEguiSnippet" />
@@ -289,6 +296,20 @@ type RustSection = 'wasm' | 'egui';
       margin: 0;
       line-height: 1.6;
       color: color-mix(in srgb, var(--ink-strong) 74%, var(--teal-strong) 26%);
+    }
+
+    .section-screenshot {
+      margin: 0;
+      padding: clamp(0.75rem, 1vw, 1rem) clamp(0.875rem, 1.25vw, 1.25rem) 0;
+    }
+
+    .section-screenshot img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      border-radius: calc(var(--theme-radius) * 0.8);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--card-shadow);
     }
 
     .topic-body {
