@@ -1,4 +1,4 @@
-import { Component, TemplateRef, computed, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import {
   FILTER_CONDITIONS,
   GridCellTemplateContext,
@@ -7,8 +7,18 @@ import {
   GridRecord,
   UiGridComponent
 } from '@ornery/ui-grid';
+import {
+  TradingLcg,
+  TradingRow,
+  createTradingRows,
+  fmtChange,
+  fmtChangePct,
+  fmtPrice,
+  tickTradingRows,
+  tradingColumnDefs,
+} from './pages/shared/trading-data';
 
-type HarnessMode = 'expandable' | 'tree' | 'templated' | 'pinning';
+type HarnessMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -67,6 +77,7 @@ function createTreeRows(): GridRecord[] {
               type="button"
               class="browser-harness__mode"
               [class.browser-harness__mode-active]="mode() === scenario.value"
+              [class.browser-harness__mode-trading]="scenario.value === 'trading'"
               [attr.aria-selected]="mode() === scenario.value"
               (click)="setMode(scenario.value)">
               {{ scenario.label }}
@@ -81,6 +92,16 @@ function createTreeRows(): GridRecord[] {
 
       <ng-template #detail let-row>
         <div class="browser-harness__detail">{{ row.name }} browser detail</div>
+      </ng-template>
+
+      <ng-template #tradingPriceCell let-value let-row="row">
+        <span [style.color]="$any(row)['priceColor']" style="font-variant-numeric:tabular-nums">{{ fmtTradingPrice(value) }}</span>
+      </ng-template>
+      <ng-template #tradingChangeCell let-value let-row="row">
+        <span [style.color]="$any(row)['changeColor']">{{ fmtTradingChange(value) }}</span>
+      </ng-template>
+      <ng-template #tradingChangePctCell let-value let-row="row">
+        <span [style.color]="$any(row)['changeColor']">{{ fmtTradingChangePct(value) }}</span>
       </ng-template>
 
       <app-ui-grid [options]="options()" />
@@ -149,6 +170,17 @@ function createTreeRows(): GridRecord[] {
       color: var(--browser-harness-button-active-text);
     }
 
+    .browser-harness__mode-trading {
+      background: color-mix(in srgb, #22c55e 14%, var(--browser-harness-button-bg));
+      color: color-mix(in srgb, #22c55e 80%, currentColor);
+      border-color: color-mix(in srgb, #22c55e 30%, transparent);
+    }
+
+    .browser-harness__mode-trading.browser-harness__mode-active {
+      background: color-mix(in srgb, #22c55e 85%, black);
+      color: #051a0e;
+    }
+
     .browser-harness__status {
       display: inline-flex;
       align-items: center;
@@ -170,13 +202,38 @@ function createTreeRows(): GridRecord[] {
   `
 })
 export class GridBrowserHarnessComponent {
+  private readonly tradingPriceCell =
+    viewChild<TemplateRef<GridCellTemplateContext>>('tradingPriceCell');
+  private readonly tradingChangeCell =
+    viewChild<TemplateRef<GridCellTemplateContext>>('tradingChangeCell');
+  private readonly tradingChangePctCell =
+    viewChild<TemplateRef<GridCellTemplateContext>>('tradingChangePctCell');
+
+  private readonly tradingRows = signal<TradingRow[]>(createTradingRows());
+  private readonly tradingRng = new TradingLcg(0xabcdef12);
+  private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  protected readonly fmtTradingPrice = fmtPrice;
+  protected readonly fmtTradingChange = fmtChange;
+  protected readonly fmtTradingChangePct = fmtChangePct;
+
   protected readonly mode = signal<HarnessMode>('expandable');
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' },
     { label: 'Tree', value: 'tree' },
     { label: 'Templated', value: 'templated' },
-    { label: 'Pinning', value: 'pinning' }
+    { label: 'Pinning', value: 'pinning' },
+    { label: 'Trading', value: 'trading' },
   ] as const;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      if (this.tradingIntervalId !== null) {
+        clearInterval(this.tradingIntervalId);
+        this.tradingIntervalId = null;
+      }
+    });
+  }
 
   private readonly statusTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('status');
   private readonly detailTemplate = viewChild<TemplateRef<GridExpandableTemplateContext>>('detail');
@@ -189,13 +246,25 @@ export class GridBrowserHarnessComponent {
         return this.templatedOptions();
       case 'pinning':
         return this.pinningOptions();
+      case 'trading':
+        return this.tradingOptions();
       default:
         return this.expandableOptions();
     }
   });
 
   protected setMode(mode: HarnessMode): void {
+    if (this.mode() === mode) return;
+    if (mode !== 'trading' && this.tradingIntervalId !== null) {
+      clearInterval(this.tradingIntervalId);
+      this.tradingIntervalId = null;
+    }
     this.mode.set(mode);
+    if (mode === 'trading' && this.tradingIntervalId === null) {
+      this.tradingIntervalId = setInterval(() => {
+        this.tradingRows.set(tickTradingRows(this.tradingRows(), this.tradingRng, 6));
+      }, 150);
+    }
   }
 
   private baseOptions(data: readonly GridRecord[]): GridOptions {
@@ -309,6 +378,36 @@ export class GridBrowserHarnessComponent {
         },
         { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' }
       ]
+    };
+  }
+
+  private tradingOptions(): GridOptions {
+    const priceTpl = this.tradingPriceCell() ?? undefined;
+    const changeTpl = this.tradingChangeCell() ?? undefined;
+    const changePctTpl = this.tradingChangePctCell() ?? undefined;
+    const colDefs = tradingColumnDefs().map((col) => {
+      if (col.name === 'price' || col.name === 'bid' || col.name === 'ask') {
+        return { ...col, cellTemplate: priceTpl };
+      }
+      if (col.name === 'change') return { ...col, cellTemplate: changeTpl };
+      if (col.name === 'changePct') return { ...col, cellTemplate: changePctTpl };
+      return col;
+    });
+    return {
+      id: 'browser-harness-trading',
+      title: 'Browser Harness: Trading Terminal',
+      emptyMessage: 'No data',
+      rowIdentity: (row) => String(row['id']),
+      data: this.tradingRows(),
+      rowHeight: 40,
+      viewportHeight: 480,
+      enableSorting: true,
+      enableFiltering: false,
+      enableGrouping: false,
+      enableColumnMoving: false,
+      enableVirtualization: true,
+      virtualizationThreshold: 1,
+      columnDefs: colDefs,
     };
   }
 }

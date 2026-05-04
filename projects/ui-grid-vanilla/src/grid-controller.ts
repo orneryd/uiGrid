@@ -248,6 +248,30 @@ export class VanillaGridController {
     this.refresh();
   }
 
+  /**
+   * Fast-path: swap only the row data and rebuild the pipeline without
+   * touching column state. Emits the new snapshot. The element uses this to
+   * patch cell content in-place without rebuilding the full shadow DOM.
+   */
+  refreshData(data: readonly GridRecord[]): void {
+    this.options = { ...this.options, data };
+    this.pipeline = defaultGridEngine.buildPipeline({
+      options: this.options,
+      columns: this.visibleColumns,
+      activeFilters: this.activeFilters,
+      sortState: this.sortState,
+      groupByColumns: this.groupByColumns,
+      collapsedGroups: this.collapsedGroups,
+      hiddenRowReasons: this.hiddenRowReasons,
+      expandedRows: this.expandedRows,
+      expandedTreeRows: this.expandedTreeRows,
+      currentPage: this.currentPage,
+      pageSize: this.pageSize,
+      rowSize: this.getRowSize(),
+    });
+    this.emit();
+  }
+
   subscribe(subscriber: GridControllerSubscriber): () => void {
     this.subscribers.add(subscriber);
     subscriber(this.getSnapshot());

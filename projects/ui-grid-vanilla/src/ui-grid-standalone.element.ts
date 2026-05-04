@@ -42,6 +42,12 @@ export type VanillaUiGridElement = HTMLElement & {
   options: GridOptions;
   getState(): GridSaveState | null;
   setState(state: Partial<GridSaveState>): void;
+  /**
+   * Fast-path data update: patches only visible cell content in the existing
+   * shadow DOM. Does NOT rebuild the scroll container or header, so scrolling
+   * remains completely smooth while data ticks in the background.
+   */
+  setData(rows: GridRecord[]): void;
 };
 
 export type UiGridControlIconKey =
@@ -109,6 +115,8 @@ export class UiGridStandaloneElement extends HTMLElement {
   private measuredFilterStickyHeight = 0;
   private stickyHeightRelayoutQueued = false;
   private benchmarkAverage = '—';
+  private skipNextRender = false;
+  private dataFrame: number | null = null;
 
   get options(): GridOptions {
     return (
@@ -141,6 +149,83 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   setState(state: Partial<GridSaveState>): void {
     this.controller?.setState(state);
+  }
+
+  /**
+   * Fast-path: update only row data without rebuilding the shadow DOM.
+   * The pipeline is updated synchronously; DOM patching is deferred to the
+   * next animation frame so it never interrupts an in-progress scroll paint.
+   * If multiple ticks arrive before the frame fires, only the latest wins.
+   * If a scroll-triggered full render fires first, the frame is cancelled
+   * (the fresh innerHTML already reflects the latest data).
+   */
+  setData(rows: GridRecord[]): void {
+    const controller = this.controller;
+    if (!controller) {
+      return;
+    }
+
+    // Update the pipeline synchronously (cheap, no DOM work).
+    this.skipNextRender = true;
+    controller.refreshData(rows);
+    this.skipNextRender = false;
+
+    // Schedule DOM patching on the next paint — latest call wins.
+    if (this.dataFrame !== null) {
+      cancelAnimationFrame(this.dataFrame);
+    }
+    this.dataFrame = requestAnimationFrame(() => {
+      this.dataFrame = null;
+      this.patchCells();
+    });
+  }
+
+  private patchCells(): void {
+    const snapshot = this.snapshot;
+    if (!snapshot) {
+      return;
+    }
+
+    const root = this.shadowRoot;
+    if (!root) {
+      return;
+    }
+
+    // Build O(1) lookup maps from the current pipeline snapshot.
+    const rowMap = new Map<string, GridRow>();
+    for (const row of snapshot.pipeline.visibleRows) {
+      rowMap.set(row.id, row);
+    }
+    const colMap = new Map<string, GridColumnDef>();
+    for (const col of snapshot.visibleColumns) {
+      colMap.set(col.name, col);
+    }
+
+    // Patch every rendered body cell in-place.
+    const cells = root.querySelectorAll<HTMLElement>('[data-row][data-column]');
+    for (const cell of cells) {
+      const rowId = cell.dataset['row'];
+      const colName = cell.dataset['column'];
+      if (!rowId || !colName) continue;
+
+      const row = rowMap.get(rowId);
+      const column = colMap.get(colName);
+      if (!row || !column) continue;
+
+      const cellShell = cell.querySelector<HTMLElement>('.cell-shell');
+      if (!cellShell) continue;
+
+      const newContent = this.renderCellTemplate(row, column, 0);
+      const toggles = cellShell.querySelectorAll<HTMLElement>('.row-toggle');
+      if (toggles.length === 0) {
+        cellShell.innerHTML = newContent;
+      } else {
+        const toggleHtml = Array.from(toggles)
+          .map((t) => t.outerHTML)
+          .join('');
+        cellShell.innerHTML = toggleHtml + newContent;
+      }
+    }
   }
 
   connectedCallback(): void {
@@ -595,7 +680,7 @@ export class UiGridStandaloneElement extends HTMLElement {
 
         this.scrollFrame = requestAnimationFrame(() => {
           this.scrollFrame = null;
-          this.render();
+          this.renderVirtualBody();
         });
       },
       true,
@@ -604,7 +689,67 @@ export class UiGridStandaloneElement extends HTMLElement {
     (root as ShadowRoot & { __uiGridBound?: boolean }).__uiGridBound = true;
   }
 
+  /**
+   * Targeted update for virtual scroll: replaces only the rendered rows inside
+   * the existing `.grid-virtual-body` without touching the scroll container.
+   * This preserves momentum/inertia scrolling because the `.grid-table` element
+   * is never destroyed.
+   */
+  private renderVirtualBody(): void {
+    const snapshot = this.snapshot;
+    if (!snapshot?.pipeline.virtualizationEnabled) {
+      this.render();
+      return;
+    }
+
+    const root = this.shadowRoot;
+    const virtualBody = root?.querySelector<HTMLElement>('.grid-virtual-body');
+    if (!root || !virtualBody) {
+      this.render();
+      return;
+    }
+
+    // Cancel any pending cell-only patch — the fresh rows we are about to
+    // render already reflect the latest snapshot data.
+    if (this.dataFrame !== null) {
+      cancelAnimationFrame(this.dataFrame);
+      this.dataFrame = null;
+    }
+
+    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const viewportHeight = snapshot.options.viewportHeight ?? 560;
+    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
+    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+    const overscan = 4;
+    const startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+    this.lastVirtualStartIndex = startIndex;
+    const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
+    const itemsToRender = snapshot.pipeline.displayItems.slice(
+      startIndex,
+      Math.min(snapshot.pipeline.displayItems.length, startIndex + visibleCount),
+    );
+    const virtualOffset = startIndex * snapshot.rowSize;
+
+    virtualBody.style.top = `${virtualOffset}px`;
+    virtualBody.innerHTML = itemsToRender
+      .map((item, index) => this.renderDisplayItem(item, startIndex + index))
+      .join('');
+  }
+
   private render(): void {
+    if (this.skipNextRender) {
+      return;
+    }
+    // A full render already incorporates the latest data — cancel any pending
+    // frame-based updates to avoid redundant DOM mutations immediately after.
+    if (this.dataFrame !== null) {
+      cancelAnimationFrame(this.dataFrame);
+      this.dataFrame = null;
+    }
+    if (this.scrollFrame !== null) {
+      cancelAnimationFrame(this.scrollFrame);
+      this.scrollFrame = null;
+    }
     const root = this.ensureShadowRoot();
     const snapshot = this.snapshot;
     const previousGridTable = root.querySelector<HTMLElement>('.grid-table');

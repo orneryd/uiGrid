@@ -18,13 +18,23 @@ import {
   GridSavedState,
   UiGridApi,
 } from '@ornery/ui-grid';
-import { mountUiGrid } from '@ornery/ui-grid-react';
+import { mountUiGrid, styledCell, updateUiGrid } from '@ornery/ui-grid-react';
 import { CodeBlockComponent } from '../../shared/code-block.component';
 import { createDemoData } from '../../shared/demo-data';
+import {
+  TradingLcg,
+  TradingRow,
+  createTradingRows,
+  fmtChange,
+  fmtChangePct,
+  fmtPrice,
+  tickTradingRows,
+  tradingColumnDefs,
+} from '../../shared/trading-data';
 
 type ReactRoot = ReturnType<typeof mountUiGrid>;
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning';
+type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -353,6 +363,9 @@ export class DocsReactComponent {
   private harnessReactRoot: ReactRoot | null = null;
   private primaryGridApi: UiGridApi | null = null;
   private savedGridState: GridSavedState | null = null;
+  private tradingRows: TradingRow[] = createTradingRows();
+  private readonly tradingRng = new TradingLcg(0xabcdef12);
+  private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly demoError = signal<string | null>(null);
@@ -420,6 +433,7 @@ export function AccountsGrid() {
     { label: 'Tree', value: 'tree' as const },
     { label: 'Templated', value: 'templated' as const },
     { label: 'Pinning', value: 'pinning' as const },
+    { label: 'Trading', value: 'trading' as const },
   ];
 
   constructor() {
@@ -434,12 +448,21 @@ export function AccountsGrid() {
       this.primaryReactRoot = null;
       this.harnessReactRoot = null;
       this.primaryGridApi = null;
+      if (this.tradingIntervalId !== null) {
+        clearInterval(this.tradingIntervalId);
+        this.tradingIntervalId = null;
+      }
     });
   }
 
   protected setMode(mode: DemoMode): void {
     if (this.mode() === mode) {
       return;
+    }
+
+    if (mode !== 'trading' && this.tradingIntervalId !== null) {
+      clearInterval(this.tradingIntervalId);
+      this.tradingIntervalId = null;
     }
 
     this.mode.set(mode);
@@ -505,6 +528,30 @@ export function AccountsGrid() {
 
     try {
       const mode = this.mode();
+
+      if (mode === 'trading') {
+        this.tradingRows = createTradingRows();
+        const cellRenderer = this.makeTradingCellRenderer();
+        this.harnessReactRoot = mountUiGrid(host, {
+          options: this.tradingOptions(),
+          className: 'react-docs-demo-grid',
+          cellRenderer,
+        });
+        if (this.tradingIntervalId === null) {
+          this.tradingIntervalId = setInterval(() => {
+            if (!this.harnessReactRoot || this.mode() !== 'trading') return;
+            this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
+            updateUiGrid(this.harnessReactRoot, {
+              options: this.tradingOptions(),
+              className: 'react-docs-demo-grid',
+              cellRenderer,
+            });
+          }, 150);
+        }
+        this.demoError.set(null);
+        return;
+      }
+
       const props = {
         options: this.optionsForMode(mode),
         className: 'react-docs-demo-grid',
@@ -533,6 +580,43 @@ export function AccountsGrid() {
     } catch (error) {
       this.demoError.set(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private makeTradingCellRenderer(): NonNullable<Parameters<typeof mountUiGrid>[1]['cellRenderer']> {
+    return (context: GridCellTemplateContext) => {
+      const row = context.row as TradingRow;
+      const name = context.column.name;
+      if (name === 'price' || name === 'bid' || name === 'ask') {
+        const preFormatted = name === 'price' ? row['priceStr'] : name === 'bid' ? row['bidStr'] : row['askStr'];
+        return styledCell(String(preFormatted ?? fmtPrice(context.value)), String(row['priceColor'] ?? 'inherit'));
+      }
+      if (name === 'change') {
+        return styledCell(String(row['changeStr'] ?? fmtChange(context.value)), String(row['changeColor'] ?? 'inherit'));
+      }
+      if (name === 'changePct') {
+        return styledCell(String(row['changePctStr'] ?? fmtChangePct(context.value)), String(row['changeColor'] ?? 'inherit'));
+      }
+      return null;
+    };
+  }
+
+  private tradingOptions() {
+    return {
+      id: 'react-demo-trading',
+      title: 'React Demo: Trading Terminal',
+      emptyMessage: 'No data',
+      rowIdentity: (row: GridRecord) => String(row['id']),
+      data: this.tradingRows,
+      rowHeight: 40,
+      viewportHeight: 460,
+      enableSorting: true,
+      enableFiltering: false,
+      enableGrouping: false,
+      enableColumnMoving: false,
+      enableVirtualization: true,
+      virtualizationThreshold: 1,
+      columnDefs: tradingColumnDefs(),
+    };
   }
 
   private primaryOptions(): GridOptions {

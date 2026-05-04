@@ -1,5 +1,6 @@
 import { isPlatformBrowser } from '@angular/common';
 import {
+  DestroyRef,
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
@@ -15,8 +16,15 @@ import { FILTER_CONDITIONS, type GridOptions, type GridRecord } from '@ornery/ui
 import { defineStandaloneUiGridElement, type VanillaUiGridElement } from '@ornery/ui-grid-vanilla';
 import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
+import {
+  TradingLcg,
+  TradingRow,
+  createTradingRows,
+  tickTradingRows,
+  tradingColumnDefs,
+} from '../shared/trading-data';
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning';
+type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
 
 type WebComponentGridElement = VanillaUiGridElement & {
   getState(): unknown;
@@ -75,6 +83,9 @@ export class WebComponentsComponent {
   private readonly demoGridRef =
     viewChild.required<ElementRef<WebComponentGridElement>>('demoGrid');
   private savedGridState: unknown = null;
+  private tradingRows: TradingRow[] = createTradingRows();
+  private readonly tradingRng = new TradingLcg(0x1a2b3c4d);
+  private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly savedStateJson = signal('No saved state captured yet.');
@@ -143,6 +154,7 @@ grid.options = options;`;
     { label: 'Tree', value: 'tree' as const },
     { label: 'Templated', value: 'templated' as const },
     { label: 'Pinning', value: 'pinning' as const },
+    { label: 'Trading', value: 'trading' as const },
   ];
 
   constructor() {
@@ -155,6 +167,13 @@ grid.options = options;`;
       this.mountPrimaryGrid();
       this.mountDemoGrid();
     });
+
+    inject(DestroyRef).onDestroy(() => {
+      if (this.tradingIntervalId !== null) {
+        clearInterval(this.tradingIntervalId);
+        this.tradingIntervalId = null;
+      }
+    });
   }
 
   protected setMode(mode: DemoMode): void {
@@ -162,8 +181,21 @@ grid.options = options;`;
       return;
     }
 
+    if (this.tradingIntervalId !== null) {
+      clearInterval(this.tradingIntervalId);
+      this.tradingIntervalId = null;
+    }
+
     this.mode.set(mode);
     this.mountDemoGrid();
+
+    if (mode === 'trading') {
+      this.tradingIntervalId = setInterval(() => {
+        this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
+        const grid = this.demoGridRef().nativeElement;
+        grid.setData(this.tradingRows);
+      }, 150);
+    }
   }
 
   protected captureState(): void {
@@ -199,6 +231,19 @@ grid.options = options;`;
     const grid = this.demoGridRef().nativeElement;
     const mode = this.mode();
 
+    if (mode === 'trading') {
+      this.tradingRows = createTradingRows();
+      this.replaceTemplates(grid, [
+        ['cell-price',     '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>'],
+        ['cell-bid',       '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>'],
+        ['cell-ask',       '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>'],
+        ['cell-change',    '<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>'],
+        ['cell-changePct', '<span style="color:{{row.changeColor}}">{{row.changePctStr}}</span>'],
+      ]);
+      grid.options = this.tradingGridOptions();
+      return;
+    }
+
     if (mode === 'expandable') {
       this.replaceTemplates(grid, [
         [
@@ -220,6 +265,25 @@ grid.options = options;`;
 
     this.replaceTemplates(grid, []);
     grid.options = mode === 'tree' ? this.treeOptions() : this.pinningOptions();
+  }
+
+  private tradingGridOptions(): GridOptions {
+    return {
+      id: 'web-components-demo-trading',
+      title: 'Web Components Demo: Trading Terminal',
+      emptyMessage: 'No data',
+      rowIdentity: (row) => String(row['id']),
+      data: this.tradingRows,
+      rowHeight: 40,
+      viewportHeight: 460,
+      enableSorting: true,
+      enableFiltering: false,
+      enableGrouping: false,
+      enableColumnMoving: false,
+      enableVirtualization: true,
+      virtualizationThreshold: 1,
+      columnDefs: tradingColumnDefs(),
+    };
   }
 
   private replaceTemplates(

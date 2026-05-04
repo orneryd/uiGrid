@@ -1,6 +1,6 @@
 export { UiGrid } from './UiGrid';
 export type { UiGridProps } from './UiGrid';
-export { mountUiGrid } from './mountUiGrid';
+export { mountUiGrid, updateUiGrid, styledCell } from './mountUiGrid';
 export {
   mountUiGridCustomElement,
   type MountUiGridCustomElementOptions,
