@@ -1,9 +1,11 @@
 import {
   GRID_CORE_CSS,
   SORT_DIRECTIONS,
+  buildGridHeaderContext,
   canGridMoveColumns,
   downloadGridCsvFile,
   exportCsvRows,
+  formatGridHeaderDisplayValue,
   getCellValue,
   sanitizeDownloadFilename,
   type DisplayItem,
@@ -1321,10 +1323,6 @@ export class UiGridStandaloneElement extends HTMLElement {
     const headerStickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
     const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
     const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    const visibleRowCount = snapshot.pipeline.visibleRows.length;
-    const totalRows = options.data.length;
-    const pinnedCount = Object.keys(snapshot.pinnedColumns).length;
-
     let startIndex = 0;
     let itemsToRender = snapshot.pipeline.displayItems;
     let virtualOffset = 0;
@@ -1370,12 +1368,9 @@ export class UiGridStandaloneElement extends HTMLElement {
         : `<div class="empty-state ui-grid-no-row-overlay"><strong>${escapeHtml(options.emptyMessage ?? labels.emptyHeading)}</strong><p>${escapeHtml(labels.emptyDescription)}</p></div>`;
 
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
-    const hero = `<header class="grid-hero"><div><p class="eyebrow">Vanilla web component</p><h1>${escapeHtml(options.title ?? 'UI Grid')}</h1><p class="deck">Framework-neutral custom element with Shadow DOM styling, slot templates, pinning, virtualization, editing, tree view, grouping, and state restore.</p></div><div class="hero-actions"><button type="button" class="action action-secondary" data-action="benchmark">Benchmark</button><button type="button" class="action action-secondary" data-action="export-csv">Export CSV</button><div class="stats-card"><span>${visibleRowCount}</span><small>${escapeHtml(labels.statsVisibleRows)}</small></div></div></header>`;
-    const metrics = `<section class="metrics-strip" aria-label="Grid metrics"><article><strong>${snapshot.pipeline.pipelineMs.toFixed(2)} ms</strong><span>pipeline</span></article><article><strong>${virtualizationEnabled ? 'On' : 'Off'}</strong><span>virtualization</span></article><article><strong>${pinnedCount}</strong><span>pinned columns</span></article><article><strong>${escapeHtml(this.benchmarkAverage)}</strong><span>benchmark avg</span></article></section>`;
-    const toolbar = `<div class="grid-toolbar"><div><strong>${visibleRowCount}</strong><span>${escapeHtml(labels.toolbarOf)} ${totalRows} ${escapeHtml(labels.toolbarRows)}</span></div><p>${escapeHtml(options.id)}</p></div>`;
     const gridTableStyle = `${virtualizationEnabled ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
 
-    root.innerHTML = `<style>${GRID_CORE_CSS}</style><section class="grid-shell ui-grid-shell">${slotRegistry}${hero}${metrics}<section class="grid-frame ui-grid" role="grid" aria-label="${escapeHtml(options.title ?? 'Data grid')}">${toolbar}<div class="grid-table ui-grid-contents-wrapper" style="${gridTableStyle}"><div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${templateColumns}">${header}</div>${filterRow}${body}</div>${pagination}</section></section>`;
+    root.innerHTML = `<style>${GRID_CORE_CSS}</style>${slotRegistry}<section class="grid-frame ui-grid" role="grid" aria-label="${escapeHtml(options.title ?? 'Data grid')}"><div class="grid-table ui-grid-contents-wrapper" style="${gridTableStyle}"><div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${templateColumns}">${header}</div>${filterRow}${body}</div>${pagination}</section>`;
 
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
     if (gridTable && this.scrollPosition > 0 && virtualizationEnabled) {
@@ -1455,8 +1450,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pinLabel = isPinned
       ? (this.snapshot?.labels.unpin ?? 'Unpin')
       : (this.snapshot?.labels.pinColumn ?? 'Pin');
+    const headerValue = escapeHtml(formatGridHeaderDisplayValue(buildGridHeaderContext(column)));
 
-    return `<div class="${classes}" data-column="${escapeHtml(column.name)}" ${draggable} style="${stickyStyle}"><span class="header-label">${escapeHtml(controller.headerLabel(column))}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span></div>`;
+    return `<div class="${classes}" data-column="${escapeHtml(column.name)}" ${draggable} style="${stickyStyle}"><span class="header-label">${headerValue}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span></div>`;
   }
 
   private renderFilterCell(column: GridColumnDef): string {

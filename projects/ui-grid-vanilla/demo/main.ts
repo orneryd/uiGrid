@@ -1,12 +1,13 @@
 import { mountVanillaUiGrid } from '../src/index';
-import type { GridOptions } from '../src/index';
+import type { GridOptions, UiGridApi } from '../src/index';
+import type { GridBenchmarkResult } from '@ornery/ui-grid-core';
 import * as uiGridRustWebModule from '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
 
 const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'] as const;
 const companies = ['Northwind', 'Blue Harbor', 'Forge Group', 'Larkspur', 'Atlas'] as const;
 const owners = ['Casey Tran', 'Jordan Silva', 'Priya Rao', 'Evan Brooks', 'Mina Patel'] as const;
 
-function createDemoData(count = 5000) {
+function createDemoData(count = 100_000) {
   return Array.from({ length: count }, (_, i) => ({
     id: `row-${i + 1}`,
     name: `Customer ${i + 1}`,
@@ -30,6 +31,19 @@ const options: GridOptions = {
   enableVirtualization: true,
   virtualizationThreshold: 25,
   grouping: { groupBy: ['status'] },
+  benchmark: { iterations: 40 },
+  onRegisterApi: (api) => {
+    gridApi = api as UiGridApi;
+    syncVisibleRows();
+    unsubscribeVisibleRows?.();
+    unsubscribeBenchmark?.();
+    unsubscribeVisibleRows = gridApi.core.on.rowsVisibleChanged((rows) => {
+      updateVisibleRows(rows.length);
+    });
+    unsubscribeBenchmark = gridApi.core.on.benchmarkComplete((result) => {
+      updateBenchmark(result as GridBenchmarkResult);
+    });
+  },
   columnDefs: [
     { name: 'name', displayName: 'Customer', width: 'minmax(14rem, 1.2fr)' },
     { name: 'company', width: 'minmax(12rem, 1fr)' },
@@ -57,10 +71,47 @@ const options: GridOptions = {
 };
 
 const mountPoint = document.getElementById('app');
+const visibleRowsValue = document.getElementById('visible-rows-value');
+const visibleRowsInline = document.getElementById('visible-rows-inline');
+const totalRowsValue = document.getElementById('total-rows-value');
+const benchmarkAvgValue = document.getElementById('benchmark-avg-value');
+const benchmarkButton = document.getElementById('benchmark-button') as HTMLButtonElement | null;
+const exportButton = document.getElementById('export-button') as HTMLButtonElement | null;
+
+let gridApi: UiGridApi | null = null;
+let unsubscribeVisibleRows: (() => void) | null = null;
+let unsubscribeBenchmark: (() => void) | null = null;
+
+function updateVisibleRows(count: number) {
+  if (visibleRowsValue) visibleRowsValue.textContent = String(count);
+  if (visibleRowsInline) visibleRowsInline.textContent = String(count);
+}
+
+function updateBenchmark(result: GridBenchmarkResult | null) {
+  if (benchmarkAvgValue) {
+    benchmarkAvgValue.textContent = result?.averageMs?.toFixed(2) ?? '—';
+  }
+}
+
+function syncVisibleRows() {
+  updateVisibleRows(gridApi?.core.getVisibleRows().length ?? 0);
+}
 
 if (!mountPoint) {
   throw new Error('Expected vanilla demo mount point');
 }
+
+if (totalRowsValue) {
+  totalRowsValue.textContent = String(options.data.length);
+}
+
+benchmarkButton?.addEventListener('click', () => {
+  gridApi?.core.benchmark();
+});
+
+exportButton?.addEventListener('click', () => {
+  gridApi?.core.exportCsv();
+});
 
 void mountVanillaUiGrid(mountPoint, options, uiGridRustWebModule).catch((error) => {
   console.error(error);

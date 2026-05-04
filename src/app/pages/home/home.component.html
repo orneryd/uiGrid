@@ -26,7 +26,54 @@
   </header>
 
   <section class="grid-stage">
-    <app-ui-grid [options]="options()" />
+    <section class="angular-demo-shell">
+      <header class="angular-demo-shell__header">
+        <div>
+          <p class="angular-demo-shell__eyebrow">Angular package demo</p>
+          <h2>{{ options().title ?? 'UI Grid' }}</h2>
+          <p>
+            Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt with Angular signals,
+            CDK virtualization, grouping, sorting, filtering, and column ordering.
+          </p>
+        </div>
+        <div class="angular-demo-shell__actions">
+          <button type="button" class="state-button" (click)="runBenchmark()">Benchmark</button>
+          <button type="button" class="state-button state-button-secondary" (click)="exportCsv()">Export CSV</button>
+          <div class="angular-demo-shell__stats">
+            <span>{{ visibleRowCount() }}</span>
+            <small>visible rows</small>
+          </div>
+        </div>
+      </header>
+
+      <section class="angular-demo-shell__metrics" aria-label="Angular grid metrics">
+        <article>
+          <strong>{{ virtualizationLabel() }}</strong>
+          <span>virtualization</span>
+        </article>
+        <article>
+          <strong>{{ groupColumnCount() }}</strong>
+          <span>group columns</span>
+        </article>
+        <article>
+          <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
+          <span>benchmark avg</span>
+        </article>
+      </section>
+
+      <div class="angular-demo-shell__toolbar">
+        <div>
+          <strong>{{ visibleRowCount() }}</strong>
+          <span>of {{ totalRows() }} rows</span>
+        </div>
+        <p>
+          <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
+          templating, and virtualized rendering.
+        </p>
+      </div>
+
+      <app-ui-grid [options]="options()" />
+    </section>
   </section>
 
   <section class="state-panel code-panel">

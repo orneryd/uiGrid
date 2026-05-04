@@ -3,12 +3,14 @@ import {
   Component,
   TemplateRef,
   computed,
+  effect,
   signal,
   viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   FILTER_CONDITIONS,
+  GridBenchmarkResult,
   GridCellTemplateContext,
   GridOptions,
   GridSavedState,
@@ -31,7 +33,14 @@ export class HomeComponent {
     viewChild<TemplateRef<GridCellTemplateContext>>('statusTemplate');
   private savedGridState: GridSavedState | null = null;
   protected readonly gridApi = signal<UiGridApi | null>(null);
+  protected readonly visibleRowCount = signal(0);
+  protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly totalRows = computed(() => this.options().data.length);
+  protected readonly groupColumnCount = computed(() => this.options().grouping?.groupBy?.length ?? 0);
+  protected readonly virtualizationLabel = computed(() =>
+    this.options().enableVirtualization === false ? 'Off' : 'On'
+  );
   protected readonly angularDemoSnippet = `import { Component, computed, signal } from '@angular/core';
 import {
   FILTER_CONDITIONS,
@@ -159,6 +168,37 @@ restoreState(): void {
     ],
     data: createDemoData(),
   }));
+
+  constructor() {
+    effect((onCleanup) => {
+      const api = this.gridApi();
+      if (!api) {
+        this.visibleRowCount.set(0);
+        return;
+      }
+
+      this.visibleRowCount.set(api.core.getVisibleRows().length);
+      const unsubscribeVisibleRows = api.core.on.rowsVisibleChanged((rows) => {
+        this.visibleRowCount.set(rows.length);
+      });
+      const unsubscribeBenchmark = api.core.on.benchmarkComplete((result) => {
+        this.benchmarkResult.set(result as GridBenchmarkResult);
+      });
+
+      onCleanup(() => {
+        unsubscribeVisibleRows();
+        unsubscribeBenchmark();
+      });
+    });
+  }
+
+  protected runBenchmark(): void {
+    this.gridApi()?.core.benchmark();
+  }
+
+  protected exportCsv(): void {
+    this.gridApi()?.core.exportCsv();
+  }
 
   protected captureState(): void {
     const api = this.gridApi();

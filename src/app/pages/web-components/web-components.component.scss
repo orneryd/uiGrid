@@ -122,6 +122,92 @@
   min-width: 0;
 }
 
+.web-primary-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.web-primary-shell__header {
+  display: grid;
+  gap: 1rem;
+}
+
+.web-primary-shell__header h3,
+.web-primary-shell__header p,
+.web-primary-shell__toolbar p {
+  margin: 0;
+}
+
+.web-primary-shell__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-strong);
+}
+
+.web-primary-shell__header p,
+.web-primary-shell__metrics span,
+.web-primary-shell__toolbar p,
+.web-primary-shell__stats small {
+  color: color-mix(in srgb, var(--ink-strong) 74%, var(--teal-strong) 26%);
+}
+
+.web-primary-shell__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.web-primary-shell__stats {
+  display: inline-grid;
+  min-width: 7rem;
+  padding: 0.8rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 82%, white);
+}
+
+.web-primary-shell__stats span {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.web-primary-shell__metrics {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.web-primary-shell__metrics article {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 84%, white);
+}
+
+.web-primary-shell__metrics strong {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.web-primary-shell__toolbar {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 88%, white);
+}
+
+.web-primary-shell__toolbar strong {
+  margin-right: 0.4rem;
+}
+
 .code-grid {
   display: grid;
   gap: 1rem;

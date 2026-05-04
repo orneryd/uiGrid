@@ -12,7 +12,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { FILTER_CONDITIONS, type GridOptions, type GridRecord } from '@ornery/ui-grid-core';
+import {
+  FILTER_CONDITIONS,
+  type GridBenchmarkResult,
+  type GridOptions,
+  type GridRecord,
+  type UiGridApi,
+} from '@ornery/ui-grid-core';
 import { defineStandaloneUiGridElement, type VanillaUiGridElement } from '@ornery/ui-grid-vanilla';
 import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
@@ -83,12 +89,19 @@ export class WebComponentsComponent {
   private readonly demoGridRef =
     viewChild.required<ElementRef<WebComponentGridElement>>('demoGrid');
   private savedGridState: unknown = null;
+  private readonly primaryData = createDemoData();
+  private primaryGridApi: UiGridApi | null = null;
+  private disposePrimaryVisibleRows: (() => void) | null = null;
+  private disposePrimaryBenchmark: (() => void) | null = null;
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0x1a2b3c4d);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
 
   protected readonly mode = signal<DemoMode>('expandable');
+  protected readonly visibleRowCount = signal(0);
+  protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly totalRows = signal(this.primaryData.length);
   protected readonly webComponentPrimarySnippet = `import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
 import { FILTER_CONDITIONS, type GridOptions } from '@ornery/ui-grid-core';
 
@@ -169,6 +182,11 @@ grid.options = options;`;
     });
 
     inject(DestroyRef).onDestroy(() => {
+      this.disposePrimaryVisibleRows?.();
+      this.disposePrimaryBenchmark?.();
+      this.disposePrimaryVisibleRows = null;
+      this.disposePrimaryBenchmark = null;
+      this.primaryGridApi = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
         this.tradingIntervalId = null;
@@ -214,9 +232,19 @@ grid.options = options;`;
 
   protected resetDemo(): void {
     this.savedGridState = null;
+    this.visibleRowCount.set(0);
+    this.benchmarkResult.set(null);
     this.savedStateJson.set('No saved state captured yet.');
     this.mountPrimaryGrid();
     this.mountDemoGrid();
+  }
+
+  protected runBenchmark(): void {
+    this.primaryGridApi?.core.benchmark();
+  }
+
+  protected exportCsv(): void {
+    this.primaryGridApi?.core.exportCsv();
   }
 
   private mountPrimaryGrid(): void {
@@ -224,6 +252,13 @@ grid.options = options;`;
     this.replaceTemplates(grid, [
       ['cell-status', '<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>'],
     ]);
+    this.disposePrimaryVisibleRows?.();
+    this.disposePrimaryBenchmark?.();
+    this.disposePrimaryVisibleRows = null;
+    this.disposePrimaryBenchmark = null;
+    this.primaryGridApi = null;
+    this.visibleRowCount.set(0);
+    this.benchmarkResult.set(null);
     grid.options = this.primaryOptions();
   }
 
@@ -342,7 +377,7 @@ grid.options = options;`;
       id: 'ui-grid-web-components-primary',
       title: 'UI Grid Modernized (Web Component)',
       emptyMessage: 'No rows match the current filters.',
-      data: createDemoData(),
+      data: this.primaryData,
       rowHeight: 48,
       viewportHeight: 620,
       enableSorting: true,
@@ -354,6 +389,18 @@ grid.options = options;`;
       virtualizationThreshold: 25,
       benchmark: {
         iterations: 40,
+      },
+      onRegisterApi: (api) => {
+        this.primaryGridApi = api as UiGridApi;
+        this.visibleRowCount.set(this.primaryGridApi.core.getVisibleRows().length);
+        this.disposePrimaryVisibleRows?.();
+        this.disposePrimaryBenchmark?.();
+        this.disposePrimaryVisibleRows = this.primaryGridApi.core.on.rowsVisibleChanged((rows) => {
+          this.visibleRowCount.set(rows.length);
+        });
+        this.disposePrimaryBenchmark = this.primaryGridApi.core.on.benchmarkComplete((result) => {
+          this.benchmarkResult.set(result as GridBenchmarkResult);
+        });
       },
       grouping: {
         groupBy: ['status'],

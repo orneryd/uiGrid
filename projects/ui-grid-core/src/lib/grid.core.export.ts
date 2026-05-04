@@ -1,9 +1,22 @@
-import { GridColumnDef, GridRow } from './grid.models';
+import { GridColumnDef, GridHeaderTemplateContext, GridRow } from './grid.models';
 import { titleize, toCsvValue } from './grid.utils';
 import { buildGridCellContext, formatGridCellDisplayValue } from './grid.core.display';
 
 export function headerLabel(column: GridColumnDef): string {
   return column.displayName ?? titleize(column.name);
+}
+
+export function buildGridHeaderContext(column: GridColumnDef): GridHeaderTemplateContext {
+  const value = headerLabel(column);
+  return {
+    $implicit: value,
+    value,
+    column,
+  };
+}
+
+export function formatGridHeaderDisplayValue(context: GridHeaderTemplateContext): string {
+  return context.column.headerRenderer ? context.column.headerRenderer(context) : context.value;
 }
 
 export function exportCsvRows(

@@ -1,60 +1,4 @@
-<section class="grid-shell ui-grid-shell" part="shell">
-  <header class="grid-hero ui-grid-toolbar-shell" part="hero">
-    <div>
-      <p class="eyebrow">Angular 21 lift and shift</p>
-      <h1>{{ options().title ?? 'UI Grid' }}</h1>
-      <p class="deck">
-        Familiar `gridOptions` and `onRegisterApi`, rebuilt with Angular 21 signals, CDK virtualization,
-        native templates, grouping, sorting, filtering, and column ordering.
-      </p>
-    </div>
-
-    <div class="hero-actions">
-      <button type="button" class="action action-secondary" part="action benchmark-action" (click)="runBenchmark()">
-        Benchmark
-      </button>
-      @if (csvExportFeature) {
-      <button type="button" class="action action-secondary" part="action export-action" (click)="exportCsv()">
-        Export CSV
-      </button>
-      }
-      <div class="stats-card" part="stats-card">
-        <span>{{ visibleRowCount() }}</span>
-        <small>{{ labels().statsVisibleRows }}</small>
-      </div>
-    </div>
-  </header>
-
-  <section class="metrics-strip" part="metrics" aria-label="Grid performance metrics">
-    <article part="metric-card">
-      <strong>{{ pipelineMs().toFixed(2) }} ms</strong>
-      <span>pipeline</span>
-    </article>
-    <article part="metric-card">
-      <strong>{{ virtualizationEnabled() ? 'On' : 'Off' }}</strong>
-      <span>virtualization</span>
-    </article>
-    <article part="metric-card">
-      <strong>{{ groupByColumns().length }}</strong>
-      <span>group columns</span>
-    </article>
-    <article part="metric-card">
-      <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
-      <span>benchmark avg</span>
-    </article>
-  </section>
-
-  <section class="grid-frame ui-grid" part="grid-frame" role="grid" [attr.aria-label]="options().title ?? 'Data grid'">
-    <div class="grid-toolbar" part="grid-toolbar">
-      <div>
-        <strong>{{ visibleRowCount() }}</strong>
-        <span>{{ labels().toolbarOf }} {{ totalRows() }} {{ labels().toolbarRows }}</span>
-      </div>
-      <p>
-        `gridOptions` compatibility layer: sorting, filtering, grouping, column moving, templating,
-        and virtualized rendering.
-      </p>
-    </div>
+<section class="grid-frame ui-grid" part="grid-frame" role="grid" [attr.aria-label]="options().title ?? 'Data grid'">
 
     <div class="grid-table ui-grid-contents-wrapper" part="grid-table"
       [style.height]="renderVirtualViewport() ? scrollContainerHeight() : null"
@@ -304,4 +248,3 @@
       }
     </div>
   </section>
-</section>

@@ -146,6 +146,7 @@ function normalizeColumnForWasm(column: GridColumnDef): GridColumnDef {
     sortingAlgorithm: undefined,
     valueGetter: undefined,
     formatter: undefined,
+    headerRenderer: undefined,
     cellTemplate: undefined,
     cellRenderer: undefined,
     cellEditableCondition: undefined,
@@ -198,6 +199,12 @@ export const buildGridCellContext: typeof tsDisplay.buildGridCellContext = (...a
 
 export const formatGridCellDisplayValue: typeof tsDisplay.formatGridCellDisplayValue = (...args) =>
   tsDisplay.formatGridCellDisplayValue(...args);
+
+export const buildGridHeaderContext: typeof tsExport.buildGridHeaderContext = (...args) =>
+  tsExport.buildGridHeaderContext(...args);
+
+export const formatGridHeaderDisplayValue: typeof tsExport.formatGridHeaderDisplayValue =
+  (...args) => tsExport.formatGridHeaderDisplayValue(...args);
 
 export const buildGridPipeline: typeof tsPipeline.buildGridPipeline = (context) =>
   tsPipeline.buildGridPipeline(context);

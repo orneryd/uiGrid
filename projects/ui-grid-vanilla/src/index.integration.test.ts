@@ -107,6 +107,38 @@ describe('mountVanillaUiGrid integration', () => {
     ]);
   }, 15000);
 
+  it('renders custom header content from column headerRenderer', async () => {
+    const target = document.getElementById('app');
+    if (!target) {
+      throw new Error('Expected test root element');
+    }
+
+    const grid = await mountVanillaUiGrid(
+      target,
+      {
+        id: 'vanilla-header-render-grid',
+        data: [{ id: 'row-1', name: 'Gamma', status: 'Pilot' }],
+        columnDefs: [
+          {
+            name: 'name',
+            displayName: 'Customer',
+            headerRenderer: ({ value, column }) => `${value}:${column.name}`,
+          },
+          { name: 'status' },
+        ],
+      },
+      undefined,
+      'ui-grid-element-vanilla-test',
+    );
+
+    const shadowRoot = await waitFor(() => grid.shadowRoot);
+    const headers = Array.from(shadowRoot.querySelectorAll('.header-label')).map((node) =>
+      node.textContent?.trim(),
+    );
+
+    expect(headers).toEqual(['Customer:name', 'Status']);
+  });
+
   it('registers Rust/WASM bindings through the vanilla API', async () => {
     const module: UiGridRustWebModule = {
       default: vi.fn(async () => undefined),

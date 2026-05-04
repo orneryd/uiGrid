@@ -40,6 +40,12 @@ export interface GridCellTemplateContext {
   rowIndex: number;
 }
 
+export interface GridHeaderTemplateContext {
+  $implicit: string;
+  value: string;
+  column: GridColumnDef;
+}
+
 export interface GridCellEditableContext {
   row: GridRecord;
   column: GridColumnDef;
@@ -94,6 +100,7 @@ export interface GridColumnDef {
   sortingAlgorithm?: GridSortFn;
   valueGetter?: (row: GridRecord) => unknown;
   formatter?: (value: unknown, row: GridRecord) => string;
+  headerRenderer?: (context: GridHeaderTemplateContext) => string;
   cellTemplate?: GridTemplateRefLike<GridCellTemplateContext>;
   cellRenderer?: (context: GridCellTemplateContext) => string;
 }

@@ -35,7 +35,56 @@
                 </p>
             </div>
         </div>
-        <ui-grid-element #primaryGrid></ui-grid-element>
+        <section class="web-primary-shell">
+            <header class="web-primary-shell__header">
+                <div>
+                    <p class="web-primary-shell__eyebrow">Vanilla package demo</p>
+                    <h3>UI Grid Modernized (Web Component)</h3>
+                    <p>
+                        Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt as a
+                        framework-neutral custom element with grouping, sorting, filtering, and virtualization.
+                    </p>
+                </div>
+                <div class="web-primary-shell__actions">
+                    <button type="button" class="demo-button" (click)="runBenchmark()">Benchmark</button>
+                    <button type="button" class="demo-button demo-button-secondary" (click)="exportCsv()">
+                        Export CSV
+                    </button>
+                    <div class="web-primary-shell__stats">
+                        <span>{{ visibleRowCount() }}</span>
+                        <small>visible rows</small>
+                    </div>
+                </div>
+            </header>
+
+            <section class="web-primary-shell__metrics" aria-label="Web components grid metrics">
+                <article>
+                    <strong>On</strong>
+                    <span>virtualization</span>
+                </article>
+                <article>
+                    <strong>1</strong>
+                    <span>group columns</span>
+                </article>
+                <article>
+                    <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
+                    <span>benchmark avg</span>
+                </article>
+            </section>
+
+            <div class="web-primary-shell__toolbar">
+                <div>
+                    <strong>{{ visibleRowCount() }}</strong>
+                    <span>of {{ totalRows() }} rows</span>
+                </div>
+                <p>
+                    <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
+                    templating, and virtualized rendering.
+                </p>
+            </div>
+
+            <ui-grid-element #primaryGrid></ui-grid-element>
+        </section>
     </section>
 
     <section class="demo-panel state-panel">

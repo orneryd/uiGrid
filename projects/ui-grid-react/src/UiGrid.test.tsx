@@ -3,7 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UiGrid } from './UiGrid';
 import type { UiGridProps } from './UiGrid';
-import type { GridOptions, UiGridApi, GridExpandableTemplateContext } from '@ornery/ui-grid-core';
+import type {
+  GridHeaderTemplateContext,
+  GridOptions,
+  UiGridApi,
+  GridExpandableTemplateContext,
+} from '@ornery/ui-grid-core';
 import { SORT_DIRECTIONS, FILTER_CONDITIONS } from '@ornery/ui-grid-core';
 
 const baseData = [
@@ -134,6 +139,41 @@ describe('UiGrid React component', () => {
     expect(container.querySelector('.empty-state strong')?.textContent).toContain(
       'Nothing to show',
     );
+  });
+
+  it('renders custom header content from the React headerRenderer prop', () => {
+    const headerRenderer = ({ value, column }: GridHeaderTemplateContext) => (
+      <span>{`${value}:${column.name}`}</span>
+    );
+
+    const { container } = renderGrid({}, { headerRenderer });
+
+    const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
+      el.textContent?.trim(),
+    );
+
+    expect(headers).toEqual([
+      'Customer:name',
+      'Status:status',
+      'Revenue:revenue',
+      'Owner:owner',
+      'Badge:badge',
+    ]);
+  });
+
+  it('renders custom header content from column headerRenderer when no React headerRenderer is provided', () => {
+    const { container } = renderGrid({
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', headerRenderer: ({ value }) => `[${value}]` },
+        { name: 'status' },
+      ],
+    });
+
+    const headers = Array.from(container.querySelectorAll('.header-label')).map((el) =>
+      el.textContent?.trim(),
+    );
+
+    expect(headers).toEqual(['[Customer]', 'Status']);
   });
 
   it('sorts rows and cycles sort state from header button', () => {

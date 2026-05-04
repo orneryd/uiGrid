@@ -11,6 +11,7 @@ import {
 import { RouterLink } from '@angular/router';
 import {
   FILTER_CONDITIONS,
+  GridBenchmarkResult,
   GridCellTemplateContext,
   GridExpandableTemplateContext,
   GridOptions,
@@ -115,9 +116,58 @@ function createTreeRows(): GridRecord[] {
             </p>
           </div>
         </header>
-        <div class="react-demo-frame">
-          <div #primaryReactDemoHost class="react-demo-host react-demo-host-primary"></div>
-        </div>
+        <section class="react-primary-shell">
+          <header class="react-primary-shell__header">
+            <div>
+              <p class="react-primary-shell__eyebrow">React package demo</p>
+              <h3>{{ primaryOptions().title ?? 'UI Grid' }}</h3>
+              <p>
+                Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt with React
+                hooks, virtualization, grouping, sorting, filtering, and column ordering.
+              </p>
+            </div>
+            <div class="react-primary-shell__actions">
+              <button type="button" class="demo-button" (click)="runBenchmark()">Benchmark</button>
+              <button type="button" class="demo-button demo-button-secondary" (click)="exportCsv()">
+                Export CSV
+              </button>
+              <div class="react-primary-shell__stats">
+                <span>{{ visibleRowCount() }}</span>
+                <small>visible rows</small>
+              </div>
+            </div>
+          </header>
+
+          <section class="react-primary-shell__metrics" aria-label="React grid metrics">
+            <article>
+              <strong>{{ primaryOptions().enableVirtualization === false ? 'Off' : 'On' }}</strong>
+              <span>virtualization</span>
+            </article>
+            <article>
+              <strong>{{ primaryOptions().grouping?.groupBy?.length ?? 0 }}</strong>
+              <span>group columns</span>
+            </article>
+            <article>
+              <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
+              <span>benchmark avg</span>
+            </article>
+          </section>
+
+          <div class="react-primary-shell__toolbar">
+            <div>
+              <strong>{{ visibleRowCount() }}</strong>
+              <span>of {{ totalRows() }} rows</span>
+            </div>
+            <p>
+              <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
+              templating, and virtualized rendering.
+            </p>
+          </div>
+
+          <div class="react-demo-frame">
+            <div #primaryReactDemoHost class="react-demo-host react-demo-host-primary"></div>
+          </div>
+        </section>
       </section>
 
       <section class="demo-panel state-panel">
@@ -318,6 +368,92 @@ function createTreeRows(): GridRecord[] {
       background: color-mix(in srgb, var(--panel-surface-strong) 86%, transparent);
     }
 
+    .react-primary-shell {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .react-primary-shell__header {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .react-primary-shell__header h3,
+    .react-primary-shell__header p,
+    .react-primary-shell__toolbar p {
+      margin: 0;
+    }
+
+    .react-primary-shell__eyebrow {
+      margin: 0 0 0.35rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--teal-strong);
+    }
+
+    .react-primary-shell__header p,
+    .react-primary-shell__metrics span,
+    .react-primary-shell__toolbar p,
+    .react-primary-shell__stats small {
+      color: color-mix(in srgb, var(--ink-strong) 74%, var(--teal-strong) 26%);
+    }
+
+    .react-primary-shell__actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .react-primary-shell__stats {
+      display: inline-grid;
+      min-width: 7rem;
+      padding: 0.8rem 1rem;
+      border-radius: calc(var(--theme-radius) - 6px);
+      border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+      background: color-mix(in srgb, var(--panel-surface-strong) 82%, white);
+    }
+
+    .react-primary-shell__stats span {
+      font-size: 1.8rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .react-primary-shell__metrics {
+      display: grid;
+      gap: 0.85rem;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    }
+
+    .react-primary-shell__metrics article {
+      display: grid;
+      gap: 0.2rem;
+      padding: 0.9rem 1rem;
+      border-radius: calc(var(--theme-radius) - 6px);
+      border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+      background: color-mix(in srgb, var(--panel-surface-strong) 84%, white);
+    }
+
+    .react-primary-shell__metrics strong {
+      font-size: 1.45rem;
+      line-height: 1.1;
+    }
+
+    .react-primary-shell__toolbar {
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.9rem 1rem;
+      border-radius: calc(var(--theme-radius) - 6px);
+      border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+      background: color-mix(in srgb, var(--panel-surface-strong) 88%, white);
+    }
+
+    .react-primary-shell__toolbar strong {
+      margin-right: 0.4rem;
+    }
+
     .react-demo-host {
       min-height: 34rem;
     }
@@ -362,14 +498,20 @@ export class DocsReactComponent {
   private primaryReactRoot: ReactRoot | null = null;
   private harnessReactRoot: ReactRoot | null = null;
   private primaryGridApi: UiGridApi | null = null;
+  private disposePrimaryVisibleRows: (() => void) | null = null;
+  private disposePrimaryBenchmark: (() => void) | null = null;
   private savedGridState: GridSavedState | null = null;
+  private readonly primaryData = createDemoData();
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0xabcdef12);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly demoError = signal<string | null>(null);
+  protected readonly visibleRowCount = signal(0);
+  protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly totalRows = signal(this.primaryData.length);
   protected readonly reactPrimarySnippet = `import { UiGrid } from '@ornery/ui-grid-react';
 import { FILTER_CONDITIONS, type GridOptions } from '@ornery/ui-grid-core';
 
@@ -447,6 +589,10 @@ export function AccountsGrid() {
       this.harnessReactRoot?.unmount();
       this.primaryReactRoot = null;
       this.harnessReactRoot = null;
+      this.disposePrimaryVisibleRows?.();
+      this.disposePrimaryBenchmark?.();
+      this.disposePrimaryVisibleRows = null;
+      this.disposePrimaryBenchmark = null;
       this.primaryGridApi = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
@@ -488,9 +634,19 @@ export function AccountsGrid() {
 
   protected resetDemo(): void {
     this.savedGridState = null;
+    this.visibleRowCount.set(0);
+    this.benchmarkResult.set(null);
     this.savedStateJson.set('No saved state captured yet.');
     void this.mountPrimaryDemo();
     void this.mountReactDemo();
+  }
+
+  protected runBenchmark(): void {
+    this.primaryGridApi?.core.benchmark();
+  }
+
+  protected exportCsv(): void {
+    this.primaryGridApi?.core.exportCsv();
   }
 
   private async mountPrimaryDemo(): Promise<void> {
@@ -501,7 +657,13 @@ export function AccountsGrid() {
 
     this.primaryReactRoot?.unmount();
     this.primaryReactRoot = null;
+    this.disposePrimaryVisibleRows?.();
+    this.disposePrimaryBenchmark?.();
+    this.disposePrimaryVisibleRows = null;
+    this.disposePrimaryBenchmark = null;
     this.primaryGridApi = null;
+    this.visibleRowCount.set(0);
+    this.benchmarkResult.set(null);
 
     try {
       this.primaryReactRoot = mountUiGrid(host, {
@@ -509,6 +671,13 @@ export function AccountsGrid() {
         className: 'react-docs-demo-grid react-docs-demo-grid-primary',
         onRegisterApi: (api: UiGridApi) => {
           this.primaryGridApi = api;
+          this.visibleRowCount.set(api.core.getVisibleRows().length);
+          this.disposePrimaryVisibleRows = api.core.on.rowsVisibleChanged((rows) => {
+            this.visibleRowCount.set(rows.length);
+          });
+          this.disposePrimaryBenchmark = api.core.on.benchmarkComplete((result) => {
+            this.benchmarkResult.set(result as GridBenchmarkResult);
+          });
         },
       });
       this.demoError.set(null);
@@ -681,7 +850,7 @@ export function AccountsGrid() {
           enableCellEdit: true,
         },
       ],
-      data: createDemoData(),
+      data: this.primaryData,
     };
   }
 

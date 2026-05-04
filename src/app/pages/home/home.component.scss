@@ -185,6 +185,99 @@
   padding: clamp(0.85rem, 1.5vw, 1.25rem);
 }
 
+.angular-demo-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.angular-demo-shell__header {
+  display: grid;
+  gap: 1rem;
+}
+
+.angular-demo-shell__header h2,
+.angular-demo-shell__header p {
+  margin: 0;
+}
+
+.angular-demo-shell__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-strong);
+}
+
+.angular-demo-shell__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.angular-demo-shell__stats {
+  display: inline-grid;
+  min-width: 7rem;
+  padding: 0.8rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 82%, white);
+}
+
+.angular-demo-shell__stats span {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.angular-demo-shell__stats small {
+  margin-top: 0.25rem;
+  color: color-mix(in srgb, var(--ink-strong) 65%, var(--teal-strong) 35%);
+}
+
+.angular-demo-shell__metrics {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.angular-demo-shell__metrics article {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 84%, white);
+}
+
+.angular-demo-shell__metrics strong {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.angular-demo-shell__metrics span,
+.angular-demo-shell__toolbar p,
+.angular-demo-shell__header p {
+  color: color-mix(in srgb, var(--ink-strong) 74%, var(--teal-strong) 26%);
+}
+
+.angular-demo-shell__toolbar {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: calc(var(--theme-radius) - 6px);
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  background: color-mix(in srgb, var(--panel-surface-strong) 88%, white);
+}
+
+.angular-demo-shell__toolbar strong {
+  margin-right: 0.4rem;
+}
+
+.angular-demo-shell__toolbar p {
+  margin: 0;
+}
+
 .state-panel {
   display: grid;
   gap: 1rem;
