@@ -257,7 +257,7 @@ See [docs/rust-egui.md](./docs/rust-egui.md) for pinning, CSV export, save/resto
 
 ## Theming
 
-The grid renders inside Shadow DOM. Customize it via CSS custom properties:
+The grid renders inside Shadow DOM. Customize it via the public `--ui-grid-*` CSS custom properties:
 
 ```css
 .my-app {
@@ -269,6 +269,8 @@ The grid renders inside Shadow DOM. Customize it via CSS custom properties:
   --ui-grid-row-hover: #322e4a;
 }
 ```
+
+Legacy `--app-ui-grid-*` aliases remain supported as a fallback for older app themes, but new consumer theming should target only `--ui-grid-*`.
 
 Target structural elements with `::part()`:
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.8-hotfix — 2026-05-04
+
+### Fixed
+
+- **Public theming tokens work directly again across the web packages** — normalized the runtime styles in the shared core and React wrapper so consumer overrides can target the documented `--ui-grid-*` CSS custom properties again, while `--app-ui-grid-*` aliases continue to work as well.
+- **Theming docs now match the shipped runtime behavior** — simplified the README and theming guide back to the supported public token surface
+
 ## v0.1.8 (web suite) — 2026-05-04
 
 ### Added

@@ -2,14 +2,31 @@
 
 UI Grid uses Shadow DOM encapsulation. All visual customization flows through CSS custom properties and `::part()` selectors.
 
+The runtime styles now normalize theme resolution around the public `--ui-grid-*` token names again. Legacy `--app-ui-grid-*` aliases still work as a fallback, but consumer themes should target the public `--ui-grid-*` surface.
+
 ## How It Works
 
 The grid component renders inside a Shadow DOM boundary. Parent styles cannot leak in. Instead, the grid exposes two theming surfaces:
 
-1. **CSS custom properties** — set `--ui-grid-*` variables on any ancestor element. They pierce the shadow boundary.
+1. **CSS custom properties** — set `--ui-grid-*` variables on any ancestor element. They pierce the shadow boundary. Legacy `--app-ui-grid-*` aliases remain supported as fallback input for older app themes.
 2. **`::part()` selectors** — target specific structural elements by their part name for full CSS access.
 
-All public styling tokens follow the `--ui-grid-*` naming pattern. The component also defines internal `--app-ui-grid-*` fallbacks, but consumers should treat `--ui-grid-*` as the supported override API.
+All public styling tokens follow the `--ui-grid-*` naming pattern.
+
+## Recommended Override Pattern
+
+```css
+.my-app {
+  --ui-grid-surface: #1e1b2e;
+  --ui-grid-accent: #8b5cf6;
+  --ui-grid-header-background: #2d2640;
+  --ui-grid-cell-color: #e2e0f0;
+  --ui-grid-border-color: rgba(139, 92, 246, 0.2);
+  --ui-grid-row-hover: #322e4a;
+}
+```
+
+If you already ship older `--app-ui-grid-*` theme tokens, they still work as a compatibility fallback. New consumer themes should use only `--ui-grid-*`.
 
 ## CSS Custom Properties
 
@@ -255,4 +272,4 @@ The demo app uses `data-color-mode` and `data-visual-mode` attributes on the roo
 }
 ```
 
-You can use this same pattern in your own app to support multiple themes without JavaScript logic — just set a data attribute and let CSS do the work.
+You can use this same pattern in your own app to support multiple themes without JavaScript logic. If you already have legacy `--app-ui-grid-*` aliases in your codebase, you can leave them in place while standardizing new theme work on the public `--ui-grid-*` names.

@@ -1,53 +1,135 @@
 .ui-grid-host {
-  --ui-grid-border-color: var(--app-ui-grid-border-color, #d4d4d8);
-  --ui-grid-header-background: var(--app-ui-grid-header-background, #f3f4f6);
-  --ui-grid-row-odd: var(--app-ui-grid-row-odd, #fcfcfd);
-  --ui-grid-row-even: var(--app-ui-grid-row-even, #f7f7f8);
-  --ui-grid-row-hover: var(--app-ui-grid-row-hover, #eef4ff);
-  --ui-grid-cell-color: var(--app-ui-grid-cell-color, #111827);
-  --ui-grid-muted-color: var(--app-ui-grid-muted-color, #6b7280);
-  --ui-grid-surface: var(--app-ui-grid-surface, #ffffff);
-  --ui-grid-radius: var(--app-ui-grid-radius, 4px);
-  --ui-grid-shadow: var(--app-ui-grid-shadow, 0 10px 24px rgba(15, 23, 42, 0.08));
-  --ui-grid-header-weight: var(--app-ui-grid-header-weight, 700);
-  --ui-grid-accent: var(--app-ui-grid-accent, #2563eb);
-  --ui-grid-group-background: var(--app-ui-grid-group-background, #eceff3);
-  --ui-grid-status-active-bg: var(--app-ui-grid-status-active-bg, rgba(22, 163, 74, 0.14));
-  --ui-grid-status-active-color: var(--app-ui-grid-status-active-color, #166534);
-  --ui-grid-status-expansion-bg: var(--app-ui-grid-status-expansion-bg, rgba(37, 99, 235, 0.14));
-  --ui-grid-status-expansion-color: var(--app-ui-grid-status-expansion-color, #1d4ed8);
-  --ui-grid-status-enterprise-bg: var(--app-ui-grid-status-enterprise-bg, rgba(15, 118, 110, 0.14));
-  --ui-grid-status-enterprise-color: var(--app-ui-grid-status-enterprise-color, #115e59);
-  --ui-grid-status-pilot-bg: var(--app-ui-grid-status-pilot-bg, rgba(234, 88, 12, 0.14));
-  --ui-grid-status-pilot-color: var(--app-ui-grid-status-pilot-color, #c2410c);
-  --ui-grid-pin-menu-open-z-index: var(--app-ui-grid-pin-menu-open-z-index, 8);
-  --ui-grid-pin-menu-z-index: var(--app-ui-grid-pin-menu-z-index, 20);
-  --ui-grid-pin-menu-gap: var(--app-ui-grid-pin-menu-gap, 0.25rem);
-  --ui-grid-pin-menu-padding: var(--app-ui-grid-pin-menu-padding, 0.25rem);
-  --ui-grid-pin-menu-radius: var(--app-ui-grid-pin-menu-radius, 999px);
-  --ui-grid-pin-menu-shadow: var(
-    --app-ui-grid-pin-menu-shadow,
-    0 10px 24px color-mix(in srgb, var(--ui-grid-cell-color) 10%, transparent)
+  --_ui-grid-border-color: var(--ui-grid-border-color, var(--app-ui-grid-border-color, #d4d4d8));
+  --_ui-grid-header-background: var(
+    --ui-grid-header-background,
+    var(--app-ui-grid-header-background, #f3f4f6)
   );
-  --ui-grid-pin-menu-action-size: var(--app-ui-grid-pin-menu-action-size, 1.75rem);
-  --ui-grid-pin-control-collapsed-size: var(--app-ui-grid-pin-control-collapsed-size, 1px);
-  --ui-grid-pin-control-transition-duration: var(
-    --app-ui-grid-pin-control-transition-duration,
-    160ms
+  --_ui-grid-row-odd: var(--ui-grid-row-odd, var(--app-ui-grid-row-odd, #fcfcfd));
+  --_ui-grid-row-even: var(--ui-grid-row-even, var(--app-ui-grid-row-even, #f7f7f8));
+  --_ui-grid-row-hover: var(--ui-grid-row-hover, var(--app-ui-grid-row-hover, #eef4ff));
+  --_ui-grid-cell-color: var(--ui-grid-cell-color, var(--app-ui-grid-cell-color, #111827));
+  --_ui-grid-muted-color: var(--ui-grid-muted-color, var(--app-ui-grid-muted-color, #6b7280));
+  --_ui-grid-surface: var(--ui-grid-surface, var(--app-ui-grid-surface, #ffffff));
+  --_ui-grid-radius: var(--ui-grid-radius, var(--app-ui-grid-radius, 4px));
+  --_ui-grid-shadow: var(
+    --ui-grid-shadow,
+    var(--app-ui-grid-shadow, 0 10px 24px rgba(15, 23, 42, 0.08))
   );
-  --ui-grid-pin-control-transition-easing: var(
-    --app-ui-grid-pin-control-transition-easing,
-    cubic-bezier(0.22, 1, 0.36, 1)
+  --_ui-grid-header-weight: var(--ui-grid-header-weight, var(--app-ui-grid-header-weight, 700));
+  --_ui-grid-accent: var(--ui-grid-accent, var(--app-ui-grid-accent, #2563eb));
+  --_ui-grid-group-background: var(
+    --ui-grid-group-background,
+    var(--app-ui-grid-group-background, #eceff3)
   );
-  --ui-grid-pin-menu-scale-closed: var(--app-ui-grid-pin-menu-scale-closed, 0.72);
+  --_ui-grid-status-active-bg: var(
+    --ui-grid-status-active-bg,
+    var(--app-ui-grid-status-active-bg, rgba(22, 163, 74, 0.14))
+  );
+  --_ui-grid-status-active-color: var(
+    --ui-grid-status-active-color,
+    var(--app-ui-grid-status-active-color, #166534)
+  );
+  --_ui-grid-status-expansion-bg: var(
+    --ui-grid-status-expansion-bg,
+    var(--app-ui-grid-status-expansion-bg, rgba(37, 99, 235, 0.14))
+  );
+  --_ui-grid-status-expansion-color: var(
+    --ui-grid-status-expansion-color,
+    var(--app-ui-grid-status-expansion-color, #1d4ed8)
+  );
+  --_ui-grid-status-enterprise-bg: var(
+    --ui-grid-status-enterprise-bg,
+    var(--app-ui-grid-status-enterprise-bg, rgba(15, 118, 110, 0.14))
+  );
+  --_ui-grid-status-enterprise-color: var(
+    --ui-grid-status-enterprise-color,
+    var(--app-ui-grid-status-enterprise-color, #115e59)
+  );
+  --_ui-grid-status-pilot-bg: var(
+    --ui-grid-status-pilot-bg,
+    var(--app-ui-grid-status-pilot-bg, rgba(234, 88, 12, 0.14))
+  );
+  --_ui-grid-status-pilot-color: var(
+    --ui-grid-status-pilot-color,
+    var(--app-ui-grid-status-pilot-color, #c2410c)
+  );
+  --_ui-grid-pin-menu-open-z-index: var(
+    --ui-grid-pin-menu-open-z-index,
+    var(--app-ui-grid-pin-menu-open-z-index, 8)
+  );
+  --_ui-grid-pin-menu-z-index: var(--ui-grid-pin-menu-z-index, var(--app-ui-grid-pin-menu-z-index, 20));
+  --_ui-grid-pin-menu-gap: var(--ui-grid-pin-menu-gap, var(--app-ui-grid-pin-menu-gap, 0.25rem));
+  --_ui-grid-pin-menu-padding: var(
+    --ui-grid-pin-menu-padding,
+    var(--app-ui-grid-pin-menu-padding, 0.25rem)
+  );
+  --_ui-grid-pin-menu-radius: var(--ui-grid-pin-menu-radius, var(--app-ui-grid-pin-menu-radius, 999px));
+  --_ui-grid-pin-menu-shadow: var(
+    --ui-grid-pin-menu-shadow,
+    var(
+      --app-ui-grid-pin-menu-shadow,
+      0 10px 24px color-mix(in srgb, var(--_ui-grid-cell-color) 10%, transparent)
+    )
+  );
+  --_ui-grid-pin-menu-action-size: var(
+    --ui-grid-pin-menu-action-size,
+    var(--app-ui-grid-pin-menu-action-size, 1.75rem)
+  );
+  --_ui-grid-pin-control-collapsed-size: var(
+    --ui-grid-pin-control-collapsed-size,
+    var(--app-ui-grid-pin-control-collapsed-size, 1px)
+  );
+  --_ui-grid-pin-control-transition-duration: var(
+    --ui-grid-pin-control-transition-duration,
+    var(--app-ui-grid-pin-control-transition-duration, 160ms)
+  );
+  --_ui-grid-pin-control-transition-easing: var(
+    --ui-grid-pin-control-transition-easing,
+    var(--app-ui-grid-pin-control-transition-easing, cubic-bezier(0.22, 1, 0.36, 1))
+  );
+  --_ui-grid-pin-menu-scale-closed: var(
+    --ui-grid-pin-menu-scale-closed,
+    var(--app-ui-grid-pin-menu-scale-closed, 0.72)
+  );
   display: block;
-  color: var(--ui-grid-cell-color);
+  color: var(--_ui-grid-cell-color);
 }
 
-.ui-grid-host,
 .ui-grid-host *,
 .ui-grid-host *::before,
 .ui-grid-host *::after {
+  --ui-grid-border-color: var(--_ui-grid-border-color);
+  --ui-grid-header-background: var(--_ui-grid-header-background);
+  --ui-grid-row-odd: var(--_ui-grid-row-odd);
+  --ui-grid-row-even: var(--_ui-grid-row-even);
+  --ui-grid-row-hover: var(--_ui-grid-row-hover);
+  --ui-grid-cell-color: var(--_ui-grid-cell-color);
+  --ui-grid-muted-color: var(--_ui-grid-muted-color);
+  --ui-grid-surface: var(--_ui-grid-surface);
+  --ui-grid-radius: var(--_ui-grid-radius);
+  --ui-grid-shadow: var(--_ui-grid-shadow);
+  --ui-grid-header-weight: var(--_ui-grid-header-weight);
+  --ui-grid-accent: var(--_ui-grid-accent);
+  --ui-grid-group-background: var(--_ui-grid-group-background);
+  --ui-grid-status-active-bg: var(--_ui-grid-status-active-bg);
+  --ui-grid-status-active-color: var(--_ui-grid-status-active-color);
+  --ui-grid-status-expansion-bg: var(--_ui-grid-status-expansion-bg);
+  --ui-grid-status-expansion-color: var(--_ui-grid-status-expansion-color);
+  --ui-grid-status-enterprise-bg: var(--_ui-grid-status-enterprise-bg);
+  --ui-grid-status-enterprise-color: var(--_ui-grid-status-enterprise-color);
+  --ui-grid-status-pilot-bg: var(--_ui-grid-status-pilot-bg);
+  --ui-grid-status-pilot-color: var(--_ui-grid-status-pilot-color);
+  --ui-grid-pin-menu-open-z-index: var(--_ui-grid-pin-menu-open-z-index);
+  --ui-grid-pin-menu-z-index: var(--_ui-grid-pin-menu-z-index);
+  --ui-grid-pin-menu-gap: var(--_ui-grid-pin-menu-gap);
+  --ui-grid-pin-menu-padding: var(--_ui-grid-pin-menu-padding);
+  --ui-grid-pin-menu-radius: var(--_ui-grid-pin-menu-radius);
+  --ui-grid-pin-menu-shadow: var(--_ui-grid-pin-menu-shadow);
+  --ui-grid-pin-menu-action-size: var(--_ui-grid-pin-menu-action-size);
+  --ui-grid-pin-control-collapsed-size: var(--_ui-grid-pin-control-collapsed-size);
+  --ui-grid-pin-control-transition-duration: var(--_ui-grid-pin-control-transition-duration);
+  --ui-grid-pin-control-transition-easing: var(--_ui-grid-pin-control-transition-easing);
+  --ui-grid-pin-menu-scale-closed: var(--_ui-grid-pin-menu-scale-closed);
   box-sizing: border-box;
 }
 
