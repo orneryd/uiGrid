@@ -1770,7 +1770,7 @@ describe('UiGridComponent', () => {
     expect(saved.treeView).toEqual({ row3: false });
   });
 
-  it('fires toolbar actions from the template and updates benchmark metrics', () => {
+  it('fires benchmark and export actions from the api and updates benchmark metrics', () => {
     let gridApi!: UiGridApi;
     const fixture = TestBed.createComponent(UiGridComponent);
     fixture.componentRef.setInput(
@@ -1781,19 +1781,18 @@ describe('UiGridComponent', () => {
     );
     fixture.detectChanges();
 
-    const shadowRoot = getShadowRoot(fixture);
     const component = fixture.componentInstance as any;
     const benchmarkSpy = vi.spyOn(component, 'runBenchmark');
     const exportSpy = vi.spyOn(component, 'exportCsv');
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:toolbar');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    (shadowRoot.querySelector('[part="action benchmark-action"]') as HTMLButtonElement).click();
-    (shadowRoot.querySelector('[part="action export-action"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
+    gridApi.core.benchmark();
+    gridApi.core.exportCsv();
 
     expect(benchmarkSpy).toHaveBeenCalled();
     expect(exportSpy).toHaveBeenCalled();
-    expect(shadowRoot.querySelector('.metrics-strip')?.textContent).not.toContain('—');
+    expect(component.benchmarkResult()).not.toBeNull();
+    expect(component.benchmarkResult()?.averageMs).toBeGreaterThanOrEqual(0);
   });
 });

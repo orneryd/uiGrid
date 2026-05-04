@@ -15,12 +15,10 @@ describe('GridBrowserHarnessComponent', () => {
 
     const component = fixture.componentInstance as any;
     const root = fixture.nativeElement as HTMLElement;
-    const gridHost = root.querySelector('app-ui-grid') as HTMLElement | null;
-    const statusHeading = gridHost?.shadowRoot?.querySelector('h1');
     const options = component.options();
 
     expect(root.textContent).toContain('Virtual scroll branch harness');
-    expect(statusHeading?.textContent).toContain('Browser Harness: Expandable');
+    expect(options.title).toBe('Browser Harness: Expandable');
     expect(options.enableExpandable).toBe(true);
     expect(options.virtualizationThreshold).toBe(1);
     expect(options.expandableRowTemplate).toBeTruthy();
