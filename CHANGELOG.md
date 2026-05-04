@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.1.8 (web suite) — 2026-05-04
+
+### Added
+
+- **Trading terminal demos across Angular, React, and vanilla docs surfaces** — added a shared market-data generator plus live trading-terminal demos to the Angular home page, the React docs page, the Web Components page, and the browser harness so all three web hosts now showcase the same high-frequency update scenario next to the existing pinning demos.
+- **Declarative vanilla custom-element API** — `@ornery/ui-grid-vanilla` now supports a full declarative configuration surface on `<ui-grid-element>`, including observed HTML attributes, mirrored JS properties, and attribute-to-options synchronization for framework-free usage.
+- **Custom header rendering for non-Angular hosts** — added `headerRenderer` support through the shared core model and export helpers, with React and vanilla integrations plus tests so wrapper consumers can override header content without forking the grid.
+
+### Changed
+
+- **Shipped wrappers now render only the grid** — moved hero/metrics/toolbar/benchmark chrome out of the React wrapper, Angular component template, and vanilla custom element and into the demo hosts instead, so published package consumers get the grid surface only.
+- **Benchmark presentation is aligned across the web suite** — Angular, React, and vanilla primary demos now expose the same benchmark controls, visible-row metrics, grouping/virtualization summary, and benchmark-average readout for side-by-side comparison.
+- **Docs and examples refreshed for the new API surface** — updated `README.md`, Getting Started, API Reference, Web Component, and Rust/WASM documentation to cover the declarative vanilla API, the benchmark/demo host split, and the latest wrapper usage patterns.
+
+### Fixed
+
+- **Vanilla trading scroll performance** — the Web Components trading demo no longer replaces the entire grid render tree on every price tick; it now uses incremental data refresh and virtualization-aware body updates so scrolling stays smooth under live updates.
+- **React styles packaging and web-suite bundling** — fixed package output so `@ornery/ui-grid-react/styles` resolves to an emitted CSS asset and cleaned up bundling/packaging issues across the web suite demo surfaces and library outputs.
+
+## rust-v0.1.8 — 2026-05-04
+
+### Added
+
+- **egui trading terminal demo** — the native Rust demo now includes a dedicated trading example with live-ticking sample data and trading-specific columns, expanding the egui showcase beyond the existing customer-grid scenarios.
+
+### Changed
+
+- **Rust demo app refreshed around the new trading surface** — updated the egui example app and shared demo data wiring so the native showcase can present the new trading workflow cleanly alongside the existing grid capabilities.
+- **Rust docs reorganized around the two Rust delivery paths** — refreshed `docs/rust.md`, `docs/rust-egui.md`, and the egui README so Rust/WASM browser usage and native egui usage are documented separately with clearer install, usage, and demo guidance.
+
+### Fixed
+
+- **egui demo/widget polish** — applied the supporting widget and example cleanup needed for the new demo flow, including the small `grid_widget.rs` adjustments and Rust hygiene follow-up (`cargo fmt` / clippy) that keep the native adapter aligned with the current shared grid behavior.
+
 ## v0.1.7-hotfix — 2026-05-02
 
 ### Fixed

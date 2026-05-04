@@ -788,7 +788,7 @@ export function AccountsGrid() {
     };
   }
 
-  private primaryOptions(): GridOptions {
+  protected primaryOptions(): GridOptions {
     return {
       id: 'ui-grid-modern-react',
       title: 'UI Grid Modernized (React)',
