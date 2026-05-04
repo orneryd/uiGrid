@@ -86,7 +86,8 @@ impl Lcg {
 
     pub fn next(&mut self) -> u64 {
         // Knuth multiplicative + additive constants (64-bit LCG)
-        self.0 = self.0
+        self.0 = self
+            .0
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
@@ -337,13 +338,15 @@ pub fn trading_column_ext() -> Vec<EguiColumnExt> {
             .unwrap_or(0.0);
         let dir = ctx.row.entity["direction"].as_i64().unwrap_or(0);
         let (fg, bg) = match dir {
-            1 => (Color32::BLACK, Color32::from_rgb(0x22, 0xC5, 0x5E)),  // green
+            1 => (Color32::BLACK, Color32::from_rgb(0x22, 0xC5, 0x5E)), // green
             -1 => (Color32::WHITE, Color32::from_rgb(0xEF, 0x44, 0x44)), // red
             _ => (ctx.theme.cell_color, Color32::TRANSPARENT),
         };
         let text = format_price(price);
-        let (rect, _) =
-            ui.allocate_exact_size(egui::Vec2::new(ui.available_width(), 18.0), egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(
+            egui::Vec2::new(ui.available_width(), 18.0),
+            egui::Sense::hover(),
+        );
         if bg != Color32::TRANSPARENT {
             ui.painter().rect_filled(rect, 2.0, bg);
         }
@@ -371,8 +374,10 @@ pub fn trading_column_ext() -> Vec<EguiColumnExt> {
             ctx.theme.muted_color
         };
         let sign = if v > 0.0 { "+" } else { "" };
-        let (rect, _) =
-            ui.allocate_exact_size(egui::Vec2::new(ui.available_width(), 18.0), egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(
+            egui::Vec2::new(ui.available_width(), 18.0),
+            egui::Sense::hover(),
+        );
         ui.painter().text(
             egui::Pos2::new(rect.max.x - 4.0, rect.center().y),
             egui::Align2::RIGHT_CENTER,
@@ -397,8 +402,10 @@ pub fn trading_column_ext() -> Vec<EguiColumnExt> {
             ctx.theme.muted_color
         };
         let sign = if v > 0.0 { "+" } else { "" };
-        let (rect, _) =
-            ui.allocate_exact_size(egui::Vec2::new(ui.available_width(), 18.0), egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(
+            egui::Vec2::new(ui.available_width(), 18.0),
+            egui::Sense::hover(),
+        );
         ui.painter().text(
             egui::Pos2::new(rect.max.x - 4.0, rect.center().y),
             egui::Align2::RIGHT_CENTER,
@@ -419,10 +426,18 @@ pub fn trading_column_ext() -> Vec<EguiColumnExt> {
 
     // bid/ask: monospace price
     let bid_ext = EguiColumnExt::new("bid").with_formatter(|v, _| {
-        format_price(v.as_f64().or_else(|| v.as_i64().map(|x| x as f64)).unwrap_or(0.0))
+        format_price(
+            v.as_f64()
+                .or_else(|| v.as_i64().map(|x| x as f64))
+                .unwrap_or(0.0),
+        )
     });
     let ask_ext = EguiColumnExt::new("ask").with_formatter(|v, _| {
-        format_price(v.as_f64().or_else(|| v.as_i64().map(|x| x as f64)).unwrap_or(0.0))
+        format_price(
+            v.as_f64()
+                .or_else(|| v.as_i64().map(|x| x as f64))
+                .unwrap_or(0.0),
+        )
     });
 
     vec![price_ext, chg_ext, chg_pct_ext, vol_ext, bid_ext, ask_ext]

@@ -591,7 +591,11 @@ impl eframe::App for DemoApp {
 
                 // ── trading terminal controls ─────────────────────────────────
                 if is_trading {
-                    let btn_label = if self.trading.running { "⏸ Pause" } else { "▶ Resume" };
+                    let btn_label = if self.trading.running {
+                        "⏸ Pause"
+                    } else {
+                        "▶ Resume"
+                    };
                     if ui.button(btn_label).clicked() {
                         self.trading.running = !self.trading.running;
                     }
@@ -599,7 +603,10 @@ impl eframe::App for DemoApp {
                     ui.label("Updates/tick:");
                     let n = self.trading.instruments.len();
                     let mut upd = self.trading.updates_per_tick;
-                    if ui.add(egui::Slider::new(&mut upd, 1..=n).text("rows")).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut upd, 1..=n).text("rows"))
+                        .changed()
+                    {
                         self.trading.updates_per_tick = upd;
                     }
 
@@ -612,11 +619,7 @@ impl eframe::App for DemoApp {
                     };
                     ui.colored_label(
                         tick_color,
-                        format!(
-                            "Tick #{} | {:.1} fps",
-                            self.trading.ticks,
-                            self.trading.fps,
-                        ),
+                        format!("Tick #{} | {:.1} fps", self.trading.ticks, self.trading.fps,),
                     );
 
                     ui.separator();
