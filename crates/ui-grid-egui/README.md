@@ -65,6 +65,10 @@ cargo run -p ui-grid-egui --example demo --release
 The demo app showcases:
 
 - Column sorting (click header), filtering (type in filter row), and grouping
+- Column pinning (left/right) with synchronized vertical scrolling
+- Drag-and-drop column reordering
+- CSV export (default and custom formatters)
+- Save/restore state (JSON serialization and deserialization)
 - Custom cell renderers (status pills, currency formatting, boolean checkboxes)
 - Cell editing via double-click or Enter, including a date picker widget
 - Tree view with expandable/collapsible rows
@@ -74,7 +78,3 @@ The demo app showcases:
 ## License
 
 MIT
-
-## Roadmap
-
-- Drag and drop reorderable columns

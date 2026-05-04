@@ -103,12 +103,12 @@ export class MyGridComponent {
 ### React
 
 ```bash
-npm install @ornery/ui-grid @ornery/ui-grid-react
+npm install @ornery/ui-grid-react @ornery/ui-grid-core
 ```
 
 ```tsx
 import { UiGrid } from '@ornery/ui-grid-react';
-import { GridOptions } from '@ornery/ui-grid';
+import type { GridOptions } from '@ornery/ui-grid-core';
 
 function MyGrid() {
   const options: GridOptions = {
@@ -128,7 +128,17 @@ function MyGrid() {
 }
 ```
 
-### Custom Element (Web Component)
+### Web Components
+
+The grid ships **two distinct web component outputs**. Both register a `<ui-grid-element>` custom element and accept the same `GridOptions` API, but they differ in runtime dependencies and how they render.
+
+#### Angular-backed Custom Element (`@ornery/ui-grid`)
+
+Built with `@angular/elements`, this wraps the full Angular component as a custom element. It requires the Angular runtime and is produced by the `build:element` script. Use this when you already have Angular in your stack or want the full Angular rendering pipeline.
+
+```bash
+npm run build:element
+```
 
 ```html
 <script type="module" src="ui-grid-element/main.js"></script>
@@ -144,6 +154,50 @@ function MyGrid() {
 </script>
 ```
 
+You can also register the element programmatically:
+
+```typescript
+import { defineUiGridElement } from '@ornery/ui-grid';
+
+await defineUiGridElement(); // registers <ui-grid-element>
+```
+
+#### Vanilla Custom Element (`@ornery/ui-grid-vanilla`)
+
+A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No Angular dependency. Use this in non-Angular apps, static sites, or anywhere you want a zero-framework grid.
+
+```bash
+npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
+```
+
+```html
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement(); // registers <ui-grid-element>
+
+  document.querySelector('#my-grid').options = {
+    id: 'vanilla-demo',
+    data: [{ name: 'Alice', role: 'Engineer' }],
+    columnDefs: [{ name: 'name' }, { name: 'role' }],
+  };
+</script>
+
+<ui-grid-element id="my-grid"></ui-grid-element>
+```
+
+Or use the `mountVanillaUiGrid` helper for a one-call setup:
+
+```typescript
+import { mountVanillaUiGrid } from '@ornery/ui-grid-vanilla';
+
+await mountVanillaUiGrid(document.getElementById('app'), {
+  id: 'mounted-grid',
+  data: [{ name: 'Alice', role: 'Engineer' }],
+  columnDefs: [{ name: 'name' }, { name: 'role' }],
+});
+```
+
 ### Native Rust / egui
 
 ```toml
@@ -153,8 +207,8 @@ ui-grid-core = "0.1"
 ```
 
 ```rust
-use ui_grid_egui::{EguiGrid, EguiColumnExt, GridThemePreset};
-use ui_grid_core::models::{GridOptions, GridColumnDef};
+use ui_grid_egui::{EguiColumnExt, EguiGrid, GridThemePreset};
+use ui_grid_core::models::{GridColumnDef, GridOptions};
 
 let mut grid = EguiGrid::new();
 let theme = GridThemePreset::DefaultDark.build();
@@ -172,7 +226,7 @@ cd uiGrid
 cargo run -p ui-grid-egui --example demo --release
 ```
 
-See the [ui-grid-egui README](./crates/ui-grid-egui/README.md) for custom formatters, renderers, and editors.
+See [docs/rust-egui.md](./docs/rust-egui.md) for pinning, CSV export, save/restore state, and custom column extensions.
 
 ---
 
@@ -182,19 +236,19 @@ See the [ui-grid-egui README](./crates/ui-grid-egui/README.md) for custom format
 - **Filtering** — per-column inputs with conditions: contains, exact, startsWith, endsWith, greaterThan, regex, custom predicates
 - **Row Grouping** — nested multi-column grouping with collapsible group headers
 - **Tree View** — hierarchical data with expand/collapse per node, arbitrary nesting depth
-- **Expandable Rows** — master/detail pattern with custom Angular templates
+- **Expandable Rows** — master/detail pattern with custom templates (Angular `ng-template`, React render prop, or vanilla `<template>` slot)
 - **Cell Editing** — inline spreadsheet-style editing with full keyboard navigation (Tab, Enter, Escape)
 - **Pagination** — client-side or external pagination with configurable page sizes
 - **Infinite Scroll** — bi-directional infinite scrolling with loading state management
 - **Column Pinning** — freeze columns left or right with CSS `position: sticky`, programmatic API, save/restore state
-- **Column Moving** — drag-and-drop column reordering via Angular CDK
+- **Column Moving** — drag-and-drop column reordering (Angular CDK, native HTML drag in React and vanilla)
 - **CSV Export** — download visible rows with formula-injection protection
 - **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows
 - **Save/Restore State** — serialize and restore sort, filter, grouping, pagination, and expansion state
 - **Auto Resize** — ResizeObserver-driven viewport height recalculation
-- **Custom Cell Templates** — Angular `ng-template` or `cellRenderer` function for fully custom cells
+- **Custom Cell Templates** — Angular `ng-template`, React `cellRenderer` render prop, vanilla `<template>` slots, or `cellRenderer` function for fully custom cells
 - **Shadow DOM** — encapsulated styles with CSS custom property and `::part()` hooks
-- **Web Component** — ship as `<ui-grid-element>` for non-Angular apps
+- **Web Component** — ship as `<ui-grid-element>` in two flavors: Angular-backed (`@ornery/ui-grid`) or framework-free vanilla (`@ornery/ui-grid-vanilla`)
 - **Feature-Flag Builds** — compile-time tree-shaking of unused features
 - **i18n** — override any UI string at runtime or bake in a locale at build time
 - **SSR Support** — server-side rendering with platform-safe guards
@@ -260,11 +314,11 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Tree View](./docs/tree-view.md)             | Hierarchical data, options, API                        |
 | [Expandable Rows](./docs/expandable-rows.md) | Master/detail, template context, API                   |
 | [Custom Builds](./docs/custom-builds.md)     | Feature flags, build presets, locale baking            |
-| [Web Component](./docs/web-component.md)     | Build, usage, styling the custom element               |
+| [Web Component](./docs/web-component.md)     | Angular-backed and vanilla web component outputs       |
 | [Internationalization](./docs/i18n.md)       | Runtime overrides, build-time locales                  |
 | [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
-| [Rust / WASM](./docs/rust.md)                | Build and run the Rust-backed browser demo locally     |
-| [Rust / egui](./docs/rust-egui.md)           | Native Rust egui adapter usage and local demo          |
+| [Rust / WASM](./docs/rust.md)                | Rust pipeline in Angular, React, and vanilla hosts     |
+| [Rust / egui](./docs/rust-egui.md)           | Native egui adapter with pinning, export, save/restore |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 

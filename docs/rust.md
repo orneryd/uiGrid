@@ -1,23 +1,137 @@
 # Rust / WASM
 
-UI Grid's core engine is being moved into Rust and exposed through WebAssembly.
-
-Today, the easiest way to run that Rust-backed engine locally is the browser-native demo in `projects/ui-grid-vanilla/`. That demo mounts the grid as a custom element, registers the Rust/WASM pipeline, and lets you interact with sorting, filtering, grouping, virtualization, and CSV export directly in the browser.
+Use UI Grid's Rust pipeline in Angular, React, or vanilla hosts without changing the public `gridOptions` / `columnDefs` surface. The host framework still renders the grid; Rust owns the shared pipeline and state math.
 
 ## What runs in Rust today
 
-The Rust/WASM engine currently owns the pipeline work:
+- Filtering, sorting, grouping, and pagination
+- Pinning state, tree flattening, and virtualization math
+- Save-state normalization and shared pipeline output
 
-- filtering
-- sorting
-- grouping
-- tree flattening
-- pagination
-- virtualization/window math
-- CSV export helpers
-- save-state normalization
+## Angular Usage
 
-The Angular, React, and vanilla/browser hosts remain thin adapters around that engine.
+Register the engine once, then keep using the Angular component normally:
+
+```typescript
+import { Component, computed } from '@angular/core';
+import { UiGridComponent, type GridOptions } from '@ornery/ui-grid';
+import { enableUiGridWasmEngine } from '@ornery/ui-grid-core';
+
+await enableUiGridWasmEngine();
+
+@Component({
+  selector: 'app-rust-wasm-angular-demo',
+  imports: [UiGridComponent],
+  template: '<app-ui-grid [options]="options()" />',
+})
+export class RustWasmAngularDemoComponent {
+  protected readonly options = computed<GridOptions>(() => ({
+    id: 'rust-wasm-angular',
+    data: createDemoData(),
+    enableSorting: true,
+    enableFiltering: true,
+    enableGrouping: true,
+    enablePinning: true,
+    grouping: { groupBy: ['status'] },
+    columnDefs: [
+      { name: 'name', pinnedLeft: true },
+      { name: 'status' },
+      { name: 'revenue', type: 'number', align: 'end' },
+      { name: 'owner', field: 'account.owner' },
+    ],
+  }));
+}
+```
+
+## React Usage
+
+The React wrapper provides a matching helper for the same Rust pipeline:
+
+```tsx
+import { UiGrid, enableReactUiGridWasmEngine } from '@ornery/ui-grid-react';
+import { type GridOptions } from '@ornery/ui-grid-core';
+
+await enableReactUiGridWasmEngine();
+
+const options: GridOptions = {
+  id: 'rust-wasm-react',
+  data,
+  enableSorting: true,
+  enableFiltering: true,
+  enablePinning: true,
+  columnDefs: [
+    { name: 'name', pinnedLeft: true },
+    { name: 'department' },
+    { name: 'region' },
+    { name: 'total', align: 'end' },
+  ],
+};
+
+export function RustWasmReactGrid() {
+  return <UiGrid options={options} />;
+}
+```
+
+## Vanilla / Web Component Usage
+
+For a plain browser host, register the module and then mount the standalone element:
+
+```typescript
+import initWasm, * as wasmModule from '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
+import {
+  defineStandaloneUiGridElement,
+  registerVanillaUiGridRustModule,
+  type VanillaUiGridElement,
+} from '@ornery/ui-grid-vanilla';
+
+await registerVanillaUiGridRustModule(
+  {
+    default: initWasm,
+    build_pipeline_js: wasmModule.build_pipeline_js,
+  },
+  '/dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm',
+);
+
+await defineStandaloneUiGridElement();
+
+const grid = document.querySelector('ui-grid-element') as VanillaUiGridElement;
+grid.options = options;
+```
+
+## Feature Recipes
+
+These options stay identical across Angular, React, and vanilla renderers:
+
+```typescript
+const options = {
+  enableSorting: true,
+  enableFiltering: true,
+  enableGrouping: true,
+  enableTreeView: true,
+  enableExpandable: true,
+  enablePinning: true,
+  grouping: { groupBy: ['status'] },
+  treeChildrenField: 'children',
+  columnDefs: [
+    { name: 'name', pinnedLeft: true },
+    { name: 'status' },
+    { name: 'revenue', type: 'number', align: 'end' },
+  ],
+};
+```
+
+## Save & Restore State
+
+```typescript
+let savedState = null;
+
+const options = {
+  onRegisterApi: (api) => {
+    savedState = api.saveState.save();
+    api.saveState.restore(savedState);
+  },
+};
+```
 
 ## Prerequisites
 
@@ -86,8 +200,6 @@ Open this URL in your browser:
 http://127.0.0.1:4174/
 ```
 
-You should see the `UI Grid Vanilla Demo` page with live grid data rendered in the browser.
-
 ## Manual workflow
 
 If you want tighter control over each step instead of using the combined script:
@@ -97,16 +209,6 @@ npm run build:library
 npm run build:rust:web
 npm run start --prefix projects/ui-grid-vanilla -- --host 127.0.0.1 --port 4174
 ```
-
-## What the vanilla demo is proving
-
-The vanilla demo is the framework-agnostic baseline for future Rust-native wrappers.
-
-It proves that:
-
-- the Rust/WASM pipeline can be loaded directly in a browser host
-- the grid can be mounted without Angular or React host application code
-- thin wrappers for future Rust UI frameworks can target the same engine boundary
 
 ## Useful validation commands
 
@@ -118,10 +220,8 @@ npm run build:rust:wasm
 npm run build:rust:web
 ```
 
-## Current limitation
+## Current boundary
 
-This is not yet a desktop-native Rust UI app. The current local "Rust app" path is a browser-native WASM demo backed by the Rust engine.
-
-That is the correct baseline for the next phase: adding thin wrappers for Rust-specific UI frameworks without duplicating the grid engine.
+The browser wrappers still own DOM rendering and framework integration. Rust currently owns the shared pipeline, state transitions, and pinning math; native Rust rendering lives in `ui-grid-egui`.
 
 If you want the native Rust widget adapter instead, see [Rust / egui](./rust-egui.md).

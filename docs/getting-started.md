@@ -47,9 +47,34 @@ export class MyGridComponent {
 | `data`       | `readonly GridRecord[]`    | Array of row objects                                        |
 | `columnDefs` | `readonly GridColumnDef[]` | Column definitions — each needs at minimum a `name`         |
 
-## Custom Element (Web Component)
+## React
 
-Build the grid as a Web Component with `npm run build:element`, then use it in any HTML page:
+```bash
+npm install @ornery/ui-grid-react @ornery/ui-grid-core
+```
+
+```tsx
+import { UiGrid } from '@ornery/ui-grid-react';
+import type { GridOptions } from '@ornery/ui-grid-core';
+
+const options: GridOptions = {
+  id: 'react-grid',
+  data: [{ name: 'Alice', role: 'Engineer' }],
+  columnDefs: [{ name: 'name' }, { name: 'role' }],
+};
+
+function App() {
+  return <UiGrid options={options} />;
+}
+```
+
+## Web Components
+
+The grid ships two distinct web component outputs. Both register a `<ui-grid-element>` custom element with the same `GridOptions` API. See [Web Component](./web-component.md) for full details.
+
+### Angular-backed (`@ornery/ui-grid`)
+
+Built with `@angular/elements`. Bundles the Angular runtime. Produced by `npm run build:element`:
 
 ```html
 <script type="module" src="ui-grid-element/main.js"></script>
@@ -66,6 +91,30 @@ Build the grid as a Web Component with `npm run build:element`, then use it in a
 </script>
 ```
 
+### Vanilla (`@ornery/ui-grid-vanilla`)
+
+Framework-free, pure DOM with Shadow DOM. No Angular dependency:
+
+```bash
+npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
+```
+
+```html
+<ui-grid-element id="my-grid"></ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  document.querySelector('#my-grid').options = {
+    id: 'vanilla-demo',
+    data: [{ name: 'Alice', role: 'Engineer' }],
+    columnDefs: [{ name: 'name' }, { name: 'role' }],
+  };
+</script>
+```
+
 ## Run the Demo Locally
 
 ```bash
@@ -75,7 +124,7 @@ npm ci
 npm start
 ```
 
-Open `http://localhost:4200` to see the full demo with 100,000 rows, theming, and all features active.
+Open `http://localhost:4200` to see the full demo with 100,000 rows, theming, and all features active. The live demo includes dedicated pages for Angular, React, Web Components, and Rust usage.
 
 ## Run the Rust-backed Demo Locally
 
@@ -92,5 +141,6 @@ Open `http://127.0.0.1:4174/` to see the framework-agnostic vanilla demo that mo
 - [Features](./features.md) — see everything the grid can do
 - [Theming](./theming.md) — customize colors and layout via CSS custom properties
 - [API Reference](./api-reference.md) — full GridOptions, GridColumnDef, and UiGridApi documentation
-- [Rust / WASM](./rust.md) — build and run the Rust-backed browser demo locally
-- [Rust / egui](./rust-egui.md) — use the native Rust `ui-grid-egui` adapter in egui apps
+- [Web Component](./web-component.md) — Angular-backed and vanilla web component outputs
+- [Rust / WASM](./rust.md) — use the Rust pipeline in Angular, React, or vanilla hosts
+- [Rust / egui](./rust-egui.md) — native Rust `ui-grid-egui` adapter with pinning, export, and save/restore

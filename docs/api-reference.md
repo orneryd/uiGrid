@@ -2,13 +2,15 @@
 
 Complete reference for `GridOptions`, `GridColumnDef`, and the `UiGridApi` runtime surface.
 
+All types are exported from `@ornery/ui-grid-core`. The Angular package (`@ornery/ui-grid`) re-exports them for convenience.
+
 ## GridOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `string` | required | Unique grid identifier |
-| `data` | `GridRecord[]` | required | Row data array |
-| `columnDefs` | `GridColumnDef[]` | required | Column definitions |
+| `data` | `readonly GridRecord[]` | required | Row data array |
+| `columnDefs` | `readonly GridColumnDef[]` | required | Column definitions |
 | `title` | `string` | — | Grid heading text |
 | `rowHeight` | `number` | 44 | Row height in pixels |
 | `headerRowHeight` | `number` | — | Header row height override |
@@ -20,17 +22,19 @@ Complete reference for `GridOptions`, `GridColumnDef`, and the `UiGridApi` runti
 | `enableGrouping` | `boolean` | false | Enable row grouping |
 | `grouping` | `{ groupBy?: string[]; startCollapsed?: boolean }` | — | Grouping configuration |
 | `enableColumnMoving` | `boolean` | false | Enable drag-and-drop column reorder |
+| `enablePinning` | `boolean` | — | Enable column pinning (freeze left/right) |
 | `enableVirtualization` | `boolean` | auto | CDK virtual scroll (auto at 40+ rows) |
 | `virtualizationThreshold` | `number` | 40 | Row count that triggers virtualization |
 | `enablePagination` | `boolean` | false | Enable pagination |
 | `enablePaginationControls` | `boolean` | true | Show pagination UI |
 | `useExternalPagination` | `boolean` | false | Grid skips local slicing |
 | `paginationPageSize` | `number` | — | Rows per page |
-| `paginationPageSizes` | `number[]` | — | Page size selector options |
+| `paginationPageSizes` | `number[] \| null` | — | Page size selector options |
 | `paginationCurrentPage` | `number` | — | Initial page |
 | `totalItems` | `number` | — | Total for external pagination |
 | `enableExpandable` | `boolean` | false | Enable expandable detail rows |
 | `expandableRowHeight` | `number` | 150 | Detail row height |
+| `expandableRowHeaderWidth` | `number` | — | Width of the expand toggle column |
 | `expandableRowTemplate` | `TemplateRef` | — | Angular template for detail content |
 | `expandableRowScope` | `Record<string, unknown>` | — | Extra template context variables |
 | `enableTreeView` | `boolean` | false | Enable hierarchical tree display |
@@ -65,12 +69,15 @@ Complete reference for `GridOptions`, `GridColumnDef`, and the `UiGridApi` runti
 | `filterable` | `boolean` | Column-level filter override |
 | `enableFiltering` | `boolean` | Alias for filterable |
 | `enableGrouping` | `boolean` | Allow grouping by this column |
+| `enablePinning` | `boolean` | Allow pinning this column |
+| `pinnedLeft` | `boolean` | Pin this column to the left on init |
+| `pinnedRight` | `boolean` | Pin this column to the right on init |
 | `enableCellEdit` | `boolean` | Column-level edit override |
 | `enableCellEditOnFocus` | `boolean` | Edit starts on focus for this column |
 | `cellEditableCondition` | `boolean \| (ctx) => boolean` | Column-level edit guard |
 | `editModelField` | `string` | Dot-path for writing edited values |
 | `sort` | `{ direction?: SortDirection; priority?: number; ignoreSort?: boolean }` | Initial sort configuration |
-| `filter` | `{ term?: unknown; condition?: FilterCondition \| RegExp \| Function; flags?: { caseSensitive?: boolean; date?: boolean } }` | Filter configuration |
+| `filter` | `{ term?: unknown; condition?: FilterCondition \| RegExp \| Function; flags?: { caseSensitive?: boolean; date?: boolean }; rawTerm?: boolean; noTerm?: boolean }` | Filter configuration |
 | `sortingAlgorithm` | `(a, b) => number` | Custom sort comparator |
 | `formatter` | `(value, row) => string` | Display value formatter |
 | `valueGetter` | `(row) => unknown` | Custom value extractor |
@@ -86,11 +93,14 @@ Access the API via `onRegisterApi`. The API is organized into namespaces.
 | Method | Description |
 |--------|-------------|
 | `refresh()` | Force a full pipeline re-run |
+| `queueGridRefresh()` | Alias for `refresh()` |
+| `queueRefresh()` | Alias for `refresh()` |
+| `refreshRows()` | Alias for `refresh()` |
 | `getVisibleRows()` | Get currently visible GridRow objects |
 | `sortColumn(name, direction?)` | Programmatic sort |
 | `setFilter(name, value)` | Set a column filter |
 | `clearAllFilters()` | Clear all active filters |
-| `groupByColumn(name)` | Add a column to grouping |
+| `groupByColumn(name)` | Add/remove a column from grouping |
 | `clearGrouping()` | Remove all grouping |
 | `moveColumn(from, to)` | Reorder columns by index |
 | `exportCsv()` | Download visible rows as CSV |
@@ -151,6 +161,13 @@ Access the API via `onRegisterApi`. The API is organized into namespaces.
 | `getTreeView()` | Get current tree expansion state |
 | `setTreeView(state)` | Bulk set expansion state |
 
+### pinning
+
+| Method | Description |
+|--------|-------------|
+| `pinColumn(name, direction)` | Pin a column left, right, or unpin (`'none'`) |
+| `on.columnPinned` | `(columnName, direction) => void` |
+
 ### infiniteScroll
 
 | Method | Description |
@@ -159,6 +176,8 @@ Access the API via `onRegisterApi`. The API is organized into namespaces.
 | `resetScroll(scrollUp?, scrollDown?)` | Reset to fresh state |
 | `saveScrollPercentage()` | Persist scroll position ratio |
 | `setScrollDirections(up, down)` | Toggle scroll directions |
+| `dataRemovedTop(scrollUp?, scrollDown?)` | Signal rows removed from top |
+| `dataRemovedBottom(scrollUp?, scrollDown?)` | Signal rows removed from bottom |
 | `on.needLoadMoreData` | `() => void` |
 | `on.needLoadMoreDataTop` | `() => void` |
 
