@@ -444,9 +444,7 @@ pub fn trading_column_ext() -> Vec<EguiColumnExt> {
 }
 
 fn format_price(p: f64) -> String {
-    if p >= 1000.0 {
-        format!("{:.2}", p)
-    } else if p >= 1.0 {
+    if p >= 1.0 {
         format!("{:.2}", p)
     } else {
         format!("{:.4}", p)
