@@ -6,6 +6,8 @@ pub enum Dataset {
     Tree,
     Large,
     Huge,
+    /// Live trading terminal — rows are owned by TradingState, not here.
+    Trading,
 }
 
 impl Dataset {
@@ -15,6 +17,8 @@ impl Dataset {
             Dataset::Tree => enrich_rows(ui_grid_fixtures::sample_tree_rows()),
             Dataset::Large => enrich_rows(generate_large_dataset(60)),
             Dataset::Huge => enrich_rows(generate_large_dataset(100_000)),
+            // Trading rows are managed externally via TradingState.
+            Dataset::Trading => vec![],
         }
     }
 
@@ -24,6 +28,7 @@ impl Dataset {
             Dataset::Tree => "Tree",
             Dataset::Large => "Large (60 rows)",
             Dataset::Huge => "Huge (100K rows)",
+            Dataset::Trading => "Trading Terminal",
         }
     }
 }

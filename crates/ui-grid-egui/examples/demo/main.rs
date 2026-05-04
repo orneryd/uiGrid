@@ -1,6 +1,7 @@
 mod app;
 mod columns;
 mod data;
+mod trading;
 
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {

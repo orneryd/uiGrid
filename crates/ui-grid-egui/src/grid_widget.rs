@@ -846,6 +846,12 @@ impl EguiGrid {
         };
     }
 
+    /// Mark the data pipeline as dirty so it re-runs on the next frame.
+    /// Call this after mutating `GridOptions::data` externally (e.g. live data updates).
+    pub fn mark_dirty(&mut self) {
+        self.pipeline_dirty = true;
+    }
+
     pub fn show(
         &mut self,
         ui: &mut Ui,

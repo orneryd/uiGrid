@@ -11,6 +11,7 @@ use ui_grid_egui::{
 
 use crate::columns::columns_for_dataset;
 use crate::data::Dataset;
+use crate::trading::{TradingState, trading_column_ext, trading_columns};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DemoLanguage {
@@ -95,6 +96,7 @@ pub struct DemoApp {
     use_custom_header_controls: bool,
     serialized_state: Option<String>,
     export_preview: Option<ExportPreview>,
+    trading: TradingState,
 }
 
 impl DemoApp {
@@ -124,10 +126,30 @@ impl DemoApp {
             use_custom_header_controls: false,
             serialized_state: None,
             export_preview: None,
+            trading: TradingState::new(),
         }
     }
 
     fn rebuild_options(&mut self) {
+        if self.dataset == Dataset::Trading {
+            self.columns = trading_columns();
+            self.options = GridOptions {
+                id: "trading-grid".to_string(),
+                data: self.trading.rows(),
+                column_defs: self.columns.clone(),
+                labels: self.language.labels(),
+                enable_sorting: true,
+                enable_filtering: true,
+                enable_grouping: false,
+                enable_column_moving: true,
+                enable_pinning: true,
+                row_id_field: Some("id".to_string()),
+                ..GridOptions::default()
+            };
+            self.column_ext = trading_column_ext();
+            self.grid.reset();
+            return;
+        }
         self.columns = columns_for_dataset(self.dataset);
         self.options = build_options(
             self.dataset,
@@ -326,6 +348,19 @@ impl eframe::App for DemoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         apply_egui_visuals(ui.ctx(), &self.theme);
 
+        // ── live tick for trading mode ────────────────────────────────────────
+        let is_trading = self.dataset == Dataset::Trading;
+        if is_trading && self.trading.running {
+            let now = ui.ctx().input(|i| i.time);
+            self.trading.update_fps(now);
+            self.trading.tick();
+            // push updated rows into grid options and re-run the pipeline
+            self.options.data = self.trading.rows();
+            self.grid.mark_dirty();
+            // request repaint to keep ticking at display refresh rate
+            ui.ctx().request_repaint();
+        }
+
         egui::Panel::top("toolbar").show_inside(ui, |ui| {
             let mut options_changed = false;
 
@@ -351,8 +386,13 @@ impl eframe::App for DemoApp {
                 egui::ComboBox::from_id_salt("dataset")
                     .selected_text(self.dataset.label())
                     .show_ui(ui, |ui| {
-                        for dataset in [Dataset::Flat, Dataset::Tree, Dataset::Large, Dataset::Huge]
-                        {
+                        for dataset in [
+                            Dataset::Flat,
+                            Dataset::Tree,
+                            Dataset::Large,
+                            Dataset::Huge,
+                            Dataset::Trading,
+                        ] {
                             ui.selectable_value(&mut self.dataset, dataset, dataset.label());
                         }
                     });
@@ -548,6 +588,39 @@ impl eframe::App for DemoApp {
                 }
 
                 ui.separator();
+
+                // ── trading terminal controls ─────────────────────────────────
+                if is_trading {
+                    let btn_label = if self.trading.running { "⏸ Pause" } else { "▶ Resume" };
+                    if ui.button(btn_label).clicked() {
+                        self.trading.running = !self.trading.running;
+                    }
+
+                    ui.label("Updates/tick:");
+                    let n = self.trading.instruments.len();
+                    let mut upd = self.trading.updates_per_tick;
+                    if ui.add(egui::Slider::new(&mut upd, 1..=n).text("rows")).changed() {
+                        self.trading.updates_per_tick = upd;
+                    }
+
+                    ui.separator();
+
+                    let tick_color = if self.trading.running {
+                        Color32::from_rgb(0x22, 0xC5, 0x5E)
+                    } else {
+                        Color32::from_rgb(0xEF, 0x44, 0x44)
+                    };
+                    ui.colored_label(
+                        tick_color,
+                        format!(
+                            "Tick #{} | {:.1} fps",
+                            self.trading.ticks,
+                            self.trading.fps,
+                        ),
+                    );
+
+                    ui.separator();
+                }
 
                 let result = self.grid.result();
                 let virtualization = if result.virtualization_enabled {
