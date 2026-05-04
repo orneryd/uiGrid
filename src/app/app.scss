@@ -391,6 +391,18 @@
 	.nav-links {
 		order: 3;
 		width: 100%;
-		justify-content: center;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 0.15rem;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	.nav-link {
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 }

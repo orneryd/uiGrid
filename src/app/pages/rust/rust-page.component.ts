@@ -178,7 +178,6 @@ type RustSection = 'wasm' | 'egui';
     .page-hero,
     .content-panel {
       position: relative;
-      overflow: hidden;
       border: 1px solid var(--card-border);
       border-radius: var(--theme-radius);
       background: var(--panel-surface);
@@ -187,6 +186,7 @@ type RustSection = 'wasm' | 'egui';
     }
 
     .page-hero {
+      overflow: hidden;
       padding: clamp(1rem, 1.5vw, 1.75rem);
       background:
         radial-gradient(
@@ -281,6 +281,7 @@ type RustSection = 'wasm' | 'egui';
 
     .content-panel {
       display: grid;
+      min-width: 0;
     }
 
     .panel-header {
@@ -316,6 +317,7 @@ type RustSection = 'wasm' | 'egui';
       padding: clamp(0.875rem, 1.25vw, 1.25rem);
       display: grid;
       gap: 1rem;
+      min-width: 0;
 
       h3 {
         margin: 0.5rem 0 0;
@@ -353,6 +355,19 @@ type RustSection = 'wasm' | 'egui';
         font-weight: 700;
         color: var(--ink-muted);
         background: var(--panel-surface-alt);
+      }
+    }
+
+    @media (max-width: 960px) {
+      .rust-page-shell {
+        width: min(100%, calc(100% - 1rem));
+        padding: 0.5rem;
+      }
+
+      .docs-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
     }
   `,

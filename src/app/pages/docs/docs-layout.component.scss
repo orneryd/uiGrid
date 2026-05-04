@@ -57,20 +57,33 @@
 	.docs-layout {
 		grid-template-columns: 1fr;
 		gap: 1rem;
+		width: min(100%, calc(100% - 1rem));
 	}
 
 	.docs-sidebar {
 		position: static;
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-		padding: 0;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		gap: 0.25rem;
+		padding: 0 0 0.75rem;
 		border-bottom: 1px solid var(--card-border);
-		padding-bottom: 1rem;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
 	}
 
 	.docs-sidebar-title {
-		width: 100%;
-		margin-bottom: 0.35rem;
+		display: none;
+	}
+
+	.docs-nav-item {
+		white-space: nowrap;
+		flex-shrink: 0;
+		padding: 0.45rem 0.65rem;
+		font-size: 0.82rem;
 	}
 }

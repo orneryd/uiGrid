@@ -297,9 +297,8 @@ function createTreeRows(): GridRecord[] {
       border: 1px solid color-mix(in srgb, var(--ink-strong) 14%, transparent);
       background: color-mix(in srgb, var(--panel-surface-strong) 82%, black 18%);
       color: var(--ink-strong);
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .react-demo-frame {
@@ -326,6 +325,7 @@ function createTreeRows(): GridRecord[] {
     .code-grid {
       display: grid;
       gap: 1rem;
+      min-width: 0;
     }
 
     @media (max-width: 960px) {
