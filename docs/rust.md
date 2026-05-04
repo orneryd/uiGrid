@@ -95,6 +95,13 @@ await registerVanillaUiGridRustModule(
 await defineStandaloneUiGridElement();
 
 const grid = document.querySelector('ui-grid-element') as VanillaUiGridElement;
+grid.gridId = options.id;
+grid.columnDefs = options.columnDefs;
+grid.data = options.data;
+grid.enableSorting = options.enableSorting ?? true;
+grid.enableFiltering = options.enableFiltering ?? true;
+
+// Use the full options object when you need callbacks or function-valued fields.
 grid.options = options;
 ```
 

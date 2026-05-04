@@ -99,6 +99,45 @@ Framework-free, pure DOM with Shadow DOM. No Angular dependency:
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ```
 
+Declarative setup now works directly in HTML:
+
+```html
+<ui-grid-element
+  grid-id="vanilla-demo"
+  enable-sorting
+  enable-filtering
+  column-defs='[{"name":"name"},{"name":"role"}]'
+  data='[{"name":"Alice","role":"Engineer"}]'>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+</script>
+```
+
+Or bind the same fields as individual JS properties:
+
+```html
+<ui-grid-element id="my-grid"></ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#my-grid');
+  grid.gridId = 'vanilla-props';
+  grid.enableSorting = true;
+  grid.enableFiltering = true;
+  grid.columnDefs = [{ name: 'name' }, { name: 'role' }];
+  grid.data = [{ name: 'Alice', role: 'Engineer' }];
+</script>
+```
+
+The original bulk `options` property remains available when you need callbacks or function-valued configuration:
+
 ```html
 <ui-grid-element id="my-grid"></ui-grid-element>
 

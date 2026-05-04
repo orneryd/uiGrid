@@ -83,7 +83,75 @@ A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM re
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ```
 
-### Usage
+### Declarative HTML Usage
+
+The vanilla element now supports a declarative attribute surface for the most common setup. Small and medium datasets can be configured directly in markup with zero grid setup JavaScript beyond registration:
+
+```html
+<ui-grid-element
+  grid-id="vanilla-demo"
+  title="Team Roster"
+  enable-sorting
+  enable-filtering
+  viewport-height="420"
+  column-defs='[
+    { "name": "name" },
+    { "name": "role" },
+    { "name": "salary", "type": "number", "align": "end" }
+  ]'
+  data='[
+    { "name": "Alice", "role": "Engineer", "salary": 120000 },
+    { "name": "Bob", "role": "Designer", "salary": 95000 }
+  ]'>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement(); // registers <ui-grid-element>
+</script>
+```
+
+Supported declarative inputs include:
+
+- Boolean attributes such as `enable-sorting`, `enable-filtering`, `enable-grouping`, `enable-pinning`, `enable-pagination`, and `enable-virtualization`
+- Scalar attributes such as `grid-id`, `title`, `row-height`, `viewport-height`, `pagination-page-size`, and `empty-message`
+- JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
+
+Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
+
+### JavaScript Property Usage
+
+The vanilla element also exposes individual JS properties that mirror the declarative attributes. This is useful when a framework or host app wants property binding without constructing a full `options` object:
+
+```html
+<ui-grid-element id="my-grid"></ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#my-grid');
+  grid.gridId = 'vanilla-props';
+  grid.title = 'Team Roster';
+  grid.enableSorting = true;
+  grid.enableFiltering = true;
+  grid.viewportHeight = 420;
+  grid.columnDefs = [
+    { name: 'name' },
+    { name: 'role' },
+    { name: 'salary', type: 'number', align: 'end' },
+  ];
+  grid.data = [
+    { name: 'Alice', role: 'Engineer', salary: 120000 },
+    { name: 'Bob', role: 'Designer', salary: 95000 },
+  ];
+  grid.paginationPageSizes = [10, 25, 50];
+</script>
+```
+
+### Full `options` Usage
 
 ```html
 <ui-grid-element id="my-grid"></ui-grid-element>
@@ -163,7 +231,9 @@ grid.setState(state);           // applies a previously saved state
 
 ## Shared: Setting Options
 
-Both web component variants accept the same `GridOptions` object as the Angular component. Set it via JavaScript property assignment — not as an HTML attribute:
+Both web component variants accept the same `GridOptions` object as the Angular component. The Angular-backed element is configured through JavaScript property assignment. The vanilla element supports that same `options` object plus the declarative attributes and individual property mirrors shown above:
+
+For the vanilla element specifically, this is now the advanced escape hatch rather than the only configuration path. Prefer attributes or individual properties when they are sufficient; use `options` when you need callbacks, function-valued column definitions, or one-shot bulk assignment.
 
 ```javascript
 const grid = document.querySelector('ui-grid-element');

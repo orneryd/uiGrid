@@ -101,6 +101,8 @@ export class UiGridStandaloneElement extends HTMLElement {
   private snapshot: GridControllerSnapshot | null = null;
   private unsubscribe: (() => void) | null = null;
   private activeOptions: VanillaGridOptions | null = null;
+  private attributeOptions: Partial<GridOptions> = {};
+  private attributeSyncScheduled = false;
   private iconOverrides: UiGridIconOverrides = {};
   private templateObserver: MutationObserver | null = null;
   private openPinMenuColumn: string | null = null;
@@ -118,6 +120,51 @@ export class UiGridStandaloneElement extends HTMLElement {
   private skipNextRender = false;
   private dataFrame: number | null = null;
 
+  static get observedAttributes(): string[] {
+    return [
+      // Scalar attributes
+      'grid-id',
+      'title',
+      'row-height',
+      'header-row-height',
+      'viewport-height',
+      'pagination-page-size',
+      'pagination-current-page',
+      'total-items',
+      'virtualization-threshold',
+      'tree-children-field',
+      'tree-indent',
+      'expandable-row-height',
+      'expandable-row-header-width',
+      'empty-message',
+      'infinite-scroll-rows-from-end',
+      // JSON attributes
+      'column-defs',
+      'data',
+      'grouping',
+      'pagination-page-sizes',
+      // Boolean flags
+      'enable-sorting',
+      'enable-filtering',
+      'enable-grouping',
+      'enable-pinning',
+      'enable-column-moving',
+      'enable-cell-edit',
+      'enable-cell-edit-on-focus',
+      'enable-pagination',
+      'enable-pagination-controls',
+      'use-external-pagination',
+      'enable-expandable',
+      'enable-tree-view',
+      'show-tree-expand-no-children',
+      'tree-row-header-always-visible',
+      'enable-auto-resize',
+      'enable-virtualization',
+      'infinite-scroll-up',
+      'infinite-scroll-down',
+    ];
+  }
+
   get options(): GridOptions {
     return (
       this.activeOptions ?? {
@@ -134,6 +181,197 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.ensureController(this.buildEffectiveOptions(this.activeOptions));
   }
 
+  attributeChangedCallback(
+    _name: string,
+    _oldValue: string | null,
+    _newValue: string | null,
+  ): void {
+    // Debounce multiple rapid attribute changes via microtask.
+    if (!this.attributeSyncScheduled) {
+      this.attributeSyncScheduled = true;
+      queueMicrotask(() => {
+        this.attributeSyncScheduled = false;
+        this.syncAttributesToOptions();
+      });
+    }
+  }
+
+  private syncAttributesToOptions(): void {
+    this.attributeOptions = {};
+
+    // Scalar string attributes
+    const gridId = this.getAttribute('grid-id');
+    if (gridId !== null) this.attributeOptions.id = gridId;
+
+    const title = this.getAttribute('title');
+    if (title !== null) this.attributeOptions.title = title;
+
+    const emptyMessage = this.getAttribute('empty-message');
+    if (emptyMessage !== null) this.attributeOptions.emptyMessage = emptyMessage;
+
+    const treeChildrenField = this.getAttribute('tree-children-field');
+    if (treeChildrenField !== null) this.attributeOptions.treeChildrenField = treeChildrenField;
+
+    // Scalar number attributes
+    const rowHeight = this.parseNumberAttribute('row-height');
+    if (rowHeight !== undefined) this.attributeOptions.rowHeight = rowHeight;
+
+    const headerRowHeight = this.parseNumberAttribute('header-row-height');
+    if (headerRowHeight !== undefined)
+      this.attributeOptions.headerRowHeight = headerRowHeight;
+
+    const viewportHeight = this.parseNumberAttribute('viewport-height');
+    if (viewportHeight !== undefined) this.attributeOptions.viewportHeight = viewportHeight;
+
+    const paginationPageSize = this.parseNumberAttribute('pagination-page-size');
+    if (paginationPageSize !== undefined)
+      this.attributeOptions.paginationPageSize = paginationPageSize;
+
+    const paginationCurrentPage = this.parseNumberAttribute('pagination-current-page');
+    if (paginationCurrentPage !== undefined)
+      this.attributeOptions.paginationCurrentPage = paginationCurrentPage;
+
+    const totalItems = this.parseNumberAttribute('total-items');
+    if (totalItems !== undefined) this.attributeOptions.totalItems = totalItems;
+
+    const virtualizationThreshold = this.parseNumberAttribute('virtualization-threshold');
+    if (virtualizationThreshold !== undefined)
+      this.attributeOptions.virtualizationThreshold = virtualizationThreshold;
+
+    const treeIndent = this.parseNumberAttribute('tree-indent');
+    if (treeIndent !== undefined) this.attributeOptions.treeIndent = treeIndent;
+
+    const expandableRowHeight = this.parseNumberAttribute('expandable-row-height');
+    if (expandableRowHeight !== undefined)
+      this.attributeOptions.expandableRowHeight = expandableRowHeight;
+
+    const expandableRowHeaderWidth = this.parseNumberAttribute(
+      'expandable-row-header-width',
+    );
+    if (expandableRowHeaderWidth !== undefined)
+      this.attributeOptions.expandableRowHeaderWidth = expandableRowHeaderWidth;
+
+    const infiniteScrollRowsFromEnd = this.parseNumberAttribute(
+      'infinite-scroll-rows-from-end',
+    );
+    if (infiniteScrollRowsFromEnd !== undefined)
+      this.attributeOptions.infiniteScrollRowsFromEnd = infiniteScrollRowsFromEnd;
+
+    // Boolean attributes
+    const enableSorting = this.parseBooleanAttribute('enable-sorting');
+    if (enableSorting !== undefined) this.attributeOptions.enableSorting = enableSorting;
+
+    const enableFiltering = this.parseBooleanAttribute('enable-filtering');
+    if (enableFiltering !== undefined) this.attributeOptions.enableFiltering = enableFiltering;
+
+    const enableGrouping = this.parseBooleanAttribute('enable-grouping');
+    if (enableGrouping !== undefined) this.attributeOptions.enableGrouping = enableGrouping;
+
+    const enablePinning = this.parseBooleanAttribute('enable-pinning');
+    if (enablePinning !== undefined) this.attributeOptions.enablePinning = enablePinning;
+
+    const enableColumnMoving = this.parseBooleanAttribute('enable-column-moving');
+    if (enableColumnMoving !== undefined)
+      this.attributeOptions.enableColumnMoving = enableColumnMoving;
+
+    const enableCellEdit = this.parseBooleanAttribute('enable-cell-edit');
+    if (enableCellEdit !== undefined) this.attributeOptions.enableCellEdit = enableCellEdit;
+
+    const enableCellEditOnFocus = this.parseBooleanAttribute('enable-cell-edit-on-focus');
+    if (enableCellEditOnFocus !== undefined)
+      this.attributeOptions.enableCellEditOnFocus = enableCellEditOnFocus;
+
+    const enablePagination = this.parseBooleanAttribute('enable-pagination');
+    if (enablePagination !== undefined)
+      this.attributeOptions.enablePagination = enablePagination;
+
+    const enablePaginationControls = this.parseBooleanAttribute(
+      'enable-pagination-controls',
+    );
+    if (enablePaginationControls !== undefined)
+      this.attributeOptions.enablePaginationControls = enablePaginationControls;
+
+    const useExternalPagination = this.parseBooleanAttribute('use-external-pagination');
+    if (useExternalPagination !== undefined)
+      this.attributeOptions.useExternalPagination = useExternalPagination;
+
+    const enableExpandable = this.parseBooleanAttribute('enable-expandable');
+    if (enableExpandable !== undefined) this.attributeOptions.enableExpandable = enableExpandable;
+
+    const enableTreeView = this.parseBooleanAttribute('enable-tree-view');
+    if (enableTreeView !== undefined) this.attributeOptions.enableTreeView = enableTreeView;
+
+    const showTreeExpandNoChildren = this.parseBooleanAttribute(
+      'show-tree-expand-no-children',
+    );
+    if (showTreeExpandNoChildren !== undefined)
+      this.attributeOptions.showTreeExpandNoChildren = showTreeExpandNoChildren;
+
+    const treeRowHeaderAlwaysVisible = this.parseBooleanAttribute(
+      'tree-row-header-always-visible',
+    );
+    if (treeRowHeaderAlwaysVisible !== undefined)
+      this.attributeOptions.treeRowHeaderAlwaysVisible = treeRowHeaderAlwaysVisible;
+
+    const enableAutoResize = this.parseBooleanAttribute('enable-auto-resize');
+    if (enableAutoResize !== undefined) this.attributeOptions.enableAutoResize = enableAutoResize;
+
+    const enableVirtualization = this.parseBooleanAttribute('enable-virtualization');
+    if (enableVirtualization !== undefined)
+      this.attributeOptions.enableVirtualization = enableVirtualization;
+
+    const infiniteScrollUp = this.parseBooleanAttribute('infinite-scroll-up');
+    if (infiniteScrollUp !== undefined) this.attributeOptions.infiniteScrollUp = infiniteScrollUp;
+
+    const infiniteScrollDown = this.parseBooleanAttribute('infinite-scroll-down');
+    if (infiniteScrollDown !== undefined)
+      this.attributeOptions.infiniteScrollDown = infiniteScrollDown;
+
+    // JSON attributes
+    const columnDefs = this.parseJsonAttribute<GridColumnDef[]>('column-defs');
+    if (columnDefs !== undefined) this.attributeOptions.columnDefs = columnDefs;
+
+    const data = this.parseJsonAttribute<GridRecord[]>('data');
+    if (data !== undefined) this.attributeOptions.data = data;
+
+    const grouping = this.parseJsonAttribute('grouping');
+    if (grouping !== undefined && grouping !== null)
+      this.attributeOptions.grouping = grouping;
+
+    const paginationPageSizes = this.parseJsonAttribute<number[] | null>(
+      'pagination-page-sizes',
+    );
+    if (paginationPageSizes !== undefined)
+      this.attributeOptions.paginationPageSizes = paginationPageSizes;
+
+    // Re-render with the merged options.
+    if (this.activeOptions) {
+      this.ensureController(this.buildEffectiveOptions(this.activeOptions));
+    }
+  }
+
+  private parseBooleanAttribute(name: string): boolean | undefined {
+    return this.hasAttribute(name) ? true : undefined;
+  }
+
+  private parseNumberAttribute(name: string): number | undefined {
+    const raw = this.getAttribute(name);
+    if (raw === null) return undefined;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private parseJsonAttribute<T = unknown>(name: string): T | undefined {
+    const raw = this.getAttribute(name);
+    if (raw === null) return undefined;
+    try {
+      return JSON.parse(raw) as T;
+    } catch (e) {
+      console.warn(`<ui-grid-element>: invalid JSON in "${name}" attribute`, e);
+      return undefined;
+    }
+  }
+
   get controlIcons(): UiGridIconOverrides {
     return this.iconOverrides;
   }
@@ -141,6 +379,308 @@ export class UiGridStandaloneElement extends HTMLElement {
   set controlIcons(value: UiGridIconOverrides) {
     this.iconOverrides = { ...value };
     this.render();
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Individual property accessors (mirrors of HTML attributes)
+  // ─────────────────────────────────────────────────────────────────
+
+  get gridId(): string {
+    return this.options.id ?? '';
+  }
+  set gridId(value: string) {
+    this.activeOptions = { ...this.activeOptions, id: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  // @ts-ignore: Intentional override of HTMLElement.title
+  get title(): string {
+    return this.options.title ?? '';
+  }
+  // @ts-ignore: Intentional override of HTMLElement.title
+  set title(value: string) {
+    this.activeOptions = { ...this.activeOptions, title: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get rowHeight(): number {
+    return this.options.rowHeight ?? 40;
+  }
+  set rowHeight(value: number) {
+    this.activeOptions = { ...this.activeOptions, rowHeight: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get headerRowHeight(): number {
+    return this.options.headerRowHeight ?? 50;
+  }
+  set headerRowHeight(value: number) {
+    this.activeOptions = { ...this.activeOptions, headerRowHeight: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get viewportHeight(): number {
+    return this.options.viewportHeight ?? 560;
+  }
+  set viewportHeight(value: number) {
+    this.activeOptions = { ...this.activeOptions, viewportHeight: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get paginationPageSize(): number {
+    return this.options.paginationPageSize ?? 25;
+  }
+  set paginationPageSize(value: number) {
+    this.activeOptions = { ...this.activeOptions, paginationPageSize: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get paginationCurrentPage(): number {
+    return this.options.paginationCurrentPage ?? 1;
+  }
+  set paginationCurrentPage(value: number) {
+    this.activeOptions = { ...this.activeOptions, paginationCurrentPage: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get totalItems(): number | undefined {
+    return this.options.totalItems;
+  }
+  set totalItems(value: number | undefined) {
+    this.activeOptions = { ...this.activeOptions, totalItems: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get virtualizationThreshold(): number {
+    return this.options.virtualizationThreshold ?? 40;
+  }
+  set virtualizationThreshold(value: number) {
+    this.activeOptions = { ...this.activeOptions, virtualizationThreshold: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get treeChildrenField(): string {
+    return this.options.treeChildrenField ?? 'children';
+  }
+  set treeChildrenField(value: string) {
+    this.activeOptions = { ...this.activeOptions, treeChildrenField: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get treeIndent(): number {
+    return this.options.treeIndent ?? 20;
+  }
+  set treeIndent(value: number) {
+    this.activeOptions = { ...this.activeOptions, treeIndent: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get expandableRowHeight(): number {
+    return this.options.expandableRowHeight ?? 150;
+  }
+  set expandableRowHeight(value: number) {
+    this.activeOptions = { ...this.activeOptions, expandableRowHeight: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get expandableRowHeaderWidth(): number {
+    return this.options.expandableRowHeaderWidth ?? 40;
+  }
+  set expandableRowHeaderWidth(value: number) {
+    this.activeOptions = { ...this.activeOptions, expandableRowHeaderWidth: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get emptyMessage(): string {
+    return this.options.emptyMessage ?? 'No data available.';
+  }
+  set emptyMessage(value: string) {
+    this.activeOptions = { ...this.activeOptions, emptyMessage: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get infiniteScrollRowsFromEnd(): number {
+    return this.options.infiniteScrollRowsFromEnd ?? 10;
+  }
+  set infiniteScrollRowsFromEnd(value: number) {
+    this.activeOptions = { ...this.activeOptions, infiniteScrollRowsFromEnd: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get columnDefs(): readonly GridColumnDef[] {
+    return this.options.columnDefs;
+  }
+  set columnDefs(value: readonly GridColumnDef[]) {
+    this.activeOptions = { ...this.activeOptions, columnDefs: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get data(): readonly GridRecord[] {
+    return this.options.data;
+  }
+  set data(value: readonly GridRecord[]) {
+    this.activeOptions = { ...this.activeOptions, data: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableSorting(): boolean {
+    return this.options.enableSorting ?? true;
+  }
+  set enableSorting(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableSorting: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableFiltering(): boolean {
+    return this.options.enableFiltering ?? true;
+  }
+  set enableFiltering(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableFiltering: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableGrouping(): boolean {
+    return this.options.enableGrouping ?? true;
+  }
+  set enableGrouping(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableGrouping: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enablePinning(): boolean {
+    return this.options.enablePinning ?? true;
+  }
+  set enablePinning(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enablePinning: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableColumnMoving(): boolean {
+    return this.options.enableColumnMoving ?? true;
+  }
+  set enableColumnMoving(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableColumnMoving: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableCellEdit(): boolean {
+    return this.options.enableCellEdit ?? false;
+  }
+  set enableCellEdit(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableCellEdit: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableCellEditOnFocus(): boolean {
+    return this.options.enableCellEditOnFocus ?? false;
+  }
+  set enableCellEditOnFocus(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableCellEditOnFocus: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enablePagination(): boolean {
+    return this.options.enablePagination ?? false;
+  }
+  set enablePagination(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enablePagination: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enablePaginationControls(): boolean {
+    return this.options.enablePaginationControls ?? true;
+  }
+  set enablePaginationControls(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enablePaginationControls: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get useExternalPagination(): boolean {
+    return this.options.useExternalPagination ?? false;
+  }
+  set useExternalPagination(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, useExternalPagination: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableExpandable(): boolean {
+    return this.options.enableExpandable ?? false;
+  }
+  set enableExpandable(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableExpandable: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableTreeView(): boolean {
+    return this.options.enableTreeView ?? false;
+  }
+  set enableTreeView(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableTreeView: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get showTreeExpandNoChildren(): boolean {
+    return this.options.showTreeExpandNoChildren ?? false;
+  }
+  set showTreeExpandNoChildren(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, showTreeExpandNoChildren: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get treeRowHeaderAlwaysVisible(): boolean {
+    return this.options.treeRowHeaderAlwaysVisible ?? false;
+  }
+  set treeRowHeaderAlwaysVisible(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, treeRowHeaderAlwaysVisible: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableAutoResize(): boolean {
+    return this.options.enableAutoResize ?? false;
+  }
+  set enableAutoResize(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableAutoResize: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableVirtualization(): boolean {
+    return this.options.enableVirtualization ?? true;
+  }
+  set enableVirtualization(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableVirtualization: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get infiniteScrollUp(): boolean {
+    return this.options.infiniteScrollUp ?? false;
+  }
+  set infiniteScrollUp(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, infiniteScrollUp: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get infiniteScrollDown(): boolean {
+    return this.options.infiniteScrollDown ?? false;
+  }
+  set infiniteScrollDown(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, infiniteScrollDown: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get grouping(): unknown {
+    return this.options.grouping;
+  }
+  set grouping(value: unknown) {
+    this.activeOptions = { ...this.activeOptions, grouping: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get paginationPageSizes(): number[] | null | undefined {
+    return this.options.paginationPageSizes;
+  }
+  set paginationPageSizes(value: number[] | null | undefined) {
+    this.activeOptions = { ...this.activeOptions, paginationPageSizes: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
   }
 
   getState(): GridSaveState | null {
@@ -294,17 +834,21 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   private buildEffectiveOptions(options: VanillaGridOptions): VanillaGridOptions {
+    // Merge: attributes are overridden by explicit JS property values.
+    // JS property always wins: { ...attributeOptions, ...options }
+    const merged = {
+      ...this.attributeOptions,
+      ...options,
+    } as VanillaGridOptions;
+
     const hasExpandableSlot = this.getTemplateMarkup('expandable-row') !== null;
-    if (options.enableExpandable && hasExpandableSlot && !options.expandableRowTemplate) {
-      return {
-        ...options,
-        expandableRowTemplate: {
-          createEmbeddedView: () => undefined,
-        },
+    if (merged.enableExpandable && hasExpandableSlot && !merged.expandableRowTemplate) {
+      merged.expandableRowTemplate = {
+        createEmbeddedView: () => undefined,
       };
     }
 
-    return options;
+    return merged;
   }
 
   private bindEvents(): void {

@@ -4,6 +4,64 @@ Complete reference for `GridOptions`, `GridColumnDef`, and the `UiGridApi` runti
 
 All types are exported from `@ornery/ui-grid-core`. The Angular package (`@ornery/ui-grid`) re-exports them for convenience.
 
+## Vanilla Custom Element Surface
+
+The vanilla web component (`@ornery/ui-grid-vanilla`) supports three equivalent configuration styles for the subset of `GridOptions` that can be expressed without functions:
+
+### Declarative attributes
+
+```html
+<ui-grid-element
+	grid-id="accounts"
+	title="Accounts"
+	enable-sorting
+	enable-filtering
+	row-height="44"
+	viewport-height="560"
+	column-defs='[{"name":"name"},{"name":"status"}]'
+	data='[{"name":"Acme","status":"Active"}]'>
+</ui-grid-element>
+```
+
+### Individual JS properties
+
+```javascript
+const grid = document.querySelector('ui-grid-element');
+grid.gridId = 'accounts';
+grid.title = 'Accounts';
+grid.enableSorting = true;
+grid.enableFiltering = true;
+grid.rowHeight = 44;
+grid.viewportHeight = 560;
+grid.columnDefs = [{ name: 'name' }, { name: 'status' }];
+grid.data = [{ name: 'Acme', status: 'Active' }];
+```
+
+### Full `options` object
+
+```javascript
+grid.options = {
+	id: 'accounts',
+	data: [{ name: 'Acme', status: 'Active' }],
+	columnDefs: [{ name: 'name' }, { name: 'status' }],
+	enableSorting: true,
+	enableFiltering: true,
+	onRegisterApi: (api) => {
+		window.gridApi = api;
+	},
+};
+```
+
+Use attributes or individual properties for static configuration. Use `options` for callbacks like `onRegisterApi`, function-valued column definitions such as `valueGetter`, `sortingAlgorithm`, and `cellRenderer`, or when you prefer a single bulk assignment.
+
+The vanilla merge order is:
+
+```text
+{ ...attributeOptions, ...jsPropertyOptions }
+```
+
+That means explicit JS property values win over declarative attributes when both are present.
+
 ## GridOptions
 
 | Field | Type | Default | Description |
