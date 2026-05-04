@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.8-hotfix — 2026-05-04
+## v0.1.8-hotfix-1 — 2026-05-04
 
 ### Fixed
 

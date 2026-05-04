@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid",
-  "version": "0.1.7",
+  "version": "0.1.8-hotfix-1",
   "description": "Angular data-grid component and web component bundle",
   "private": false,
   "sideEffects": false,
@@ -8,7 +8,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@ornery/ui-grid-core": "^0.1.7"
+    "@ornery/ui-grid-core": "0.1.8-hotfix-1"
   },
   "peerDependencies": {
     "@angular/cdk": "^21.2.8",
