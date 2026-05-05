@@ -40,7 +40,7 @@ describe('mountVanillaUiGrid', () => {
     expect(registerRustWasmGridEngine).toHaveBeenCalledTimes(1);
     expect(customElements.get('ui-grid-element')).toBeDefined();
     expect(grid.tagName.toLowerCase()).toBe('ui-grid-element');
-    expect(grid.options).toBe(options);
+    expect(grid.options).toStrictEqual(options);
     expect(target.firstElementChild).toBe(grid);
   });
 

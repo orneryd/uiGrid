@@ -26,6 +26,10 @@ type DeclarativeUiGridElement = HTMLElement & {
   options: GridOptions;
   connectedCallback?(): void;
   attributeChangedCallback?(name: string, oldValue: string | null, newValue: string | null): void;
+  __uiGridAttributeSyncScheduled__?: boolean;
+  __uiGridAttributeOptions__?: Partial<GridOptions>;
+  __uiGridPropertyOptions__?: Partial<GridOptions>;
+  setPropertyOption?(key: keyof GridOptions, value: unknown): void;
 };
 
 const declarativeSurface: readonly DeclarativeSurfaceEntry[] = [
@@ -286,101 +290,108 @@ function buildDeclarativeAttributeOptions(element: HTMLElement): Partial<GridOpt
 function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): UiGridElementConstructor {
   const baseOptionsDescriptor = Object.getOwnPropertyDescriptor(baseElement.prototype, 'options');
   const basePrototype = baseElement.prototype as Partial<DeclarativeUiGridElement>;
-  const baseObservedAttributeSet: ReadonlySet<string> = new Set(baseElement.observedAttributes ?? []);
+  const baseObservedAttributes = [...(baseElement.observedAttributes ?? [])];
+  const baseObservedAttributeSet: ReadonlySet<string> = new Set(baseObservedAttributes);
+  const originalConnectedCallback = basePrototype.connectedCallback;
+  const originalAttributeChangedCallback = basePrototype.attributeChangedCallback;
 
   if (!baseOptionsDescriptor?.get || !baseOptionsDescriptor?.set) {
     throw new Error('Expected Angular custom element to expose an options property descriptor');
   }
 
-  const baseGetter = baseOptionsDescriptor.get;
   const baseSetter = baseOptionsDescriptor.set;
 
-  class UiGridDeclarativeElement extends baseElement {
-    private attributeSyncScheduled = false;
-    private attributeOptions: Partial<GridOptions> = {};
-    private propertyOptions: Partial<GridOptions> = {};
+  Object.defineProperty(baseElement, 'observedAttributes', {
+    configurable: true,
+    get() {
+      return [...new Set([...baseObservedAttributes, ...observedDeclarativeAttributes])];
+    },
+  });
 
-    static override get observedAttributes(): string[] {
-      return [...new Set([...(baseElement.observedAttributes ?? []), ...observedDeclarativeAttributes])];
+  const syncDeclarativeAttributesToOptions = function (this: DeclarativeUiGridElement): void {
+    this.__uiGridAttributeOptions__ = buildDeclarativeAttributeOptions(this);
+    baseSetter.call(this, {
+      ...defaultRequiredOptions,
+      ...(this.__uiGridAttributeOptions__ ?? {}),
+      ...(this.__uiGridPropertyOptions__ ?? {}),
+    } satisfies GridOptions);
+  };
+
+  basePrototype.connectedCallback = function (this: DeclarativeUiGridElement): void {
+    originalConnectedCallback?.call(this);
+    syncDeclarativeAttributesToOptions.call(this);
+  };
+
+  basePrototype.attributeChangedCallback = function (
+    this: DeclarativeUiGridElement,
+    name: string,
+    oldValue: string | null,
+    newValue: string | null,
+  ): void {
+    if (baseObservedAttributeSet.has(name)) {
+      originalAttributeChangedCallback?.call(this, name, oldValue, newValue);
+    }
+    if (!observedDeclarativeAttributeSet.has(name)) {
+      return;
     }
 
-    connectedCallback(): void {
-      basePrototype.connectedCallback?.call(this);
-      this.syncDeclarativeAttributesToOptions();
+    if (!this.__uiGridAttributeSyncScheduled__) {
+      this.__uiGridAttributeSyncScheduled__ = true;
+      queueMicrotask(() => {
+        this.__uiGridAttributeSyncScheduled__ = false;
+        syncDeclarativeAttributesToOptions.call(this);
+      });
     }
+  };
 
-    attributeChangedCallback(
-      name: string,
-      oldValue: string | null,
-      newValue: string | null,
-    ): void {
-      if (baseObservedAttributeSet.has(name)) {
-        basePrototype.attributeChangedCallback?.call(this, name, oldValue, newValue);
-      }
-      if (!observedDeclarativeAttributeSet.has(name)) {
-        return;
-      }
-
-      if (!this.attributeSyncScheduled) {
-        this.attributeSyncScheduled = true;
-        queueMicrotask(() => {
-          this.attributeSyncScheduled = false;
-          this.syncDeclarativeAttributesToOptions();
-        });
-      }
-    }
-
-    get options(): GridOptions {
+  Object.defineProperty(baseElement.prototype, 'options', {
+    configurable: true,
+    enumerable: false,
+    get(this: DeclarativeUiGridElement): GridOptions {
       return {
         ...defaultRequiredOptions,
-        ...this.attributeOptions,
-        ...this.propertyOptions,
+        ...(this.__uiGridAttributeOptions__ ?? {}),
+        ...(this.__uiGridPropertyOptions__ ?? {}),
       };
-    }
-
-    set options(value: GridOptions) {
-      this.propertyOptions = value ?? {};
-      this.applyMergedOptions();
-    }
-
-    private syncDeclarativeAttributesToOptions(): void {
-      this.attributeOptions = buildDeclarativeAttributeOptions(this);
-      this.applyMergedOptions();
-    }
-
-    private applyMergedOptions(): void {
+    },
+    set(this: DeclarativeUiGridElement, value: GridOptions) {
+      this.__uiGridPropertyOptions__ = value ?? {};
       baseSetter.call(this, {
         ...defaultRequiredOptions,
-        ...this.attributeOptions,
-        ...this.propertyOptions,
+        ...(this.__uiGridAttributeOptions__ ?? {}),
+        ...(this.__uiGridPropertyOptions__ ?? {}),
       } satisfies GridOptions);
-    }
+    },
+  });
 
-    setPropertyOption(key: keyof GridOptions, value: unknown): void {
-      this.propertyOptions = {
-        ...this.propertyOptions,
-        [key]: value,
-      };
-      this.applyMergedOptions();
-    }
-  }
+  basePrototype.setPropertyOption = function (this: DeclarativeUiGridElement, key: keyof GridOptions, value: unknown): void {
+    this.__uiGridPropertyOptions__ = {
+      ...(this.__uiGridPropertyOptions__ ?? {}),
+      [key]: value,
+    };
+    baseSetter.call(this, {
+      ...defaultRequiredOptions,
+      ...(this.__uiGridAttributeOptions__ ?? {}),
+      ...(this.__uiGridPropertyOptions__ ?? {}),
+    } satisfies GridOptions);
+  };
 
   for (const entry of declarativeSurface) {
-    Object.defineProperty(UiGridDeclarativeElement.prototype, entry.property, {
+    Object.defineProperty(baseElement.prototype, entry.property, {
       configurable: true,
       enumerable: false,
-      get(this: UiGridDeclarativeElement) {
+      get(this: DeclarativeUiGridElement) {
         const currentOptions = this.options;
         const currentValue = currentOptions[entry.optionKey];
         return currentValue ?? entry.defaultValue;
       },
-      set(this: UiGridDeclarativeElement, value: unknown) {
-        this.setPropertyOption(entry.optionKey, value);
+      set(this: DeclarativeUiGridElement, value: unknown) {
+        this.setPropertyOption?.(entry.optionKey, value);
       },
     });
   }
 
-  return UiGridDeclarativeElement;
+  return baseElement;
 }
 
 export async function defineUiGridElement(tagName = 'ui-grid-element'): Promise<void> {
