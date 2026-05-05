@@ -79,6 +79,20 @@ Built with `@angular/elements`. Bundles the Angular runtime. Produced by `npm ru
 ```html
 <script type="module" src="ui-grid-element/main.js"></script>
 
+<ui-grid-element
+  grid-id="element-demo"
+  enable-sorting
+  enable-filtering
+  column-defs='[{"name":"name"},{"name":"role"}]'
+  data='[{"name":"Alice","role":"Engineer"}]'>
+</ui-grid-element>
+```
+
+Or assign the full `options` object when you need callbacks or function-valued configuration:
+
+```html
+<script type="module" src="ui-grid-element/main.js"></script>
+
 <ui-grid-element id="my-grid"></ui-grid-element>
 
 <script type="module">

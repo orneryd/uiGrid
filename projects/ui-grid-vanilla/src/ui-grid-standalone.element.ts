@@ -168,13 +168,16 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   get options(): GridOptions {
-    return (
-      this.activeOptions ?? {
-        id: '__ui-grid-pending__',
-        data: [],
-        columnDefs: [],
-      }
-    );
+    if (this.activeOptions !== null) {
+      return this.buildEffectiveOptions(this.activeOptions);
+    }
+    // No imperative options set yet: safe defaults with attributes taking priority.
+    return {
+      id: '__ui-grid-pending__',
+      data: [],
+      columnDefs: [],
+      ...this.attributeOptions,
+    } as GridOptions;
   }
 
   set options(value: GridOptions) {
@@ -347,8 +350,16 @@ export class UiGridStandaloneElement extends HTMLElement {
       this.attributeOptions.paginationPageSizes = paginationPageSizes;
 
     // Re-render with the merged options.
-    if (this.activeOptions) {
+    if (this.activeOptions !== null) {
       this.ensureController(this.buildEffectiveOptions(this.activeOptions));
+    } else {
+      // Purely declarative path: attributes drive the grid without an imperative bridge.
+      this.ensureController({
+        id: '__ui-grid-pending__',
+        data: [],
+        columnDefs: [],
+        ...this.attributeOptions,
+      } as VanillaGridOptions);
     }
   }
 

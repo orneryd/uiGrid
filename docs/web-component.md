@@ -1,18 +1,13 @@
 # Web Component
 
-UI Grid ships **two distinct web component outputs**. Both register a `<ui-grid-element>` custom element and accept the same `GridOptions` API surface, but they differ in runtime dependencies and rendering strategy.
+UI Grid ships **two separate web component outputs** that happen to share the same default tag name, `<ui-grid-element>`.
 
-| | Angular-backed (`@ornery/ui-grid`) | Vanilla (`@ornery/ui-grid-vanilla`) |
-|---|---|---|
-| **Rendering** | Full Angular component via `@angular/elements` | Pure DOM with Shadow DOM, no framework |
-| **Runtime deps** | Angular, RxJS, Angular CDK | `@ornery/ui-grid-core` only |
-| **Build** | `npm run build:element` | `npm run build:vanilla` |
-| **Best for** | Angular apps, full feature parity | Non-Angular apps, static sites, zero-framework setups |
-| **Registration** | `defineUiGridElement()` | `defineStandaloneUiGridElement()` |
+- **Angular Elements output**: published from `@ornery/ui-grid`, rendered through Angular via `@angular/elements`
+- **Vanilla output**: published from `@ornery/ui-grid-vanilla`, rendered with the framework-free DOM implementation
 
----
+Do not load both outputs on the same page with the same tag name. Pick the package that matches your host environment and runtime requirements.
 
-## Angular-backed Custom Element
+## Angular Elements Output (`@ornery/ui-grid`)
 
 Wraps the Angular `UiGridComponent` as a custom element using `@angular/elements`. The Angular runtime is bundled into the output.
 
@@ -24,7 +19,48 @@ npm run build:element
 
 This produces `dist/ui-grid-element/main.js` — a self-contained ES module that includes the Angular runtime.
 
-### Usage
+### Declarative HTML Usage
+
+This is the Angular-powered custom element build. Use it when you want to embed the Angular renderer itself as a web component.
+
+The Angular Elements output supports the same declarative attribute surface as the vanilla build for common markup-first setup:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="module" src="ui-grid-element/main.js"></script>
+</head>
+<body>
+  <ui-grid-element
+    grid-id="angular-element-demo"
+    title="Team Roster"
+    enable-sorting
+    enable-filtering
+    viewport-height="420"
+    column-defs='[
+      { "name": "name" },
+      { "name": "role" },
+      { "name": "salary", "type": "number", "align": "end" }
+    ]'
+    data='[
+      { "name": "Alice", "role": "Engineer", "salary": 120000 },
+      { "name": "Bob", "role": "Designer", "salary": 95000 }
+    ]'>
+  </ui-grid-element>
+</body>
+</html>
+```
+
+Supported declarative inputs include:
+
+- Boolean attributes such as `enable-sorting`, `enable-filtering`, `enable-grouping`, `enable-pinning`, `enable-pagination`, and `enable-virtualization`
+- Scalar attributes such as `grid-id`, `title`, `row-height`, `viewport-height`, `pagination-page-size`, and `empty-message`
+- JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
+
+Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
+
+### JavaScript Property Usage
 
 ```html
 <!DOCTYPE html>
@@ -73,7 +109,7 @@ await defineUiGridRustElement(); // inits WASM, then registers <ui-grid-element>
 
 ---
 
-## Vanilla Custom Element
+## Vanilla Output (`@ornery/ui-grid-vanilla`)
 
 A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No Angular dependency at all.
 
@@ -85,7 +121,9 @@ npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 
 ### Declarative HTML Usage
 
-The vanilla element now supports a declarative attribute surface for the most common setup. Small and medium datasets can be configured directly in markup with zero grid setup JavaScript beyond registration:
+This is the non-Angular custom element build. Use it in static sites, plain JavaScript apps, or any host that should not carry Angular runtime code.
+
+The vanilla element supports the same declarative attribute surface. Small and medium datasets can be configured directly in markup with zero grid setup JavaScript beyond registration:
 
 ```html
 <ui-grid-element
@@ -231,9 +269,11 @@ grid.setState(state);           // applies a previously saved state
 
 ## Shared: Setting Options
 
-Both web component variants accept the same `GridOptions` object as the Angular component. The Angular-backed element is configured through JavaScript property assignment. The vanilla element supports that same `options` object plus the declarative attributes and individual property mirrors shown above:
+## Shared Grid Configuration Surface
 
-For the vanilla element specifically, this is now the advanced escape hatch rather than the only configuration path. Prefer attributes or individual properties when they are sufficient; use `options` when you need callbacks, function-valued column definitions, or one-shot bulk assignment.
+Both outputs accept the same `GridOptions` object as the Angular component, plus the same declarative attributes for common markup-first setup:
+
+For both elements, the `options` property is the advanced escape hatch rather than the only configuration path. Prefer attributes when they are sufficient; use `options` when you need callbacks, function-valued column definitions, or one-shot bulk assignment.
 
 ```javascript
 const grid = document.querySelector('ui-grid-element');

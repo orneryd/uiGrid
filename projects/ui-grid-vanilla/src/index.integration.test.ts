@@ -6,6 +6,7 @@ import {
   clearRustWasmGridEngine,
 } from '@ornery/ui-grid-core';
 import {
+  defineStandaloneUiGridElement,
   mountVanillaUiGrid,
   registerVanillaUiGridRustModule,
   type GridOptions,
@@ -273,5 +274,34 @@ describe('mountVanillaUiGrid integration', () => {
     );
 
     expect(detailCard.textContent).toContain('Owner Mina Patel');
+  });
+
+  it('preserves declarative attribute data when augmenting options imperatively', async () => {
+    // Use the already-registered 'ui-grid-element-vanilla-test' tag (from mountVanillaUiGrid
+    // in prior tests) to avoid the jsdom constraint of not registering the same class twice.
+    const grid = document.createElement('ui-grid-element-vanilla-test') as HTMLElement & {
+      options: GridOptions;
+    };
+    document.getElementById('app')!.appendChild(grid);
+
+    grid.setAttribute('grid-id', 'declarative-test');
+    grid.setAttribute('column-defs', JSON.stringify([{ name: 'name', displayName: 'Customer' }]));
+    grid.setAttribute('data', JSON.stringify([{ id: 'row-1', name: 'Gamma' }]));
+
+    // Flush the attributeChangedCallback microtask so attributeOptions are populated.
+    await new Promise<void>((r) => setTimeout(r, 0));
+
+    // Before any imperative assignment, the getter must surface attribute-derived data.
+    expect((grid.options.data as Array<{ id: string; name: string }>)[0].name).toBe('Gamma');
+    expect(grid.options.columnDefs[0].name).toBe('name');
+
+    // Simulate the bridge pattern: augment without losing attribute-derived data.
+    grid.options = {
+      ...grid.options,
+      viewportHeight: 999,
+    };
+
+    expect((grid.options.data as Array<{ id: string; name: string }>)[0].name).toBe('Gamma');
+    expect(grid.options.viewportHeight).toBe(999);
   });
 });

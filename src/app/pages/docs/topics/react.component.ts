@@ -194,6 +194,23 @@ function createTreeRows(): GridRecord[] {
         </div>
       </section>
 
+      <section class="demo-panel usage-panel">
+        <header class="panel-header">
+          <div>
+            <h2>Cell &amp; Expandable Row Renderers</h2>
+            <p>
+              Pass <code>cellRenderer</code> and <code>expandableRenderer</code> to
+              <code>mountUiGrid</code> / <code>updateUiGrid</code> for custom cell and detail-panel
+              rendering. Both receive typed context objects.
+            </p>
+          </div>
+        </header>
+        <div class="code-grid">
+          <app-code-block lang="tsx" [code]="reactCellRendererSnippet" />
+          <app-code-block lang="tsx" [code]="reactExpandableRendererSnippet" />
+        </div>
+      </section>
+
       <section class="demo-panel">
         <header class="panel-header">
           <div>
@@ -585,6 +602,52 @@ export function AccountsGrid() {
     { name: 'status', displayName: 'Status', width: '150px' },
   ],
 };`;
+  protected readonly reactCellRendererSnippet =
+`import { mountUiGrid } from '@ornery/ui-grid-react';
+import type { GridCellTemplateContext } from '@ornery/ui-grid-core';
+
+// cellRenderer receives GridCellTemplateContext for every cell.
+// Return a string, number, ReactNode, or null (use default rendering).
+//
+// GridCellTemplateContext shape:
+//   $implicit / value  — raw cell value (unknown)
+//   row                — full row data record (GridRecord)
+//   column             — GridColumnDef descriptor for this cell
+//   rowIndex           — 0-based visible row index
+
+mountUiGrid(host, {
+  options,
+  cellRenderer: ({ value, row, column, rowIndex }: GridCellTemplateContext) => {
+    if (column.name === 'status') {
+      const cls = String(value).toLowerCase();
+      return \`<span class="pill pill-\${cls}">\${String(value)}</span>\`;
+    }
+    return null; // fall back to default formatter
+  },
+});`;
+
+  protected readonly reactExpandableRendererSnippet =
+`import { mountUiGrid } from '@ornery/ui-grid-react';
+import type { GridExpandableTemplateContext } from '@ornery/ui-grid-core';
+
+// expandableRenderer receives GridExpandableTemplateContext for each
+// expanded row's detail panel.
+//
+// GridExpandableTemplateContext shape:
+//   $implicit / row  — full row data record (GridRecord)
+//   expanded         — boolean, always true when the panel is rendered
+//   rowIndex         — 0-based visible row index
+
+mountUiGrid(host, {
+  options,
+  expandableRenderer: ({ row, rowIndex }: GridExpandableTemplateContext) =>
+    \`<article class="detail-card">
+       <h3>\${String(row['name'])}</h3>
+       <p>Owner: \${String(row['account']?.['owner'] ?? '')}</p>
+       <p>Row \${rowIndex}</p>
+     </article>\`,
+});`;
+
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' as const },
     { label: 'Tree', value: 'tree' as const },

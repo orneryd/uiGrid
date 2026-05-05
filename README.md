@@ -130,15 +130,47 @@ function MyGrid() {
 
 ### Web Components
 
-The grid ships **two distinct web component outputs**. Both register a `<ui-grid-element>` custom element and accept the same `GridOptions` API, but they differ in runtime dependencies and how they render.
+The grid ships **two separate web component outputs** that share the same default tag name, `<ui-grid-element>`.
 
-#### Angular-backed Custom Element (`@ornery/ui-grid`)
+- **Angular Elements output**: `@ornery/ui-grid`, rendered through Angular via `@angular/elements`
+- **Vanilla output**: `@ornery/ui-grid-vanilla`, rendered by the framework-free DOM implementation
+
+Pick one output per page. They expose the same common declarative surface, but they are different packages with different runtime requirements.
+
+#### Angular Elements Output (`@ornery/ui-grid`)
 
 Built with `@angular/elements`, this wraps the full Angular component as a custom element. It requires the Angular runtime and is produced by the `build:element` script. Use this when you already have Angular in your stack or want the full Angular rendering pipeline.
 
 ```bash
 npm run build:element
 ```
+
+Declarative HTML usage is available for the same common setup surface as the vanilla build:
+
+```html
+<script type="module" src="ui-grid-element/main.js"></script>
+
+<ui-grid-element
+  grid-id="element-demo"
+  title="Team Roster"
+  enable-sorting
+  enable-filtering
+  viewport-height="420"
+  column-defs='[
+    { "name": "name" },
+    { "name": "role" },
+    { "name": "salary", "type": "number", "align": "end" }
+  ]'
+  data='[
+    { "name": "Alice", "role": "Engineer", "salary": 120000 },
+    { "name": "Bob", "role": "Designer", "salary": 95000 }
+  ]'>
+</ui-grid-element>
+```
+
+Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
+
+For callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property:
 
 ```html
 <script type="module" src="ui-grid-element/main.js"></script>
@@ -162,7 +194,7 @@ import { defineUiGridElement } from '@ornery/ui-grid';
 await defineUiGridElement(); // registers <ui-grid-element>
 ```
 
-#### Vanilla Custom Element (`@ornery/ui-grid-vanilla`)
+#### Vanilla Output (`@ornery/ui-grid-vanilla`)
 
 A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No Angular dependency. Use this in non-Angular apps, static sites, or anywhere you want a zero-framework grid.
 
@@ -170,23 +202,36 @@ A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM re
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ```
 
+Declarative HTML usage is available out of the box for the same common setup surface:
+
 ```html
+<ui-grid-element
+  grid-id="vanilla-demo"
+  title="Team Roster"
+  enable-sorting
+  enable-filtering
+  viewport-height="420"
+  column-defs='[
+    { "name": "name" },
+    { "name": "role" },
+    { "name": "salary", "type": "number", "align": "end" }
+  ]'
+  data='[
+    { "name": "Alice", "role": "Engineer", "salary": 120000 },
+    { "name": "Bob", "role": "Designer", "salary": 95000 }
+  ]'>
+</ui-grid-element>
+
 <script type="module">
   import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
 
   await defineStandaloneUiGridElement(); // registers <ui-grid-element>
-
-  document.querySelector('#my-grid').options = {
-    id: 'vanilla-demo',
-    data: [{ name: 'Alice', role: 'Engineer' }],
-    columnDefs: [{ name: 'name' }, { name: 'role' }],
-  };
 </script>
-
-<ui-grid-element id="my-grid"></ui-grid-element>
 ```
 
-Or use the `mountVanillaUiGrid` helper for a one-call setup:
+Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
+
+When you need callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property or the `mountVanillaUiGrid` helper instead:
 
 ```typescript
 import { mountVanillaUiGrid } from '@ornery/ui-grid-vanilla';

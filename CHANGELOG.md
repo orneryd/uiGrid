@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.1.9 — 2026-05-05
+
+### Added
+
+- **Angular Elements declarative surface parity** — `@ornery/ui-grid` now supports declarative HTML attributes, mirrored JS properties, and attribute-to-options synchronization so the Angular-backed custom element can be configured markup-first like the vanilla build.
+- **Custom-element coverage for declarative and imperative mixing** — added Angular and vanilla tests that verify declarative `data` / `column-defs` rendering and confirm later imperative augmentation does not discard attribute-derived state.
+- **Cross-framework renderer/template docs** — expanded the docs app and Web Component docs with Angular `TemplateRef` context tables, vanilla slot-template token references, and React cell/expandable renderer context examples.
+- **Release version-sync tooling** — added a dedicated version-sync workflow for package manifests and npm lockfiles to keep the `0.1.9` release metadata aligned across the repo.
+
+### Changed
+
+- **Web Component documentation now distinguishes the two shipped outputs clearly** — refreshed the README, Getting Started, and Web Component docs so Angular Elements and vanilla custom elements are described separately, with their shared declarative surface and their differing runtime expectations called out explicitly.
+- **Angular home demos now showcase both host surfaces** — the home page now has separate Angular Native and Angular Element modes, with dedicated Angular Element scenario harnesses for expandable, tree, templated, pinning, and trading demos.
+- **Web Components demo host moved to declarative attribute-driven setup** — the primary and scenario grids on the web-components page are now configured from declarative attributes first, with template injection and imperative bridge wiring layered on top only where needed.
+- **Release metadata refreshed for `0.1.9`** — regenerated the root and package-local npm lockfiles after syncing internal package versions to the next intended web release version.
+
+### Fixed
+
+- **Vanilla custom-element option augmentation no longer drops declarative data** — reading `grid.options`, spreading it, and writing it back now preserves attribute-derived `data` and `columnDefs` instead of resetting the declarative surface.
+- **Angular Element trading terminal now live-updates correctly** — the home-page Angular-backed custom element trading harness now drives live ticks and applies the intended colorized cell templates for price and change columns.
+- **Vanilla trading demo now reattaches slot templates and resumes ticking after mode switches** — the web-components Trading scenario correctly reinjects its slot templates and restarts the live-update loop when switching between scenarios.
+- **Declarative web-component docs and demos now match runtime behavior** — the live examples, code snippets, and docs pages were brought back into sync for attribute-driven setup, template slots, and high-frequency data updates.
+
 ## v0.1.8-hotfix-1 — 2026-05-04
 
 ### Fixed

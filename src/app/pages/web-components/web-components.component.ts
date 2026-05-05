@@ -4,6 +4,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   CUSTOM_ELEMENTS_SCHEMA,
   ElementRef,
   PLATFORM_ID,
@@ -35,6 +36,33 @@ type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
 type WebComponentGridElement = VanillaUiGridElement & {
   getState(): unknown;
   setState(state: unknown): void;
+  setData(rows: GridRecord[]): void;
+  options: GridOptions;
+};
+
+type DeclarativeGridConfig = {
+  readonly id: string;
+  readonly title: string;
+  readonly emptyMessage: string;
+  readonly dataJson: string;
+  readonly columnDefsJson: string;
+  readonly groupingJson?: string;
+  readonly rowHeight: number;
+  readonly viewportHeight: number;
+  readonly virtualizationThreshold: number;
+  readonly treeChildrenField?: string;
+  readonly treeIndent?: number;
+  readonly expandableRowHeight?: number;
+  readonly enableSorting: boolean;
+  readonly enableFiltering: boolean;
+  readonly enableGrouping: boolean;
+  readonly enableColumnMoving: boolean;
+  readonly enableVirtualization: boolean;
+  readonly enableCellEditOnFocus: boolean;
+  readonly enablePinning: boolean;
+  readonly enableExpandable: boolean;
+  readonly enableTreeView: boolean;
+  readonly showTreeExpandNoChildren: boolean;
 };
 
 function createHarnessRows(count = 18): GridRecord[] {
@@ -74,6 +102,48 @@ function createTreeRows(): GridRecord[] {
   }));
 }
 
+function createPinningRows(): GridRecord[] {
+  return Array.from({ length: 20 }, (_value, index) => ({
+    id: `pin-${index + 1}`,
+    name: `Row ${index + 1}`,
+    department: index % 3 === 0 ? 'Engineering' : index % 3 === 1 ? 'Design' : 'Sales',
+    region:
+      index % 4 === 0 ? 'West' : index % 4 === 1 ? 'East' : index % 4 === 2 ? 'Central' : 'South',
+    q1: 1000 + index * 120,
+    q2: 1100 + index * 95,
+    q3: 900 + index * 140,
+    q4: 1300 + index * 80,
+    total: 4300 + index * 435,
+    growth: `${(2.5 + index * 0.3).toFixed(1)}%`,
+    status: index % 2 === 0 ? 'Active' : 'Review',
+  }));
+}
+
+function createTradingDisplayRows(rows: readonly TradingRow[]): GridRecord[] {
+  return rows.map((row) => ({
+    id: row.id,
+    symbol: row.symbol,
+    exchange: row.exchange,
+    sector: row.sector,
+    price: row.price,
+    bid: row.bid,
+    ask: row.ask,
+    change: row.change,
+    changePct: row.changePct,
+    high: row.high,
+    low: row.low,
+    volume: row.volume,
+    lastSize: row.lastSize,
+    priceColor: row.priceColor,
+    changeColor: row.changeColor,
+    priceStr: row.priceStr,
+    bidStr: row.bidStr,
+    askStr: row.askStr,
+    changeStr: row.changeStr,
+    changePctStr: row.changePctStr,
+  }));
+}
+
 @Component({
   selector: 'app-web-components-page',
   imports: [RouterLink, CodeBlockComponent],
@@ -83,6 +153,27 @@ function createTreeRows(): GridRecord[] {
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class WebComponentsComponent {
+  // ─── slot template markup strings (injected programmatically because
+  //     Angular's compiler eats native <template> as ng-template) ────────
+  private static readonly STATUS_PILL_TEMPLATE =
+    `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
+
+  private static readonly EXPANDABLE_ROW_TEMPLATE =
+    `<article class="detail-card">` +
+    `<strong>{{row.name}}</strong>` +
+    `<p>Owner: {{row.account.owner}}</p>` +
+    `<p>Renewal: {{row.renewalDate}}</p>` +
+    `<p>Revenue: {{row.revenue}}</p>` +
+    `</article>`;
+
+  private static readonly TRADING_TEMPLATES: ReadonlyArray<[slotName: string, markup: string]> = [
+    ['cell-price',     `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>`],
+    ['cell-bid',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>`],
+    ['cell-ask',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>`],
+    ['cell-change',    `<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>`],
+    ['cell-changePct', `<span style="color:{{row.changeColor}}">{{row.changePctStr}}</span>`],
+  ];
+
   private readonly platformId = inject(PLATFORM_ID);
   private readonly primaryGridRef =
     viewChild.required<ElementRef<WebComponentGridElement>>('primaryGrid');
@@ -90,66 +181,92 @@ export class WebComponentsComponent {
     viewChild.required<ElementRef<WebComponentGridElement>>('demoGrid');
   private savedGridState: unknown = null;
   private readonly primaryData = createDemoData();
+  private readonly primaryDataJson = JSON.stringify(this.primaryData);
   private primaryGridApi: UiGridApi | null = null;
   private disposePrimaryVisibleRows: (() => void) | null = null;
   private disposePrimaryBenchmark: (() => void) | null = null;
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0x1a2b3c4d);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
-
-  protected readonly mode = signal<DemoMode>('expandable');
-  protected readonly visibleRowCount = signal(0);
-  protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
-  protected readonly savedStateJson = signal('No saved state captured yet.');
-  protected readonly totalRows = signal(this.primaryData.length);
-  protected readonly webComponentPrimarySnippet = `import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
-import { FILTER_CONDITIONS, type GridOptions } from '@ornery/ui-grid-core';
-
-await defineStandaloneUiGridElement();
-
-const grid = document.querySelector('ui-grid-element');
-
-const options: GridOptions = {
-  id: 'ui-grid-web-components-primary',
-  data: createDemoData(),
-  rowHeight: 48,
-  viewportHeight: 620,
-  enableSorting: true,
-  enableFiltering: true,
-  enableGrouping: true,
-  enableColumnMoving: true,
-  enableVirtualization: true,
-  enableCellEditOnFocus: true,
-  virtualizationThreshold: 25,
-  grouping: { groupBy: ['status'] },
-  rowIdentity: (row) => String(row['id']),
-  columnDefs: [
-    { name: 'name', displayName: 'Customer', enableCellEdit: true },
-    { name: 'company', enableCellEdit: true },
+  private readonly tradingDisplayDataSignal = signal<string>(
+    JSON.stringify(createTradingDisplayRows(this.tradingRows)),
+  );
+  private readonly primaryColumnDefs = [
+    {
+      name: 'name',
+      displayName: 'Customer',
+      width: 'minmax(14rem, 1.2fr)',
+      enableCellEdit: true,
+    },
+    {
+      name: 'company',
+      width: 'minmax(12rem, 1fr)',
+      enableCellEdit: true,
+    },
     {
       name: 'revenue',
       type: 'number',
       align: 'end',
+      width: 'minmax(10rem, 0.7fr)',
       filter: { condition: FILTER_CONDITIONS.greaterThan },
     },
-    { name: 'status', filter: { condition: FILTER_CONDITIONS.exact } },
-    { name: 'renewalDate', type: 'date', displayName: 'Renewal' },
-    { name: 'owner', field: 'account.owner', displayName: 'Account Owner' },
-  ],
-};
-
-grid.options = options;`;
-  protected readonly webComponentPinningSnippet = `grid.options = {
-  id: 'web-components-demo-pinning',
-  data,
-  rowHeight: 46,
-  viewportHeight: 300,
-  enableSorting: true,
-  enableFiltering: true,
-  enablePinning: true,
-  enableVirtualization: true,
-  virtualizationThreshold: 1,
-  columnDefs: [
+    {
+      name: 'status',
+      width: 'minmax(8rem, 0.7fr)',
+      filter: { condition: FILTER_CONDITIONS.exact },
+    },
+    {
+      name: 'renewalDate',
+      type: 'date',
+      displayName: 'Renewal',
+      width: 'minmax(11rem, 0.8fr)',
+    },
+    {
+      name: 'owner',
+      field: 'account.owner',
+      displayName: 'Account Owner',
+      width: 'minmax(11rem, 0.8fr)',
+      enableCellEdit: true,
+    },
+  ] satisfies GridOptions['columnDefs'];
+  private readonly primaryColumnDefsJson = JSON.stringify(this.primaryColumnDefs);
+  private readonly baseHarnessColumnDefs = [
+    { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
+    { name: 'status', width: 'minmax(9rem, 0.7fr)' },
+    {
+      name: 'revenue',
+      align: 'end',
+      width: 'minmax(9rem, 0.7fr)',
+      filter: { condition: FILTER_CONDITIONS.greaterThan },
+    },
+    {
+      name: 'owner',
+      field: 'account.owner',
+      displayName: 'Owner',
+      width: 'minmax(10rem, 0.8fr)',
+    },
+  ] satisfies GridOptions['columnDefs'];
+  private readonly templatedColumnDefs = [
+    { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
+    {
+      name: 'status',
+      width: 'minmax(9rem, 0.7fr)',
+      filter: { condition: FILTER_CONDITIONS.exact },
+    },
+    {
+      name: 'revenue',
+      align: 'end',
+      width: 'minmax(9rem, 0.7fr)',
+      filter: { condition: FILTER_CONDITIONS.greaterThan },
+    },
+    {
+      name: 'owner',
+      field: 'account.owner',
+      displayName: 'Owner',
+      width: 'minmax(10rem, 0.8fr)',
+    },
+  ] satisfies GridOptions['columnDefs'];
+  private readonly pinningColumnDefs = [
     { name: 'name', displayName: 'Name', width: '160px', pinnedLeft: true },
     { name: 'department', displayName: 'Department', width: '180px' },
     { name: 'region', displayName: 'Region', width: '140px' },
@@ -160,8 +277,339 @@ grid.options = options;`;
     { name: 'total', displayName: 'Total', width: '150px', align: 'end' },
     { name: 'growth', displayName: 'Growth', width: '140px', align: 'end' },
     { name: 'status', displayName: 'Status', width: '150px' },
-  ],
-};`;
+  ] satisfies GridOptions['columnDefs'];
+  private readonly tradingColumnDefsJson = JSON.stringify(
+    tradingColumnDefs().map((column) => ({
+      ...column,
+      formatter: undefined,
+    })),
+  );
+  protected readonly primaryGridActive = signal(true);
+  protected readonly demoGridActive = signal(true);
+
+  protected readonly mode = signal<DemoMode>('expandable');
+  protected readonly visibleRowCount = signal(0);
+  protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
+  protected readonly savedStateJson = signal('No saved state captured yet.');
+  protected readonly totalRows = signal(this.primaryData.length);
+  protected readonly primaryConfig = computed<DeclarativeGridConfig>(() => ({
+    id: 'ui-grid-web-components-primary',
+    title: 'UI Grid Modernized (Web Component)',
+    emptyMessage: 'No rows match the current filters.',
+    dataJson: this.primaryDataJson,
+    columnDefsJson: this.primaryColumnDefsJson,
+    groupingJson: JSON.stringify({ groupBy: ['status'] }),
+    rowHeight: 48,
+    viewportHeight: 620,
+    virtualizationThreshold: 25,
+    enableSorting: true,
+    enableFiltering: true,
+    enableGrouping: true,
+    enableColumnMoving: true,
+    enableVirtualization: true,
+    enableCellEditOnFocus: true,
+    enablePinning: false,
+    enableExpandable: false,
+    enableTreeView: false,
+    showTreeExpandNoChildren: false,
+  }));
+  protected readonly demoConfig = computed<DeclarativeGridConfig>(() => {
+    switch (this.mode()) {
+      case 'tree':
+        return {
+          id: 'web-components-demo-tree',
+          title: 'Web Components Demo: Tree',
+          emptyMessage: 'No rows match the current filters.',
+          dataJson: JSON.stringify(createTreeRows()),
+          columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
+          rowHeight: 46,
+          viewportHeight: 300,
+          virtualizationThreshold: 1,
+          treeChildrenField: 'children',
+          treeIndent: 16,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: true,
+          showTreeExpandNoChildren: false,
+        };
+      case 'templated':
+        return {
+          id: 'web-components-demo-templated',
+          title: 'Web Components Demo: Templated',
+          emptyMessage: 'No rows match the current filters.',
+          dataJson: JSON.stringify(createHarnessRows()),
+          columnDefsJson: JSON.stringify(this.templatedColumnDefs),
+          rowHeight: 46,
+          viewportHeight: 300,
+          virtualizationThreshold: 1,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+        };
+      case 'pinning':
+        return {
+          id: 'web-components-demo-pinning',
+          title: 'Web Components Demo: Pinning',
+          emptyMessage: 'No rows',
+          dataJson: JSON.stringify(createPinningRows()),
+          columnDefsJson: JSON.stringify(this.pinningColumnDefs),
+          rowHeight: 46,
+          viewportHeight: 300,
+          virtualizationThreshold: 1,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: true,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+        };
+      case 'trading':
+        return {
+          id: 'web-components-demo-trading',
+          title: 'Web Components Demo: Trading Terminal',
+          emptyMessage: 'No data',
+          dataJson: this.tradingDisplayDataSignal(),
+          columnDefsJson: this.tradingColumnDefsJson,
+          rowHeight: 40,
+          viewportHeight: 460,
+          virtualizationThreshold: 1,
+          enableSorting: true,
+          enableFiltering: false,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+        };
+      default:
+        return {
+          id: 'web-components-demo-expandable',
+          title: 'Web Components Demo: Expandable',
+          emptyMessage: 'No rows match the current filters.',
+          dataJson: JSON.stringify(createHarnessRows()),
+          columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
+          rowHeight: 46,
+          viewportHeight: 300,
+          virtualizationThreshold: 1,
+          expandableRowHeight: 112,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: true,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+        };
+    }
+  });
+  protected readonly webComponentPrimarySnippet = computed(() => `<ui-grid-element
+  id="primary-grid"
+  grid-id="ui-grid-web-components-primary"
+  title="UI Grid Modernized (Web Component)"
+  empty-message="No rows match the current filters."
+  row-height="48"
+  viewport-height="620"
+  virtualization-threshold="25"
+  enable-sorting
+  enable-filtering
+  enable-grouping
+  enable-column-moving
+  enable-virtualization
+  enable-cell-edit-on-focus>
+  <template slot="cell-status" ngNonBindable>
+    <span class="status-pill status-pill-{{valueLower}}">{{value}}</span>
+  </template>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#primary-grid');
+  const columnDefs = [
+    { name: 'name', displayName: 'Customer', width: 'minmax(14rem, 1.2fr)', enableCellEdit: true },
+    { name: 'company', width: 'minmax(12rem, 1fr)', enableCellEdit: true },
+    { name: 'revenue', type: 'number', align: 'end', width: 'minmax(10rem, 0.7fr)' },
+    { name: 'status', width: 'minmax(8rem, 0.7fr)' },
+    { name: 'renewalDate', type: 'date', displayName: 'Renewal', width: 'minmax(11rem, 0.8fr)' },
+    { name: 'owner', field: 'account.owner', displayName: 'Account Owner', width: 'minmax(11rem, 0.8fr)', enableCellEdit: true },
+  ];
+
+  grid.setAttribute('grouping', JSON.stringify({ groupBy: ['status'] }));
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+
+  grid.options = {
+    ...grid.options,
+    benchmark: { iterations: 40 },
+    onRegisterApi: (api) => {
+      // hook benchmark, export, and saved-state buttons
+    },
+  };
+</script>`);
+  protected readonly webComponentScenarioSnippet = computed(() => {
+    switch (this.mode()) {
+      case 'tree':
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-tree"
+  title="Web Components Demo: Tree"
+  row-height="46"
+  viewport-height="300"
+  virtualization-threshold="1"
+  tree-children-field="children"
+  tree-indent="16"
+  enable-sorting
+  enable-filtering
+  enable-tree-view
+  enable-virtualization>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(treeRows));
+</script>`;
+      case 'templated':
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-templated"
+  title="Web Components Demo: Templated"
+  row-height="46"
+  viewport-height="300"
+  virtualization-threshold="1"
+  enable-sorting
+  enable-filtering
+  enable-virtualization>
+  <template slot="cell-status" ngNonBindable>
+    <span class="status-pill status-pill-{{valueLower}}">{{value}}</span>
+  </template>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+</script>`;
+      case 'pinning':
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-pinning"
+  title="Web Components Demo: Pinning"
+  row-height="46"
+  viewport-height="300"
+  virtualization-threshold="1"
+  enable-sorting
+  enable-filtering
+  enable-pinning
+  enable-virtualization>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+</script>`;
+      case 'trading':
+        return `<ui-grid-element
+  id="trading-grid"
+  grid-id="web-components-demo-trading"
+  title="Web Components Demo: Trading Terminal"
+  row-height="40"
+  viewport-height="460"
+  enable-sorting
+  enable-virtualization>
+  <template slot="cell-price" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span></template>
+  <template slot="cell-bid" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span></template>
+  <template slot="cell-ask" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span></template>
+  <template slot="cell-change" ngNonBindable><span style="color:{{row.changeColor}}">{{row.changeStr}}</span></template>
+  <template slot="cell-changePct" ngNonBindable><span style="color:{{row.changeColor}}">{{row.changePctStr}}</span></template>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#trading-grid');
+  grid.setAttribute('column-defs', JSON.stringify(tradingColumnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+
+  setInterval(() => {
+    rows = tickTradingRows(rows, rng, 6);
+    grid.setData(rows);
+  }, 150);
+</script>`;
+      default:
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-expandable"
+  title="Web Components Demo: Expandable"
+  row-height="46"
+  viewport-height="300"
+  virtualization-threshold="1"
+  expandable-row-height="112"
+  enable-sorting
+  enable-filtering
+  enable-expandable
+  enable-virtualization>
+  <template slot="expandable-row" ngNonBindable>
+    <article class="detail-card">
+      <strong>{{row.name}}</strong>
+      <p>Owner: {{row.account.owner}}</p>
+      <p>Renewal: {{row.renewalDate}}</p>
+      <p>Revenue: {{row.revenue}}</p>
+    </article>
+  </template>
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+</script>`;
+    }
+  });
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' as const },
     { label: 'Tree', value: 'tree' as const },
@@ -177,8 +625,10 @@ grid.options = options;`;
       }
 
       await defineStandaloneUiGridElement();
-      this.mountPrimaryGrid();
-      this.mountDemoGrid();
+      this.injectPrimaryGridTemplates();
+      this.installPrimaryGridBridge();
+      this.injectDemoGridTemplates();
+      this.syncTradingLoop();
     });
 
     inject(DestroyRef).onDestroy(() => {
@@ -199,21 +649,11 @@ grid.options = options;`;
       return;
     }
 
-    if (this.tradingIntervalId !== null) {
-      clearInterval(this.tradingIntervalId);
-      this.tradingIntervalId = null;
-    }
-
     this.mode.set(mode);
-    this.mountDemoGrid();
-
-    if (mode === 'trading') {
-      this.tradingIntervalId = setInterval(() => {
-        this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
-        const grid = this.demoGridRef().nativeElement;
-        grid.setData(this.tradingRows);
-      }, 150);
-    }
+    queueMicrotask(() => {
+      this.injectDemoGridTemplates();
+      this.syncTradingLoop();
+    });
   }
 
   protected captureState(): void {
@@ -235,8 +675,28 @@ grid.options = options;`;
     this.visibleRowCount.set(0);
     this.benchmarkResult.set(null);
     this.savedStateJson.set('No saved state captured yet.');
-    this.mountPrimaryGrid();
-    this.mountDemoGrid();
+    this.disposePrimaryVisibleRows?.();
+    this.disposePrimaryBenchmark?.();
+    this.disposePrimaryVisibleRows = null;
+    this.disposePrimaryBenchmark = null;
+    this.primaryGridApi = null;
+    if (this.tradingIntervalId !== null) {
+      clearInterval(this.tradingIntervalId);
+      this.tradingIntervalId = null;
+    }
+    this.tradingRows = createTradingRows();
+    this.primaryGridActive.set(false);
+    this.demoGridActive.set(false);
+    queueMicrotask(() => {
+      this.primaryGridActive.set(true);
+      this.demoGridActive.set(true);
+      queueMicrotask(() => {
+        this.injectPrimaryGridTemplates();
+        this.installPrimaryGridBridge();
+        this.injectDemoGridTemplates();
+        this.syncTradingLoop();
+      });
+    });
   }
 
   protected runBenchmark(): void {
@@ -247,11 +707,12 @@ grid.options = options;`;
     this.primaryGridApi?.core.exportCsv();
   }
 
-  private mountPrimaryGrid(): void {
+  private installPrimaryGridBridge(): void {
+    if (!isPlatformBrowser(this.platformId) || !this.primaryGridActive()) {
+      return;
+    }
+
     const grid = this.primaryGridRef().nativeElement;
-    this.replaceTemplates(grid, [
-      ['cell-status', '<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>'],
-    ]);
     this.disposePrimaryVisibleRows?.();
     this.disposePrimaryBenchmark?.();
     this.disposePrimaryVisibleRows = null;
@@ -259,134 +720,8 @@ grid.options = options;`;
     this.primaryGridApi = null;
     this.visibleRowCount.set(0);
     this.benchmarkResult.set(null);
-    grid.options = this.primaryOptions();
-  }
-
-  private mountDemoGrid(): void {
-    const grid = this.demoGridRef().nativeElement;
-    const mode = this.mode();
-
-    if (mode === 'trading') {
-      this.tradingRows = createTradingRows();
-      this.replaceTemplates(grid, [
-        ['cell-price',     '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>'],
-        ['cell-bid',       '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>'],
-        ['cell-ask',       '<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>'],
-        ['cell-change',    '<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>'],
-        ['cell-changePct', '<span style="color:{{row.changeColor}}">{{row.changePctStr}}</span>'],
-      ]);
-      grid.options = this.tradingGridOptions();
-      return;
-    }
-
-    if (mode === 'expandable') {
-      this.replaceTemplates(grid, [
-        [
-          'expandable-row',
-          '<article class="detail-card"><strong>{{row.name}}</strong><p>Owner: {{row.account.owner}}</p><p>Renewal: {{row.renewalDate}}</p><p>Revenue: {{row.revenue}}</p></article>',
-        ],
-      ]);
-      grid.options = this.expandableOptions();
-      return;
-    }
-
-    if (mode === 'templated') {
-      this.replaceTemplates(grid, [
-        ['cell-status', '<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>'],
-      ]);
-      grid.options = this.templatedOptions();
-      return;
-    }
-
-    this.replaceTemplates(grid, []);
-    grid.options = mode === 'tree' ? this.treeOptions() : this.pinningOptions();
-  }
-
-  private tradingGridOptions(): GridOptions {
-    return {
-      id: 'web-components-demo-trading',
-      title: 'Web Components Demo: Trading Terminal',
-      emptyMessage: 'No data',
-      rowIdentity: (row) => String(row['id']),
-      data: this.tradingRows,
-      rowHeight: 40,
-      viewportHeight: 460,
-      enableSorting: true,
-      enableFiltering: false,
-      enableGrouping: false,
-      enableColumnMoving: false,
-      enableVirtualization: true,
-      virtualizationThreshold: 1,
-      columnDefs: tradingColumnDefs(),
-    };
-  }
-
-  private replaceTemplates(
-    grid: WebComponentGridElement,
-    templates: ReadonlyArray<readonly [slotName: string, markup: string]>,
-  ): void {
-    grid
-      .querySelectorAll<HTMLTemplateElement>('template[slot]')
-      .forEach((template) => template.remove());
-
-    for (const [slotName, markup] of templates) {
-      const template = document.createElement('template');
-      template.slot = slotName;
-      template.innerHTML = markup;
-      grid.append(template);
-    }
-  }
-
-  private baseOptions(data: readonly GridRecord[]): GridOptions {
-    return {
-      id: `web-components-demo-${this.mode()}`,
-      title: `Web Components Demo: ${this.mode().charAt(0).toUpperCase()}${this.mode().slice(1)}`,
-      emptyMessage: 'No rows match the current filters.',
-      rowIdentity: (row) => String(row['id']),
-      data,
-      rowHeight: 46,
-      viewportHeight: 300,
-      enableSorting: true,
-      enableFiltering: true,
-      enableGrouping: false,
-      enableColumnMoving: false,
-      enableVirtualization: true,
-      virtualizationThreshold: 1,
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
-        { name: 'status', width: 'minmax(9rem, 0.7fr)' },
-        {
-          name: 'revenue',
-          align: 'end',
-          width: 'minmax(9rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) => `$${value}`,
-        },
-        {
-          name: 'owner',
-          field: 'account.owner',
-          displayName: 'Owner',
-          width: 'minmax(10rem, 0.8fr)',
-        },
-      ],
-    };
-  }
-
-  private primaryOptions(): GridOptions {
-    return {
-      id: 'ui-grid-web-components-primary',
-      title: 'UI Grid Modernized (Web Component)',
-      emptyMessage: 'No rows match the current filters.',
-      data: this.primaryData,
-      rowHeight: 48,
-      viewportHeight: 620,
-      enableSorting: true,
-      enableFiltering: true,
-      enableGrouping: true,
-      enableColumnMoving: true,
-      enableVirtualization: true,
-      enableCellEditOnFocus: true,
-      virtualizationThreshold: 25,
+    grid.options = {
+      ...grid.options,
       benchmark: {
         iterations: 40,
       },
@@ -402,144 +737,70 @@ grid.options = options;`;
           this.benchmarkResult.set(result as GridBenchmarkResult);
         });
       },
-      grouping: {
-        groupBy: ['status'],
-      },
-      rowIdentity: (row) => String(row['id']),
-      columnDefs: [
-        {
-          name: 'name',
-          displayName: 'Customer',
-          width: 'minmax(14rem, 1.2fr)',
-          enableCellEdit: true,
-        },
-        {
-          name: 'company',
-          width: 'minmax(12rem, 1fr)',
-          enableCellEdit: true,
-        },
-        {
-          name: 'revenue',
-          type: 'number',
-          align: 'end',
-          width: 'minmax(10rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) =>
-            new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0,
-            }).format(Number(value ?? 0)),
-        },
-        {
-          name: 'status',
-          width: 'minmax(8rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.exact },
-        },
-        {
-          name: 'renewalDate',
-          type: 'date',
-          displayName: 'Renewal',
-          width: 'minmax(11rem, 0.8fr)',
-          formatter: (value) => new Date(String(value)).toLocaleDateString('en-US'),
-        },
-        {
-          name: 'owner',
-          field: 'account.owner',
-          displayName: 'Account Owner',
-          width: 'minmax(11rem, 0.8fr)',
-          enableCellEdit: true,
-        },
-      ],
-    };
+    } as GridOptions;
   }
 
-  private expandableOptions(): GridOptions {
-    return {
-      ...this.baseOptions(createHarnessRows()),
-      enableExpandable: true,
-      expandableRowHeight: 112,
-    };
+  private injectSlotTemplate(element: HTMLElement, slotName: string, markup: string): void {
+    let tmpl = element.querySelector<HTMLTemplateElement>(`template[slot="${slotName}"]`);
+    if (tmpl) {
+      tmpl.innerHTML = markup;
+    } else {
+      tmpl = document.createElement('template');
+      tmpl.setAttribute('slot', slotName);
+      tmpl.innerHTML = markup;
+      element.appendChild(tmpl);
+    }
   }
 
-  private treeOptions(): GridOptions {
-    return {
-      ...this.baseOptions(createTreeRows()),
-      enableTreeView: true,
-      treeChildrenField: 'children',
-      showTreeExpandNoChildren: false,
-      treeIndent: 16,
-    };
+  private clearSlotTemplates(element: HTMLElement): void {
+    element.querySelectorAll('template[slot]').forEach((t) => t.remove());
   }
 
-  private templatedOptions(): GridOptions {
-    return {
-      ...this.baseOptions(createHarnessRows()),
-      columnDefs: [
-        { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
-        {
-          name: 'status',
-          width: 'minmax(9rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.exact },
-        },
-        {
-          name: 'revenue',
-          align: 'end',
-          width: 'minmax(9rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) => `$${value}`,
-        },
-        {
-          name: 'owner',
-          field: 'account.owner',
-          displayName: 'Owner',
-          width: 'minmax(10rem, 0.8fr)',
-        },
-      ],
-    };
+  private injectPrimaryGridTemplates(): void {
+    if (!isPlatformBrowser(this.platformId) || !this.primaryGridActive()) {
+      return;
+    }
+    const el = this.primaryGridRef().nativeElement;
+    this.injectSlotTemplate(
+      el,
+      'cell-status',
+      WebComponentsComponent.STATUS_PILL_TEMPLATE,
+    );
   }
 
-  private pinningOptions(): GridOptions {
-    const data = Array.from({ length: 20 }, (_value, index) => ({
-      id: `pin-${index + 1}`,
-      name: `Row ${index + 1}`,
-      department: index % 3 === 0 ? 'Engineering' : index % 3 === 1 ? 'Design' : 'Sales',
-      region:
-        index % 4 === 0 ? 'West' : index % 4 === 1 ? 'East' : index % 4 === 2 ? 'Central' : 'South',
-      q1: 1000 + index * 120,
-      q2: 1100 + index * 95,
-      q3: 900 + index * 140,
-      q4: 1300 + index * 80,
-      total: 4300 + index * 435,
-      growth: `${(2.5 + index * 0.3).toFixed(1)}%`,
-      status: index % 2 === 0 ? 'Active' : 'Review',
-    }));
+  private injectDemoGridTemplates(): void {
+    if (!isPlatformBrowser(this.platformId) || !this.demoGridActive()) {
+      return;
+    }
+    const el = this.demoGridRef().nativeElement;
+    this.clearSlotTemplates(el);
+    const mode = this.mode();
+    if (mode === 'expandable') {
+      this.injectSlotTemplate(el, 'expandable-row', WebComponentsComponent.EXPANDABLE_ROW_TEMPLATE);
+    } else if (mode === 'templated') {
+      this.injectSlotTemplate(el, 'cell-status', WebComponentsComponent.STATUS_PILL_TEMPLATE);
+    } else if (mode === 'trading') {
+      for (const [slotName, markup] of WebComponentsComponent.TRADING_TEMPLATES) {
+        this.injectSlotTemplate(el, slotName, markup);
+      }
+    }
+  }
 
-    return {
-      id: 'web-components-demo-pinning',
-      title: 'Web Components Demo: Pinning',
-      emptyMessage: 'No rows',
-      rowIdentity: (row) => String(row['id']),
-      data,
-      rowHeight: 46,
-      viewportHeight: 300,
-      enableSorting: true,
-      enableFiltering: true,
-      enablePinning: true,
-      enableVirtualization: true,
-      virtualizationThreshold: 1,
-      columnDefs: [
-        { name: 'name', displayName: 'Name', width: '160px', pinnedLeft: true },
-        { name: 'department', displayName: 'Department', width: '180px' },
-        { name: 'region', displayName: 'Region', width: '140px' },
-        { name: 'q1', displayName: 'Q1 Revenue', width: '180px', align: 'end' },
-        { name: 'q2', displayName: 'Q2 Revenue', width: '180px', align: 'end' },
-        { name: 'q3', displayName: 'Q3 Revenue', width: '180px', align: 'end' },
-        { name: 'q4', displayName: 'Q4 Revenue', width: '180px', align: 'end' },
-        { name: 'total', displayName: 'Total', width: '150px', align: 'end' },
-        { name: 'growth', displayName: 'Growth', width: '140px', align: 'end' },
-        { name: 'status', displayName: 'Status', width: '150px' },
-      ],
-    };
+  private syncTradingLoop(): void {
+    if (this.tradingIntervalId !== null) {
+      clearInterval(this.tradingIntervalId);
+      this.tradingIntervalId = null;
+    }
+
+    if (!isPlatformBrowser(this.platformId) || this.mode() !== 'trading') {
+      return;
+    }
+
+    this.tradingRows = createTradingRows();
+    this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
+    this.tradingIntervalId = setInterval(() => {
+      this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
+      this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
+    }, 150);
   }
 }

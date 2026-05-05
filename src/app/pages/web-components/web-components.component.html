@@ -83,7 +83,26 @@
                 </p>
             </div>
 
-            <ui-grid-element #primaryGrid></ui-grid-element>
+            @if (primaryGridActive()) {
+                <ui-grid-element
+                    #primaryGrid
+                    [attr.grid-id]="primaryConfig().id"
+                    [attr.title]="primaryConfig().title"
+                    [attr.empty-message]="primaryConfig().emptyMessage"
+                    [attr.row-height]="primaryConfig().rowHeight"
+                    [attr.viewport-height]="primaryConfig().viewportHeight"
+                    [attr.virtualization-threshold]="primaryConfig().virtualizationThreshold"
+                    [attr.grouping]="primaryConfig().groupingJson ?? null"
+                    [attr.column-defs]="primaryConfig().columnDefsJson"
+                    [attr.data]="primaryConfig().dataJson"
+                    enable-sorting
+                    enable-filtering
+                    enable-grouping
+                    enable-column-moving
+                    enable-virtualization
+                    enable-cell-edit-on-focus>
+                </ui-grid-element>
+            }
         </section>
     </section>
 
@@ -104,8 +123,8 @@
             </div>
         </div>
         <div class="code-grid">
-            <app-code-block lang="typescript" [code]="webComponentPrimarySnippet" />
-            <app-code-block lang="typescript" [code]="webComponentPinningSnippet" />
+            <app-code-block lang="html" [code]="webComponentPrimarySnippet()" />
+            <app-code-block lang="html" [code]="webComponentScenarioSnippet()" />
         </div>
     </section>
 
@@ -126,6 +145,31 @@
             </button>
             }
         </div>
-        <ui-grid-element #demoGrid></ui-grid-element>
+        @if (demoGridActive()) {
+            <ui-grid-element
+                #demoGrid
+                [attr.grid-id]="demoConfig().id"
+                [attr.title]="demoConfig().title"
+                [attr.empty-message]="demoConfig().emptyMessage"
+                [attr.row-height]="demoConfig().rowHeight"
+                [attr.viewport-height]="demoConfig().viewportHeight"
+                [attr.virtualization-threshold]="demoConfig().virtualizationThreshold"
+                [attr.tree-children-field]="demoConfig().treeChildrenField ?? null"
+                [attr.tree-indent]="demoConfig().treeIndent ?? null"
+                [attr.expandable-row-height]="demoConfig().expandableRowHeight ?? null"
+                [attr.column-defs]="demoConfig().columnDefsJson"
+                [attr.data]="demoConfig().dataJson"
+                [attr.enable-sorting]="demoConfig().enableSorting ? '' : null"
+                [attr.enable-filtering]="demoConfig().enableFiltering ? '' : null"
+                [attr.enable-grouping]="demoConfig().enableGrouping ? '' : null"
+                [attr.enable-column-moving]="demoConfig().enableColumnMoving ? '' : null"
+                [attr.enable-virtualization]="demoConfig().enableVirtualization ? '' : null"
+                [attr.enable-cell-edit-on-focus]="demoConfig().enableCellEditOnFocus ? '' : null"
+                [attr.enable-pinning]="demoConfig().enablePinning ? '' : null"
+                [attr.enable-expandable]="demoConfig().enableExpandable ? '' : null"
+                [attr.enable-tree-view]="demoConfig().enableTreeView ? '' : null"
+                [attr.show-tree-expand-no-children]="demoConfig().showTreeExpandNoChildren ? '' : null">
+            </ui-grid-element>
+        }
     </section>
 </main>

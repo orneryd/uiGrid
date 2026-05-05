@@ -185,6 +185,36 @@
   padding: clamp(0.85rem, 1.5vw, 1.25rem);
 }
 
+.section-switch {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-surface-strong) 84%, white);
+  width: fit-content;
+}
+
+.section-button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--ink-strong) 74%, var(--teal-strong) 26%);
+  padding: 0.65rem 1rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.section-button-active {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--teal-strong) 85%, black),
+    color-mix(in srgb, var(--teal-strong) 65%, black)
+  );
+  color: #051017;
+}
+
 .angular-demo-shell {
   display: grid;
   gap: 1rem;
@@ -278,6 +308,27 @@
   margin: 0;
 }
 
+.angular-demo-shell--element {
+  --ui-grid-border-color: color-mix(in srgb, var(--teal-strong) 14%, var(--card-border));
+}
+
+.angular-element-shell__difference {
+  margin-top: 0.65rem;
+}
+
+.angular-element-shell__difference a {
+  color: var(--teal-strong);
+  font-weight: 700;
+}
+
+.angular-element-grid {
+  display: block;
+}
+
+.angular-element-grid--scenario {
+  margin-top: 1rem;
+}
+
 .state-panel {
   display: grid;
   gap: 1rem;
@@ -367,6 +418,70 @@
   -webkit-text-size-adjust: 100%;
 }
 
+.browser-harness {
+  display: grid;
+  gap: 1rem;
+}
+
+.browser-harness__header {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  border-radius: 1rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--panel-surface-strong) 84%, white), transparent);
+}
+
+.browser-harness__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-strong);
+}
+
+.browser-harness__header h2,
+.browser-harness__header p {
+  margin: 0;
+}
+
+.browser-harness__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.browser-harness__mode {
+  border: 1px solid color-mix(in srgb, var(--ink-strong) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-surface-strong) 88%, white);
+  color: color-mix(in srgb, var(--ink-strong) 78%, var(--teal-strong) 22%);
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.browser-harness__mode-active {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--teal-strong) 85%, black),
+    color-mix(in srgb, var(--teal-strong) 65%, black)
+  );
+  color: #051017;
+}
+
+.browser-harness__mode-trading {
+  background: color-mix(in srgb, #22c55e 14%, var(--panel-surface-strong));
+  color: color-mix(in srgb, #22c55e 80%, currentColor);
+  border-color: color-mix(in srgb, #22c55e 30%, transparent);
+}
+
+.browser-harness__mode-trading.browser-harness__mode-active {
+  background: color-mix(in srgb, #22c55e 85%, black);
+  color: #051a0e;
+}
+
 @media (max-width: 960px) {
   .app-shell {
     width: min(100%, calc(100% - 1rem));
@@ -379,6 +494,15 @@
 
   .state-header {
     display: grid;
+  }
+
+  .section-switch {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .section-button {
+    flex: 1 1 0;
   }
 
   .state-panel pre {
