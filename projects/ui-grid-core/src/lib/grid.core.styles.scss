@@ -795,6 +795,7 @@ h1 {
   background: var(--ui-grid-surface);
   overflow-x: var(--ui-grid-overflow-x);
   overflow-y: var(--ui-grid-overflow-y);
+  overflow-anchor: none;
 }
 
 .header-grid,

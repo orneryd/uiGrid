@@ -97,6 +97,19 @@ type WebComponentTab = 'angular' | 'vanilla';
           </p>
           <app-code-block lang="javascript" [code]="angularImperativeSnippet" />
 
+          <h3>Performance guidance</h3>
+          <p>
+            Declarative attributes are the best authoring experience for initial render and
+            occasional reconfiguration, but they are not the cheapest high-frequency update path.
+            Updating JSON attributes such as <code>data</code> or <code>column-defs</code>
+            requires reparsing the payload and re-running the custom element update flow.
+          </p>
+          <p>
+            Use declarative HTML for first mount, then batch imperative <code>options</code>
+            changes from application code. For truly live feeds, prefer the Angular component
+            directly instead of the Angular Elements wrapper.
+          </p>
+
           <h3>Declarative surface</h3>
           <p>
             Every attribute maps 1-to-1 to a <code>GridOptions</code> key. JavaScript property
@@ -166,6 +179,20 @@ type WebComponentTab = 'angular' | 'vanilla';
 
           <h3>Imperative augmentation</h3>
           <app-code-block lang="javascript" [code]="vanillaImperativeSnippet" />
+
+          <h3>Performance guidance</h3>
+          <p>
+            Use declarative attributes for initial mount and infrequent configuration changes.
+            Replacing a large JSON <code>data</code> attribute repeatedly is more expensive than
+            imperative row updates because the element must parse the new payload, merge options,
+            and re-enter its declarative sync path.
+          </p>
+          <p>
+            For streaming datasets, the most efficient sequence is: mount declaratively if you
+            want HTML-first setup, then send live row changes through
+            <code>grid.setData(rows)</code>. That path is specifically optimized to patch the
+            mounted grid instead of treating every tick like a full reconfiguration.
+          </p>
 
           <h3>Live data (trading / high-frequency feeds)</h3>
           <p>

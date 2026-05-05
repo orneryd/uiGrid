@@ -112,6 +112,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   private draggedColumnName: string | null = null;
   private dropTargetColumnName: string | null = null;
   private scrollPosition = 0;
+  private horizontalScrollPosition = 0;
   private scrollFrame: number | null = null;
   private suppressScrollEvent = false;
   private lastVirtualStartIndex = -1;
@@ -121,6 +122,9 @@ export class UiGridStandaloneElement extends HTMLElement {
   private benchmarkAverage = '—';
   private skipNextRender = false;
   private dataFrame: number | null = null;
+  private pendingPatchedRowIds: Set<string> | null = null;
+  private pendingDataRefreshMode: 'patch' | 'virtual' | 'full' | null = null;
+  private lastScrollActivityAt = 0;
 
   static get observedAttributes(): string[] {
     return [
@@ -718,22 +722,63 @@ export class UiGridStandaloneElement extends HTMLElement {
       return;
     }
 
+    const previousSnapshot = this.snapshot;
+
     // Update the pipeline synchronously (cheap, no DOM work).
     this.skipNextRender = true;
     controller.refreshData(rows);
     this.skipNextRender = false;
+
+    const { mode, changedRowIds } = this.classifyDataRefresh(previousSnapshot, this.snapshot);
+    if (mode === null) {
+      return;
+    }
+
+    this.pendingDataRefreshMode = mode;
+    this.pendingPatchedRowIds = changedRowIds;
 
     // Schedule DOM patching on the next paint — latest call wins.
     if (this.dataFrame !== null) {
       cancelAnimationFrame(this.dataFrame);
     }
     this.dataFrame = requestAnimationFrame(() => {
-      this.dataFrame = null;
-      this.patchCells();
+      this.flushPendingDataRefresh();
     });
   }
 
-  private patchCells(): void {
+  private flushPendingDataRefresh(): void {
+    this.dataFrame = null;
+
+    const mode = this.pendingDataRefreshMode;
+    if (mode === null) {
+      return;
+    }
+
+    if (Date.now() - this.lastScrollActivityAt < 80) {
+      this.dataFrame = requestAnimationFrame(() => {
+        this.flushPendingDataRefresh();
+      });
+      return;
+    }
+
+    const changedRowIds = this.pendingPatchedRowIds;
+    this.pendingDataRefreshMode = null;
+    this.pendingPatchedRowIds = null;
+
+    if (mode === 'patch') {
+      this.patchCells(changedRowIds ?? undefined);
+      return;
+    }
+
+    if (mode === 'virtual') {
+      this.renderVirtualBody();
+      return;
+    }
+
+    this.render();
+  }
+
+  private patchCells(changedRowIds?: ReadonlySet<string>): void {
     const snapshot = this.snapshot;
     if (!snapshot) {
       return;
@@ -746,12 +791,16 @@ export class UiGridStandaloneElement extends HTMLElement {
 
     // Build O(1) lookup maps from the current pipeline snapshot.
     const rowMap = new Map<string, GridRow>();
+    const rowIndexMap = new Map<string, number>();
     for (const row of snapshot.pipeline.visibleRows) {
       rowMap.set(row.id, row);
+      rowIndexMap.set(row.id, rowIndexMap.size);
     }
     const colMap = new Map<string, GridColumnDef>();
+    const templateMarkupMap = new Map<string, string | null>();
     for (const col of snapshot.visibleColumns) {
       colMap.set(col.name, col);
+      templateMarkupMap.set(col.name, this.getTemplateMarkup(this.cellSlotName(col)));
     }
 
     // Patch every rendered body cell in-place.
@@ -760,23 +809,24 @@ export class UiGridStandaloneElement extends HTMLElement {
       const rowId = cell.dataset['row'];
       const colName = cell.dataset['column'];
       if (!rowId || !colName) continue;
+      if (changedRowIds && !changedRowIds.has(rowId)) continue;
 
       const row = rowMap.get(rowId);
       const column = colMap.get(colName);
       if (!row || !column) continue;
+      if (cell.classList.contains('cell-editing')) continue;
 
-      const cellShell = cell.querySelector<HTMLElement>('.cell-shell');
-      if (!cellShell) continue;
+      const cellContent = cell.querySelector<HTMLElement>('.cell-content');
+      if (!cellContent) continue;
 
-      const newContent = this.renderCellTemplate(row, column, 0);
-      const toggles = cellShell.querySelectorAll<HTMLElement>('.row-toggle');
-      if (toggles.length === 0) {
-        cellShell.innerHTML = newContent;
-      } else {
-        const toggleHtml = Array.from(toggles)
-          .map((t) => t.outerHTML)
-          .join('');
-        cellShell.innerHTML = toggleHtml + newContent;
+      const newContent = this.renderCellTemplateFromMarkup(
+        row,
+        column,
+        rowIndexMap.get(rowId) ?? 0,
+        templateMarkupMap.get(colName) ?? null,
+      );
+      if (cellContent.innerHTML !== newContent) {
+        cellContent.innerHTML = newContent;
       }
     }
   }
@@ -1214,7 +1264,9 @@ export class UiGridStandaloneElement extends HTMLElement {
           return;
         }
 
+        this.lastScrollActivityAt = Date.now();
         this.scrollPosition = target.scrollTop;
+        this.horizontalScrollPosition = target.scrollLeft;
         if (!this.snapshot?.pipeline.virtualizationEnabled) {
           return;
         }
@@ -1312,6 +1364,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     const previousGridTable = root.querySelector<HTMLElement>('.grid-table');
     if (previousGridTable && !this.suppressScrollEvent) {
       this.scrollPosition = previousGridTable.scrollTop;
+      this.horizontalScrollPosition = previousGridTable.scrollLeft;
     }
 
     if (!snapshot) {
@@ -1379,14 +1432,20 @@ export class UiGridStandaloneElement extends HTMLElement {
         : `<div class="empty-state ui-grid-no-row-overlay"><strong>${escapeHtml(options.emptyMessage ?? labels.emptyHeading)}</strong><p>${escapeHtml(labels.emptyDescription)}</p></div>`;
 
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
-    const gridTableStyle = `${virtualizationEnabled ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
+    const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
+    const gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
 
     root.innerHTML = `<style>${GRID_CORE_CSS}</style>${slotRegistry}<section class="grid-frame ui-grid" role="grid" aria-label="${escapeHtml(options.title ?? 'Data grid')}"><div class="grid-table ui-grid-contents-wrapper" style="${gridTableStyle}"><div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${templateColumns}">${header}</div>${filterRow}${body}</div>${pagination}</section>`;
 
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    if (gridTable && this.scrollPosition > 0 && virtualizationEnabled) {
+    if (gridTable && (this.scrollPosition > 0 || this.horizontalScrollPosition > 0)) {
       this.suppressScrollEvent = true;
-      gridTable.scrollTop = this.scrollPosition;
+      if (this.scrollPosition > 0) {
+        gridTable.scrollTop = this.scrollPosition;
+      }
+      if (this.horizontalScrollPosition > 0) {
+        gridTable.scrollLeft = this.horizontalScrollPosition;
+      }
       requestAnimationFrame(() => {
         this.suppressScrollEvent = false;
       });
@@ -1548,7 +1607,7 @@ export class UiGridStandaloneElement extends HTMLElement {
       .join(' ');
 
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
-    return `<div class="${classes}" tabindex="0" data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" style="${stickyStyle}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}${content}</div></div>`;
+    return `<div class="${classes}" tabindex="0" data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" style="${stickyStyle}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></div>`;
   }
 
   private renderPagination(snapshot: GridControllerSnapshot): string {
@@ -1570,6 +1629,15 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   private renderCellTemplate(row: GridRow, column: GridColumnDef, displayIndex: number): string {
     const templateMarkup = this.getTemplateMarkup(this.cellSlotName(column));
+    return this.renderCellTemplateFromMarkup(row, column, displayIndex, templateMarkup);
+  }
+
+  private renderCellTemplateFromMarkup(
+    row: GridRow,
+    column: GridColumnDef,
+    displayIndex: number,
+    templateMarkup: string | null,
+  ): string {
     if (!templateMarkup) {
       return `<span class="cell-value">${escapeHtml(this.controller?.displayValue(row, column) ?? '')}</span>`;
     }
@@ -1633,6 +1701,101 @@ export class UiGridStandaloneElement extends HTMLElement {
       this.snapshot?.pipeline.visibleRows.findIndex((candidate) => candidate.id === row.id) ??
       fallback
     );
+  }
+
+  private classifyDataRefresh(
+    previousSnapshot: GridControllerSnapshot | null,
+    nextSnapshot: GridControllerSnapshot | null,
+  ): { mode: 'patch' | 'virtual' | 'full' | null; changedRowIds: Set<string> | null } {
+    if (!nextSnapshot) {
+      return { mode: 'full', changedRowIds: null };
+    }
+
+    if (!previousSnapshot) {
+      return {
+        mode: nextSnapshot.pipeline.virtualizationEnabled ? 'virtual' : 'full',
+        changedRowIds: null,
+      };
+    }
+
+    if (previousSnapshot.visibleColumns.length !== nextSnapshot.visibleColumns.length) {
+      return { mode: 'full', changedRowIds: null };
+    }
+
+    for (let index = 0; index < previousSnapshot.visibleColumns.length; index += 1) {
+      if (previousSnapshot.visibleColumns[index]?.name !== nextSnapshot.visibleColumns[index]?.name) {
+        return { mode: 'full', changedRowIds: null };
+      }
+    }
+
+    const previousWindow = this.getRenderedDisplayWindow(previousSnapshot);
+    const nextWindow = this.getRenderedDisplayWindow(nextSnapshot);
+    if (
+      previousWindow.startIndex !== nextWindow.startIndex ||
+      previousWindow.items.length !== nextWindow.items.length
+    ) {
+      return {
+        mode: nextSnapshot.pipeline.virtualizationEnabled ? 'virtual' : 'full',
+        changedRowIds: null,
+      };
+    }
+
+    const changedRowIds = new Set<string>();
+    for (let index = 0; index < previousWindow.items.length; index += 1) {
+      const previousItem = previousWindow.items[index];
+      const nextItem = nextWindow.items[index];
+
+      if (!previousItem || !nextItem || previousItem.kind !== 'row' || nextItem.kind !== 'row') {
+        return {
+          mode: nextSnapshot.pipeline.virtualizationEnabled ? 'virtual' : 'full',
+          changedRowIds: null,
+        };
+      }
+
+      if (previousItem.row.id !== nextItem.row.id) {
+        return {
+          mode: nextSnapshot.pipeline.virtualizationEnabled ? 'virtual' : 'full',
+          changedRowIds: null,
+        };
+      }
+
+      if (previousItem.row.entity !== nextItem.row.entity) {
+        changedRowIds.add(nextItem.row.id);
+      }
+    }
+
+    return {
+      mode: changedRowIds.size > 0 ? 'patch' : null,
+      changedRowIds: changedRowIds.size > 0 ? changedRowIds : null,
+    };
+  }
+
+  private getRenderedDisplayWindow(snapshot: GridControllerSnapshot): {
+    startIndex: number;
+    items: readonly DisplayItem[];
+  } {
+    if (!snapshot.pipeline.virtualizationEnabled) {
+      return {
+        startIndex: 0,
+        items: snapshot.pipeline.displayItems,
+      };
+    }
+
+    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const viewportHeight = snapshot.options.viewportHeight ?? 560;
+    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
+    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+    const overscan = 4;
+    const startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+    const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
+
+    return {
+      startIndex,
+      items: snapshot.pipeline.displayItems.slice(
+        startIndex,
+        Math.min(snapshot.pipeline.displayItems.length, startIndex + visibleCount),
+      ),
+    };
   }
 
   private cellSlotName(column: GridColumnDef): string {

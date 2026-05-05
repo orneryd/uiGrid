@@ -60,6 +60,13 @@ Supported declarative inputs include:
 
 Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
 
+### Performance Guidance
+
+- **Best use for declarative attributes**: initial render, static embeds, server-rendered HTML, CMS content, and occasional UI reconfiguration.
+- **Cost of declarative updates**: changing JSON attributes such as `data`, `column-defs`, or `grouping` requires parsing the new string payload and re-running the element's configuration/update path.
+- **Best use for imperative updates**: callbacks, function-valued configuration, programmatic integration, and batched reconfiguration from application code.
+- **High-frequency updates**: avoid pushing a new `data` attribute every frame. For the Angular Elements output, batch `options` changes and prefer the Angular component directly for truly live data feeds.
+
 ### JavaScript Property Usage
 
 ```html
@@ -157,6 +164,13 @@ Supported declarative inputs include:
 - JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
 
 Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
+
+### Performance Guidance
+
+- **Best use for declarative attributes**: initial mount, static markup-first pages, and infrequent option changes.
+- **Cost of declarative updates**: changing JSON attributes such as `data` or `column-defs` forces the element to parse the new payload, merge options again, and may trigger more DOM work than necessary for live feeds.
+- **Best use for imperative updates**: callbacks, one-shot bulk configuration, host-framework integration, and any case where application code already owns the current row set.
+- **High-frequency updates**: for streaming or trading-style feeds, mount declaratively if you want, but switch live row updates to `grid.setData(rows)` instead of replacing the `data` attribute. `setData(rows)` is the vanilla element's cheapest update path because it patches the existing grid surface instead of re-running the full declarative sync flow.
 
 ### JavaScript Property Usage
 
@@ -274,6 +288,12 @@ grid.setState(state);           // applies a previously saved state
 Both outputs accept the same `GridOptions` object as the Angular component, plus the same declarative attributes for common markup-first setup:
 
 For both elements, the `options` property is the advanced escape hatch rather than the only configuration path. Prefer attributes when they are sufficient; use `options` when you need callbacks, function-valued column definitions, or one-shot bulk assignment.
+
+In performance terms, think of the surfaces like this:
+
+- **Declarative attributes** optimize for authoring convenience and HTML-first setup.
+- **`options` assignment** optimizes for programmatic control and coarse reconfiguration.
+- **Vanilla `setData(rows)`** optimizes for repeated row-data refreshes and is the preferred path for high-frequency updates.
 
 ```javascript
 const grid = document.querySelector('ui-grid-element');

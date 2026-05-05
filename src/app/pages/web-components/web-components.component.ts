@@ -389,12 +389,12 @@ export class WebComponentsComponent {
           columnDefsJson: this.tradingColumnDefsJson,
           rowHeight: 40,
           viewportHeight: 460,
-          virtualizationThreshold: 1,
+          virtualizationThreshold: 64,
           enableSorting: true,
           enableFiltering: false,
           enableGrouping: false,
           enableColumnMoving: false,
-          enableVirtualization: true,
+          enableVirtualization: false,
           enableCellEditOnFocus: false,
           enablePinning: false,
           enableExpandable: false,
@@ -554,7 +554,7 @@ export class WebComponentsComponent {
   row-height="40"
   viewport-height="460"
   enable-sorting
-  enable-virtualization>
+  >
   <template slot="cell-price" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span></template>
   <template slot="cell-bid" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span></template>
   <template slot="cell-ask" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span></template>
@@ -649,6 +649,11 @@ export class WebComponentsComponent {
       return;
     }
 
+    if (mode === 'trading') {
+      this.tradingRows = createTradingRows();
+      this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
+    }
+
     this.mode.set(mode);
     queueMicrotask(() => {
       this.injectDemoGridTemplates();
@@ -685,6 +690,7 @@ export class WebComponentsComponent {
       this.tradingIntervalId = null;
     }
     this.tradingRows = createTradingRows();
+    this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
     this.primaryGridActive.set(false);
     this.demoGridActive.set(false);
     queueMicrotask(() => {
@@ -796,11 +802,11 @@ export class WebComponentsComponent {
       return;
     }
 
-    this.tradingRows = createTradingRows();
-    this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
+    const grid = this.demoGridRef().nativeElement;
+    grid.setData(createTradingDisplayRows(this.tradingRows));
     this.tradingIntervalId = setInterval(() => {
       this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
-      this.tradingDisplayDataSignal.set(JSON.stringify(createTradingDisplayRows(this.tradingRows)));
+      grid.setData(createTradingDisplayRows(this.tradingRows));
     }, 150);
   }
 }

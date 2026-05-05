@@ -170,6 +170,8 @@ Declarative HTML usage is available for the same common setup surface as the van
 
 Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
 
+Declarative attributes are the lowest-friction setup path, but they are not the cheapest update path. Changing JSON attributes such as `data` or `column-defs` means reparsing the payload and re-running the custom element's configuration flow. That is fine for initial render, docs examples, SSR/CMS content, and occasional state changes, but it is not ideal for high-frequency feeds.
+
 For callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property:
 
 ```html
@@ -193,6 +195,8 @@ import { defineUiGridElement } from '@ornery/ui-grid';
 
 await defineUiGridElement(); // registers <ui-grid-element>
 ```
+
+For performance-sensitive updates on the Angular-backed custom element, prefer declarative attributes for first render and infrequent changes, then batch any imperative `options` updates so you do not replace large `data` payloads every frame. If you need very high-frequency streaming behavior, use the Angular component directly instead of the custom-element wrapper.
 
 #### Vanilla Output (`@ornery/ui-grid-vanilla`)
 
@@ -231,6 +235,8 @@ Declarative HTML usage is available out of the box for the same common setup sur
 
 Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
 
+Declarative attributes are best for initial mount and occasional reconfiguration. Updating a large `data` JSON attribute repeatedly is more expensive than imperative row updates because the element must parse the new attribute value, merge options again, and potentially rebuild more of the grid state.
+
 When you need callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property or the `mountVanillaUiGrid` helper instead:
 
 ```typescript
@@ -242,6 +248,8 @@ await mountVanillaUiGrid(document.getElementById('app'), {
   columnDefs: [{ name: 'name' }, { name: 'role' }],
 });
 ```
+
+For live or high-frequency data, use the declarative surface only for the initial mount and then switch to imperative updates. In the vanilla element, `grid.setData(rows)` is the most efficient path for streaming row changes because it updates the pipeline and patches rendered cells in place instead of re-running the full declarative attribute sync path.
 
 ### Native Rust / egui
 
