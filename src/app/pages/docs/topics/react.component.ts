@@ -357,8 +357,18 @@ function createTreeRows(): GridRecord[] {
       border: 1px solid color-mix(in srgb, var(--ink-strong) 14%, transparent);
       background: color-mix(in srgb, var(--panel-surface-strong) 82%, black 18%);
       color: var(--ink-strong);
+      max-width: 100%;
       overflow-x: auto;
+      overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
+      white-space: pre;
+      word-break: normal;
+      overflow-wrap: normal;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
     }
 
     .react-demo-frame {
@@ -484,6 +494,11 @@ function createTreeRows(): GridRecord[] {
       .panel-header,
       .state-panel {
         display: grid;
+      }
+
+      .state-panel pre {
+        font-size: 0.75rem;
+        line-height: 1.5;
       }
     }
   `,

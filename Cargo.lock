@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "ui-grid-contracts"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -2539,7 +2539,7 @@ dependencies = [
 
 [[package]]
 name = "ui-grid-core"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "regex",
@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "ui-grid-egui"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "eframe",
  "egui",
@@ -2565,7 +2565,7 @@ dependencies = [
 
 [[package]]
 name = "ui-grid-fixtures"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -2573,14 +2573,14 @@ dependencies = [
 
 [[package]]
 name = "ui-grid-virtualization"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "ui-grid-wasm"
-version = "0.1.7"
+version = "0.1.9"
 dependencies = [
  "console_error_panic_hook",
  "serde",

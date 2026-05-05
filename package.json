@@ -1,6 +1,6 @@
 {
   "name": "ui-grid",
-  "version": "0.1.8-hotfix-1",
+  "version": "0.1.9",
   "scripts": {
     "ng": "ng",
     "start": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng serve",
@@ -22,7 +22,8 @@
     "test:angular": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng test --watch=false",
     "test:rust": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --workspace",
     "test:react": "npm run build:rust:wasm && npm test --prefix projects/ui-grid-react",
-    "test:vanilla": "npm run build:core && npm run build:library && npm run build:rust:web && npm test --prefix projects/ui-grid-vanilla"
+    "test:vanilla": "npm run build:core && npm run build:library && npm run build:rust:web && npm test --prefix projects/ui-grid-vanilla",
+    "version:sync": "node scripts/sync-versions.mjs"
   },
   "private": true,
   "packageManager": "npm@11.11.1",
