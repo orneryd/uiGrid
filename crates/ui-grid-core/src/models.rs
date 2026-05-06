@@ -302,6 +302,8 @@ pub struct GridOptions {
     pub enable_grouping: bool,
     #[serde(default)]
     pub enable_column_moving: bool,
+    #[serde(default = "default_true")]
+    pub enable_column_resizing: bool,
     #[serde(default)]
     pub enable_cell_edit: bool,
     #[serde(default)]
@@ -371,6 +373,7 @@ impl Default for GridOptions {
             enable_filtering: false,
             enable_grouping: false,
             enable_column_moving: false,
+            enable_column_resizing: true,
             enable_cell_edit: false,
             enable_cell_edit_on_focus: false,
             enable_virtualization: true,

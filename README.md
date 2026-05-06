@@ -8,7 +8,7 @@
 
 # UI Grid — Remastered
 
-**The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, React, and native Rust/egui.**
+**The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, React, native Rust/egui, and native C/LVGL.**
 
 A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` api surface, modern Angular signals internals, and zero legacy baggage. 
 
@@ -54,7 +54,8 @@ Everything below ships free and MIT-licensed. No enterprise tier, no license key
 | **SSR Support**          | **Free** |         —         |    ~$999/dev/yr    |        —        |     —      |        —        |
 | i18n                     | **Free** |         —         |    ~$999/dev/yr    |      Free       |    Paid    |   Community\*   |
 | React Native             | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
-| Rust/egui Native           | **Yes**  |      No      |      No       |       No        |  No   |     No     |
+| Rust/egui Native         | **Yes**  |      No      |      No       |       No        |  No   |     No     |
+| C/LVGL Native            | **Yes**  |      No      |      No       |       No        |  No   |     No     |
 | Angular Native           | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
 | **License**              | **MIT**  |        MIT        |     Commercial     |  Apache/Comm.   | Commercial | Comm./Community |
 
@@ -281,6 +282,26 @@ cargo run -p ui-grid-egui --example demo --release
 
 See [docs/rust-egui.md](./docs/rust-egui.md) for pinning, CSV export, save/restore state, and custom column extensions.
 
+### Native C / LVGL
+
+The C adapter sits on top of the same Rust core and C ABI contract used by the other foreign bindings. The current demo uses LVGL with the SDL desktop backend.
+
+Prerequisites:
+
+- Rust 1.95+
+- CMake 3.20+
+- SDL2
+
+```bash
+brew install sdl2
+cargo build -p ui-grid-c-abi
+cmake -S crates/ui-grid-lvgl -B target/ui-grid-lvgl
+cmake --build target/ui-grid-lvgl -j4
+./target/ui-grid-lvgl/ui-grid-lvgl-demo
+```
+
+The LVGL demo currently exercises the native C grid shell with sorting, grouping, pinning, state save/restore, theme presets, live trading-row updates, and the shared projection/command contract.
+
 ---
 
 ## Features
@@ -298,6 +319,7 @@ See [docs/rust-egui.md](./docs/rust-egui.md) for pinning, CSV export, save/resto
 - **CSV Export** — download visible rows with formula-injection protection
 - **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows
 - **Save/Restore State** — serialize and restore sort, filter, grouping, pagination, and expansion state
+- **Native Rust and C Grids** — shared Rust core with native Rust/egui and native C/LVGL adapters driven by the same projection and command contract
 - **Auto Resize** — ResizeObserver-driven viewport height recalculation
 - **Custom Cell Templates** — Angular `ng-template`, React `cellRenderer` render prop, vanilla `<template>` slots, or `cellRenderer` function for fully custom cells
 - **Shadow DOM** — encapsulated styles with CSS custom property and `::part()` hooks
@@ -374,6 +396,7 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
 | [Rust / WASM](./docs/rust.md)                | Rust pipeline in Angular, React, and vanilla hosts     |
 | [Rust / egui](./docs/rust-egui.md)           | Native egui adapter with pinning, export, save/restore |
+| `README native C / LVGL section`             | Native C/LVGL build and demo run instructions          |
 
 Interactive versions of all documentation are also available in the [live demo](https://orneryd.github.io/uiGrid/).
 
@@ -399,6 +422,18 @@ Requires [Rust 1.95+](https://rustup.rs/).
 cargo test --workspace                                    # Run all Rust tests
 cargo clippy --workspace --all-targets -- -D warnings     # Lint
 cargo run -p ui-grid-egui --example demo --release        # Run the native egui demo app
+```
+
+### C / LVGL
+
+Requires SDL2 plus the Rust/C ABI build.
+
+```bash
+brew install sdl2
+cargo build -p ui-grid-c-abi
+cmake -S crates/ui-grid-lvgl -B target/ui-grid-lvgl
+cmake --build target/ui-grid-lvgl -j4
+./target/ui-grid-lvgl/ui-grid-lvgl-demo                  # Run the native C/LVGL demo app
 ```
 
 ---

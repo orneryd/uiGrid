@@ -1,0 +1,214 @@
+{
+  "engineContractVersion": "0.1.0",
+  "cAbiVersion": "0.1.0",
+  "projectionSchemaVersion": "0.1.0",
+  "commandSchemaVersion": "0.1.0",
+  "payload": {
+    "options": {
+      "id": "ffi-grid",
+      "title": null,
+      "data": [
+        {
+          "id": "row-1",
+          "name": "Alice"
+        }
+      ],
+      "columnDefs": [
+        {
+          "name": "name",
+          "displayName": null,
+          "field": null,
+          "type": "string",
+          "visible": true,
+          "sortable": true,
+          "filterable": true,
+          "enableSorting": true,
+          "enableFiltering": true,
+          "enableGrouping": true,
+          "enableCellEdit": false,
+          "enableCellEditOnFocus": false,
+          "pinnedLeft": false,
+          "pinnedRight": false,
+          "enablePinning": true,
+          "width": null,
+          "align": null,
+          "sort": null,
+          "filter": null
+        }
+      ],
+      "labels": {
+        "sortDefault": "Sort",
+        "sortAsc": "Sort ascending",
+        "sortDesc": "Sort descending",
+        "groupColumn": "Group by this column",
+        "ungroupColumn": "Remove grouping",
+        "groupCollapse": "Collapse group",
+        "groupExpand": "Expand group",
+        "treeCollapse": "Collapse row",
+        "treeExpand": "Expand row",
+        "expandDetail": "Expand details",
+        "collapseDetail": "Collapse details",
+        "filterPlaceholder": "Filter…",
+        "filterDisabled": "Filter disabled",
+        "filterColumn": "Filter",
+        "paginationPrevious": "Previous page",
+        "paginationNext": "Next page",
+        "paginationPage": "Page",
+        "paginationOf": "of",
+        "paginationRows": "Rows per page",
+        "emptyHeading": "No matching rows",
+        "emptyDescription": "Adjust the active filters, grouping, or sort order.",
+        "toolbarOf": "of",
+        "toolbarRows": "rows",
+        "statsVisibleRows": "visible rows",
+        "groupRowsSuffix": "rows",
+        "pinColumn": "Pin column",
+        "pinLeft": "Pin left",
+        "pinRight": "Pin right",
+        "unpin": "Unpin"
+      },
+      "icons": {
+        "sortDefault": "sort",
+        "sortAsc": "sortAsc",
+        "sortDesc": "sortDesc",
+        "groupColumn": "group",
+        "ungroupColumn": "ungroup",
+        "groupCollapse": "chevronDown",
+        "groupExpand": "chevronRight",
+        "treeCollapse": "chevronDown",
+        "treeExpand": "chevronRight",
+        "expandDetail": "chevronDown",
+        "collapseDetail": "chevronDown",
+        "dragHandle": "grip",
+        "moveLeft": "chevronLeft",
+        "moveRight": "chevronRight",
+        "pinLeft": "pinLeft",
+        "pinRight": "pinRight",
+        "unpin": "unpin"
+      },
+      "enableSorting": true,
+      "enableFiltering": true,
+      "enableGrouping": false,
+      "enableColumnMoving": false,
+      "enableCellEdit": false,
+      "enableCellEditOnFocus": false,
+      "enableVirtualization": true,
+      "enablePagination": false,
+      "enablePaginationControls": true,
+      "useExternalPagination": false,
+      "paginationPageSizes": [],
+      "paginationPageSize": null,
+      "paginationCurrentPage": null,
+      "totalItems": null,
+      "enableExpandable": false,
+      "expandableRowHeight": null,
+      "expandableRowHeaderWidth": null,
+      "enableTreeView": false,
+      "treeChildrenField": null,
+      "treeIndent": null,
+      "showTreeExpandNoChildren": true,
+      "treeRowHeaderAlwaysVisible": false,
+      "enableAutoResize": false,
+      "infiniteScrollRowsFromEnd": null,
+      "infiniteScrollUp": false,
+      "infiniteScrollDown": null,
+      "virtualizationThreshold": null,
+      "viewportHeight": null,
+      "grouping": null,
+      "enablePinning": false,
+      "rowIdField": null
+    },
+    "visibleColumns": [
+      {
+        "name": "name",
+        "displayName": null,
+        "field": null,
+        "type": "string",
+        "visible": true,
+        "sortable": true,
+        "filterable": true,
+        "enableSorting": true,
+        "enableFiltering": true,
+        "enableGrouping": true,
+        "enableCellEdit": false,
+        "enableCellEditOnFocus": false,
+        "pinnedLeft": false,
+        "pinnedRight": false,
+        "enablePinning": true,
+        "width": null,
+        "align": null,
+        "sort": null,
+        "filter": null
+      }
+    ],
+    "pipeline": {
+      "visibleRows": [
+        {
+          "id": "ffi-grid-0",
+          "entity": {
+            "id": "row-1",
+            "name": "Alice"
+          },
+          "index": 0,
+          "height": 44,
+          "invisibleReasons": [],
+          "visible": true,
+          "isSelected": false,
+          "treeLevel": 0,
+          "parentId": null,
+          "hasChildren": false,
+          "childCount": 0,
+          "expanded": false,
+          "expandedRowHeight": 150
+        }
+      ],
+      "displayItems": [
+        {
+          "kind": "row",
+          "id": "ffi-grid-0",
+          "row": {
+            "id": "ffi-grid-0",
+            "entity": {
+              "id": "row-1",
+              "name": "Alice"
+            },
+            "index": 0,
+            "height": 44,
+            "invisibleReasons": [],
+            "visible": true,
+            "isSelected": false,
+            "treeLevel": 0,
+            "parentId": null,
+            "hasChildren": false,
+            "childCount": 0,
+            "expanded": false,
+            "expandedRowHeight": 150
+          },
+          "visibleIndex": 0
+        }
+      ],
+      "virtualizationEnabled": false,
+      "pipelineMs": 0.0,
+      "totalItems": 1
+    },
+    "activeFilters": {
+      "name": "Ali"
+    },
+    "sortState": {
+      "columnName": "name",
+      "direction": "asc"
+    },
+    "groupByColumns": [
+      "name"
+    ],
+    "collapsedGroups": {},
+    "expandedRows": {},
+    "expandedTreeRows": {},
+    "pinnedColumns": {
+      "name": "left"
+    },
+    "currentPage": 1,
+    "pageSize": 0,
+    "rowSize": 44
+  }
+}

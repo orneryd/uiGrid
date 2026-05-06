@@ -1,0 +1,19 @@
+[package]
+name = "ui-grid-c-abi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "C ABI wrapper for ui-grid-core"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+rmp-serde.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ui-grid-contracts = { path = "../ui-grid-contracts", version = "0.1" }
+ui-grid-core = { path = "../ui-grid-core", version = "0.1" }

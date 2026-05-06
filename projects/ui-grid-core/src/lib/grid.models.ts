@@ -210,6 +210,7 @@ export interface GridOptions {
   enableFiltering?: boolean;
   enableGrouping?: boolean;
   enableColumnMoving?: boolean;
+  enableColumnResizing?: boolean;
   enableVirtualization?: boolean;
   enableCellEdit?: boolean;
   enableCellEditOnFocus?: boolean;

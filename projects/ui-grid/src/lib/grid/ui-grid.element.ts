@@ -143,6 +143,13 @@ const declarativeSurface: readonly DeclarativeSurfaceEntry[] = [
     defaultValue: true,
   },
   {
+    attribute: 'enable-column-resizing',
+    property: 'enableColumnResizing',
+    optionKey: 'enableColumnResizing',
+    kind: 'boolean',
+    defaultValue: true,
+  },
+  {
     attribute: 'enable-cell-edit',
     property: 'enableCellEdit',
     optionKey: 'enableCellEdit',

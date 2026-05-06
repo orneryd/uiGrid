@@ -1237,10 +1237,11 @@ impl EguiGrid {
             label_row_h + theme.header_padding_y
         };
 
+        let resizable = options.enable_column_resizing;
         let mut table = TableBuilder::new(ui)
             .striped(false)
             .vscroll(vscroll)
-            .resizable(true)
+            .resizable(resizable)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
 
         if let Some(salt) = id_salt {
@@ -1255,7 +1256,7 @@ impl EguiGrid {
         }
 
         for _ in columns {
-            table = table.column(Column::initial(176.0).resizable(true).clip(true));
+            table = table.column(Column::initial(176.0).resizable(resizable).clip(true));
         }
 
         let has_mixed_heights = display_items

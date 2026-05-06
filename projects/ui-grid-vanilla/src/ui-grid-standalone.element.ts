@@ -283,6 +283,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (enableColumnMoving !== undefined)
       this.attributeOptions.enableColumnMoving = enableColumnMoving;
 
+    const enableColumnResizing = this.parseBooleanAttribute('enable-column-resizing');
+    if (enableColumnResizing !== undefined)
+      this.attributeOptions.enableColumnResizing = enableColumnResizing;
+
     const enableCellEdit = this.parseBooleanAttribute('enable-cell-edit');
     if (enableCellEdit !== undefined) this.attributeOptions.enableCellEdit = enableCellEdit;
 
@@ -577,6 +581,14 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
   set enableColumnMoving(value: boolean) {
     this.activeOptions = { ...this.activeOptions, enableColumnMoving: value } as any;
+    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
+  }
+
+  get enableColumnResizing(): boolean {
+    return (this.options as any).enableColumnResizing ?? true;
+  }
+  set enableColumnResizing(value: boolean) {
+    this.activeOptions = { ...this.activeOptions, enableColumnResizing: value } as any;
     this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
   }
 

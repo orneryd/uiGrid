@@ -49,6 +49,10 @@ pub fn can_grid_move_columns(options: &GridOptions) -> bool {
     options.enable_column_moving
 }
 
+pub fn can_grid_resize_columns(options: &GridOptions) -> bool {
+    options.enable_column_resizing
+}
+
 pub fn is_grid_primary_column(visible_columns: &[GridColumnDef], column: &GridColumnDef) -> bool {
     visible_columns
         .first()
