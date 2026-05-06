@@ -31,6 +31,27 @@ function nextTagName(): string {
   return `ui-grid-element-attr-spec-${elementCounter}`;
 }
 
+/**
+ * Creates the registered element via the HTML parser instead of
+ * `document.createElement`. jsdom's `Document.createElement` takes the
+ * synchronous custom-element path, which trips on subclassed Angular
+ * Elements constructors with `Cannot read properties of undefined
+ * (reading '_ceState')`. The parser path goes through the async upgrade
+ * reaction and behaves correctly.
+ */
+function createRegisteredElement(tagName: string, attributes: Record<string, string> = {}): HTMLElement {
+  const host = document.createElement('div');
+  const attrMarkup = Object.entries(attributes)
+    .map(([name, value]) => `${name}="${String(value).replace(/"/g, '&quot;')}"`)
+    .join(' ');
+  host.innerHTML = `<${tagName}${attrMarkup ? ' ' + attrMarkup : ''}></${tagName}>`;
+  const element = host.firstElementChild as HTMLElement | null;
+  if (!element) {
+    throw new Error(`Failed to create element <${tagName}>`);
+  }
+  return element;
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -40,20 +61,18 @@ describe('defineUiGridElement', () => {
     const tagName = nextTagName();
     await defineUiGridElement(tagName);
 
-    const grid = document.createElement(tagName) as UiGridElementHandle;
-    grid.setAttribute('grid-id', 'declarative-grid');
-    grid.setAttribute('title', 'Team Roster');
-    grid.setAttribute('enable-sorting', '');
-    grid.setAttribute('enable-filtering', '');
-    grid.setAttribute('viewport-height', '420');
-    grid.setAttribute(
-      'column-defs',
-      JSON.stringify([{ name: 'name' }, { name: 'role' } satisfies GridColumnDef]),
-    );
-    grid.setAttribute(
-      'data',
-      JSON.stringify([{ name: 'Alice', role: 'Engineer' } satisfies GridRecord]),
-    );
+    const grid = createRegisteredElement(tagName, {
+      'grid-id': 'declarative-grid',
+      title: 'Team Roster',
+      'enable-sorting': '',
+      'enable-filtering': '',
+      'viewport-height': '420',
+      'column-defs': JSON.stringify([
+        { name: 'name' },
+        { name: 'role' } satisfies GridColumnDef,
+      ]),
+      data: JSON.stringify([{ name: 'Alice', role: 'Engineer' } satisfies GridRecord]),
+    }) as UiGridElementHandle;
 
     document.body.appendChild(grid);
 
@@ -72,9 +91,10 @@ describe('defineUiGridElement', () => {
     const tagName = nextTagName();
     await defineUiGridElement(tagName);
 
-    const grid = document.createElement(tagName) as UiGridElementHandle;
-    grid.setAttribute('column-defs', JSON.stringify([{ name: 'name' } satisfies GridColumnDef]));
-    grid.setAttribute('data', JSON.stringify([{ name: 'Alice' } satisfies GridRecord]));
+    const grid = createRegisteredElement(tagName, {
+      'column-defs': JSON.stringify([{ name: 'name' } satisfies GridColumnDef]),
+      data: JSON.stringify([{ name: 'Alice' } satisfies GridRecord]),
+    }) as UiGridElementHandle;
     document.body.appendChild(grid);
 
     await waitFor(() => grid.shadowRoot?.querySelector('.ui-grid-header'));
