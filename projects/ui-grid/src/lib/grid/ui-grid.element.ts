@@ -294,6 +294,14 @@ function buildDeclarativeAttributeOptions(element: HTMLElement): Partial<GridOpt
   return options;
 }
 
+/** @internal Exposed for unit testing the declarative attribute surface. */
+export const __testables__ = {
+  buildDeclarativeAttributeOptions,
+  declarativeSurface,
+  observedDeclarativeAttributes,
+  createDeclarativeUiGridElement,
+};
+
 function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): UiGridElementConstructor {
   const element = class extends baseElement {};
   const baseOptionsDescriptor = Object.getOwnPropertyDescriptor(baseElement.prototype, 'options');
