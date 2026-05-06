@@ -27,12 +27,16 @@ const packageLockFiles = [
   'projects/ui-grid-vanilla/package-lock.json',
 ];
 
+const cargoManifestFiles = getCargoManifestFiles();
+
 const internalPackages = [
   '@ornery/ui-grid',
   '@ornery/ui-grid-core',
   '@ornery/ui-grid-react',
   '@ornery/ui-grid-vanilla',
 ];
+
+const internalCrates = cargoManifestFiles.map((filePath) => filePath.split('/').at(-2));
 
 function updatePackageJson(filePath) {
   const absolutePath = resolve(rootDir, filePath);
@@ -58,6 +62,8 @@ function updatePackageJson(filePath) {
       }
     }
   }
+
+  syncPeerDependenciesMeta(pkg);
 
   writeFileSync(absolutePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
   console.log(`updated ${filePath}`);
@@ -103,6 +109,8 @@ function updatePackageLock(filePath) {
           }
         }
       }
+
+      syncPeerDependenciesMeta(pkg);
     }
   }
 
@@ -115,6 +123,90 @@ function updatePackageLock(filePath) {
 
   writeFileSync(absolutePath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
   console.log(`updated ${filePath}`);
+}
+
+function syncPeerDependenciesMeta(pkg) {
+  const peerDependenciesMeta = pkg.peerDependenciesMeta;
+  if (!peerDependenciesMeta || typeof peerDependenciesMeta !== 'object') {
+    return;
+  }
+
+  const peerDependencies =
+    pkg.peerDependencies && typeof pkg.peerDependencies === 'object' ? pkg.peerDependencies : {};
+
+  for (const name of internalPackages) {
+    if (peerDependenciesMeta[name] && !peerDependencies[name]) {
+      delete peerDependenciesMeta[name];
+    }
+  }
+
+  if (Object.keys(peerDependenciesMeta).length === 0) {
+    delete pkg.peerDependenciesMeta;
+  }
+}
+
+function getCargoManifestFiles() {
+  const cargoToml = readFileSync(resolve(rootDir, 'Cargo.toml'), 'utf8');
+  const membersMatch = cargoToml.match(/\[workspace\][\s\S]*?members\s*=\s*\[([\s\S]*?)\]/);
+
+  if (!membersMatch) {
+    console.error('Failed to locate workspace members in Cargo.toml');
+    process.exit(1);
+  }
+
+  return [...membersMatch[1].matchAll(/"([^"]+)"/g)].map((match) => `${match[1]}/Cargo.toml`);
+}
+
+function updateCargoManifestVersions(filePath) {
+  const absolutePath = resolve(rootDir, filePath);
+  const raw = readFileSync(absolutePath, 'utf8');
+  let updated = raw;
+
+  for (const crateName of internalCrates) {
+    const pattern = new RegExp(
+      `(${escapeRegExp(crateName)}\\s*=\\s*\\{[^\n}]*\\bversion\\s*=\\s*")(.*?)(")`,
+      'g',
+    );
+    updated = updated.replace(pattern, (_, prefix, current, suffix) => {
+      return `${prefix}${withExistingCargoPrefix(current, targetVersion)}${suffix}`;
+    });
+  }
+
+  if (updated !== raw) {
+    writeFileSync(absolutePath, updated, 'utf8');
+    console.log(`updated ${filePath}`);
+  }
+}
+
+function updateCargoLock() {
+  const absolutePath = resolve(rootDir, 'Cargo.lock');
+  const raw = readFileSync(absolutePath, 'utf8');
+  let updated = raw;
+
+  for (const crateName of internalCrates) {
+    const pattern = new RegExp(
+      `(\\[\\[package\\]\\]\\nname = "${escapeRegExp(crateName)}"\\nversion = ")(.*?)(")`,
+      'g',
+    );
+    updated = updated.replace(pattern, (_, prefix, __current, suffix) => {
+      return `${prefix}${targetVersion}${suffix}`;
+    });
+  }
+
+  if (updated !== raw) {
+    writeFileSync(absolutePath, updated, 'utf8');
+    console.log('updated Cargo.lock');
+  }
+}
+
+function withExistingCargoPrefix(current, version) {
+  const prefixMatch = current.match(/^[^0-9]*/);
+  const prefix = prefixMatch?.[0] ?? '';
+  return `${prefix}${version}`;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function inferPackageName(pkgPath, pkg) {
@@ -165,5 +257,11 @@ for (const file of packageLockFiles) {
 }
 
 updateCargoWorkspaceVersion();
+
+for (const file of cargoManifestFiles) {
+  updateCargoManifestVersions(file);
+}
+
+updateCargoLock();
 
 console.log(`\nVersion sync complete: ${targetVersion}`);

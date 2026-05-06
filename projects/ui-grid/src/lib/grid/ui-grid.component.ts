@@ -1457,9 +1457,9 @@ export class UiGridComponent {
     let maxWidth = 0;
     for (const selector of selectors) {
       const elements = root.querySelectorAll<HTMLElement>(selector);
-      for (const element of elements) {
+      elements.forEach((element) => {
         maxWidth = Math.max(maxWidth, element.scrollWidth);
-      }
+      });
     }
 
     return maxWidth + 12;

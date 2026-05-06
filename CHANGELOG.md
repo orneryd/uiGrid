@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.1.10 — 2026-05-05
+
+### Added
+
+- **Stable C-facing ABI over the Rust grid core** — added `ui-grid-c-abi`, exposing opaque engine lifecycle, JSON and MessagePack transport helpers, projection/state APIs, C smoke examples, and a projection benchmark so native hosts can drive the shared grid engine without embedding Rust types directly.
+- **C++ wrapper for the native ABI** — added `ui-grid-cpp` with RAII engine management, typed sort/group/pin command builders, JSON and MessagePack projection helpers, and smoke examples for a higher-level native integration surface.
+- **Initial LVGL native C prototype** — added `ui-grid-lvgl`, including the first LVGL-backed adapter, theme/column extension headers, and an SDL-backed demo app that proves the native widget path end to end.
+- **Native adapter roadmap documentation** — added a dedicated plan for the Rust C ABI, C++, Go, and follow-on native adapter work so the non-web host strategy is documented alongside the prototype.
+
+### Changed
+
+- **Version sync now covers the full monorepo with one command** — the release sync script now updates npm package manifests, npm lockfiles, Cargo workspace versioning, crate-to-crate Rust dependency versions, Cargo.lock, and internal peer metadata cleanup in one pass.
+- **Project docs and positioning now include native C/LVGL support explicitly** — refreshed the root README and native adapter docs so the repo presents Angular, React, Web Components, Rust/egui, and native C/LVGL as first-class delivery targets.
+- **Column resizing behavior is now consistent across Angular, React, and vanilla hosts** — all three web surfaces now support the same drag-resize, double-click auto-fit, hover indicator, and container-filling demo behavior, including smoother virtualized resizing paths that avoid per-mousemove full rerenders.
+
+### Fixed
+
+- **Cross-suite resize polish and parity issues** — fixed missing React resize handle styling, removed header scrollbar artifacts during resize, and aligned the Angular, React, and vanilla demos so the column resize affordances behave the same across the web suite.
+- **Angular and Rust CI follow-up regressions** — corrected the Angular custom-element CI issue and refreshed the ABI fixture data needed to keep the Rust/native test path green after the new adapter work landed.
+
 ## v0.1.9 — 2026-05-05
 
 ### Added

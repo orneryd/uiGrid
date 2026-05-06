@@ -15,5 +15,5 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 rmp-serde.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-ui-grid-contracts = { path = "../ui-grid-contracts", version = "0.1" }
-ui-grid-core = { path = "../ui-grid-core", version = "0.1" }
+ui-grid-contracts = { path = "../ui-grid-contracts", version = "0.1.10" }
+ui-grid-core = { path = "../ui-grid-core", version = "0.1.10" }

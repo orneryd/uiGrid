@@ -391,6 +391,16 @@ export function useGridState(
   currentPageRef.current = currentPage;
   const pageSizeRef = useRef(pageSize);
   pageSizeRef.current = pageSize;
+
+  const setEditingCellState = useCallback((nextEditingCell: GridCellPosition | null): void => {
+    editingCellRef.current = nextEditingCell;
+    setEditingCell(nextEditingCell);
+  }, []);
+
+  const setEditingValueState = useCallback((nextEditingValue: string): void => {
+    editingValueRef.current = nextEditingValue;
+    setEditingValue(nextEditingValue);
+  }, []);
   const infiniteScrollStateRef = useRef(infiniteScrollState);
   infiniteScrollStateRef.current = infiniteScrollState;
   const optionsRef = useRef(options);
@@ -960,8 +970,8 @@ export function useGridState(
         gridApiRef.current!,
         {
           setFocusedCell: (fc) => setFocusedCell(fc),
-          setEditingCell: (ec2) => setEditingCell(ec2),
-          setEditingValue: (ev) => setEditingValue(ev),
+          setEditingCell: setEditingCellState,
+          setEditingValue: setEditingValueState,
         },
         row,
         column,
@@ -974,7 +984,7 @@ export function useGridState(
         queueMicrotask(() => focusEditorInput(focusToken));
       }
     },
-    [focusEditorInput],
+    [focusEditorInput, setEditingCellState, setEditingValueState],
   );
 
   const commitCellEditFn = useCallback(
@@ -982,8 +992,8 @@ export function useGridState(
       const result = commitGridCellEditCommand(gridApiRef.current!, {
         getEditingCell: () => editingCellRef.current,
         getEditingValue: () => editingValueRef.current,
-        setEditingCell: (ec) => setEditingCell(ec),
-        setEditingValue: (ev) => setEditingValue(ev),
+        setEditingCell: setEditingCellState,
+        setEditingValue: setEditingValueState,
         findRowById: (rowId) =>
           coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
         findColumnByName: (columnName) =>
@@ -1007,15 +1017,15 @@ export function useGridState(
         focusRenderedCell(result.focusTarget);
       }
     },
-    [buildRowsFromData, focusRenderedCell],
+    [buildRowsFromData, focusRenderedCell, setEditingCellState, setEditingValueState],
   );
 
   const cancelCellEditFn = useCallback((): void => {
     const hadEditingCell = editingCellRef.current !== null;
     const result = cancelGridCellEditCommand(gridApiRef.current!, {
       getEditingCell: () => editingCellRef.current,
-      setEditingCell: (ec) => setEditingCell(ec),
-      setEditingValue: (ev) => setEditingValue(ev),
+      setEditingCell: setEditingCellState,
+      setEditingValue: setEditingValueState,
       findRowById: (rowId) =>
         coreFindGridRowById(buildRowsFromData(optionsRef.current.data), rowId),
       findColumnByName: (columnName) =>
@@ -1025,7 +1035,7 @@ export function useGridState(
     if (!hadEditingCell) return;
     editorFocusTokenRef.current += 1;
     if (result.focusTarget) focusRenderedCell(result.focusTarget);
-  }, [buildRowsFromData, focusRenderedCell]);
+  }, [buildRowsFromData, focusRenderedCell, setEditingCellState, setEditingValueState]);
 
   const moveFocusFn = useCallback(
     (
@@ -1129,8 +1139,8 @@ export function useGridState(
     setHiddenRowReasons({});
     setCollapsedGroups({});
     setFocusedCell(null);
-    setEditingCell(null);
-    setEditingValue('');
+    setEditingCellState(null);
+    setEditingValueState('');
     setExpandedRows({});
     setExpandedTreeRows({});
     setColumnOrder(options.columnDefs.map((column) => column.name));
@@ -1551,8 +1561,8 @@ export function useGridState(
   );
 
   const updateEditingValueFn = useCallback((value: string): void => {
-    setEditingValue(value);
-  }, []);
+    setEditingValueState(value);
+  }, [setEditingValueState]);
 
   const handleEditorKeyDownFn = useCallback(
     (event: React.KeyboardEvent): void => {
