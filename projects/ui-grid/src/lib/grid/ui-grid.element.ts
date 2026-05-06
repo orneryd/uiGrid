@@ -295,9 +295,10 @@ function buildDeclarativeAttributeOptions(element: HTMLElement): Partial<GridOpt
 }
 
 function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): UiGridElementConstructor {
+  const element = class extends baseElement {};
   const baseOptionsDescriptor = Object.getOwnPropertyDescriptor(baseElement.prototype, 'options');
   const basePrototype = baseElement.prototype as Partial<DeclarativeUiGridElement>;
-  const elementPrototype = baseElement.prototype as Partial<DeclarativeUiGridElement>;
+  const elementPrototype = element.prototype as Partial<DeclarativeUiGridElement>;
   const baseObservedAttributes = [...(baseElement.observedAttributes ?? [])];
   const baseObservedAttributeSet: ReadonlySet<string> = new Set(baseObservedAttributes);
   const originalConnectedCallback = basePrototype.connectedCallback;
@@ -309,7 +310,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
 
   const baseSetter = baseOptionsDescriptor.set;
 
-  Object.defineProperty(baseElement, 'observedAttributes', {
+  Object.defineProperty(element, 'observedAttributes', {
     configurable: true,
     get() {
       return [...new Set([...baseObservedAttributes, ...observedDeclarativeAttributes])];
@@ -352,7 +353,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     }
   };
 
-  Object.defineProperty(baseElement.prototype, 'options', {
+  Object.defineProperty(element.prototype, 'options', {
     configurable: true,
     enumerable: false,
     get(this: DeclarativeUiGridElement): GridOptions {
@@ -385,7 +386,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
   };
 
   for (const entry of declarativeSurface) {
-    Object.defineProperty(baseElement.prototype, entry.property, {
+    Object.defineProperty(element.prototype, entry.property, {
       configurable: true,
       enumerable: false,
       get(this: DeclarativeUiGridElement) {
@@ -399,7 +400,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     });
   }
 
-  return baseElement;
+  return element;
 }
 
 export async function defineUiGridElement(tagName = 'ui-grid-element'): Promise<void> {
