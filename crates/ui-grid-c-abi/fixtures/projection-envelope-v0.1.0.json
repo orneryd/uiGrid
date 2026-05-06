@@ -90,6 +90,7 @@
       "enableFiltering": true,
       "enableGrouping": false,
       "enableColumnMoving": false,
+      "enableColumnResizing": true,
       "enableCellEdit": false,
       "enableCellEditOnFocus": false,
       "enableVirtualization": true,
