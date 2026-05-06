@@ -295,8 +295,10 @@ function buildDeclarativeAttributeOptions(element: HTMLElement): Partial<GridOpt
 }
 
 function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): UiGridElementConstructor {
+  const element = class extends baseElement {};
   const baseOptionsDescriptor = Object.getOwnPropertyDescriptor(baseElement.prototype, 'options');
   const basePrototype = baseElement.prototype as Partial<DeclarativeUiGridElement>;
+  const elementPrototype = element.prototype as Partial<DeclarativeUiGridElement>;
   const baseObservedAttributes = [...(baseElement.observedAttributes ?? [])];
   const baseObservedAttributeSet: ReadonlySet<string> = new Set(baseObservedAttributes);
   const originalConnectedCallback = basePrototype.connectedCallback;
@@ -308,7 +310,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
 
   const baseSetter = baseOptionsDescriptor.set;
 
-  Object.defineProperty(baseElement, 'observedAttributes', {
+  Object.defineProperty(element, 'observedAttributes', {
     configurable: true,
     get() {
       return [...new Set([...baseObservedAttributes, ...observedDeclarativeAttributes])];
@@ -324,12 +326,12 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     } satisfies GridOptions);
   };
 
-  basePrototype.connectedCallback = function (this: DeclarativeUiGridElement): void {
+  elementPrototype.connectedCallback = function (this: DeclarativeUiGridElement): void {
     originalConnectedCallback?.call(this);
     syncDeclarativeAttributesToOptions.call(this);
   };
 
-  basePrototype.attributeChangedCallback = function (
+  elementPrototype.attributeChangedCallback = function (
     this: DeclarativeUiGridElement,
     name: string,
     oldValue: string | null,
@@ -351,7 +353,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     }
   };
 
-  Object.defineProperty(baseElement.prototype, 'options', {
+  Object.defineProperty(element.prototype, 'options', {
     configurable: true,
     enumerable: false,
     get(this: DeclarativeUiGridElement): GridOptions {
@@ -371,7 +373,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     },
   });
 
-  basePrototype.setPropertyOption = function (this: DeclarativeUiGridElement, key: keyof GridOptions, value: unknown): void {
+  elementPrototype.setPropertyOption = function (this: DeclarativeUiGridElement, key: keyof GridOptions, value: unknown): void {
     this.__uiGridPropertyOptions__ = {
       ...(this.__uiGridPropertyOptions__ ?? {}),
       [key]: value,
@@ -384,7 +386,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
   };
 
   for (const entry of declarativeSurface) {
-    Object.defineProperty(baseElement.prototype, entry.property, {
+    Object.defineProperty(element.prototype, entry.property, {
       configurable: true,
       enumerable: false,
       get(this: DeclarativeUiGridElement) {
@@ -398,7 +400,7 @@ function createDeclarativeUiGridElement(baseElement: UiGridElementConstructor): 
     });
   }
 
-  return baseElement;
+  return element;
 }
 
 export async function defineUiGridElement(tagName = 'ui-grid-element'): Promise<void> {
