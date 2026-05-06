@@ -7,7 +7,20 @@
   );
   --_ui-grid-row-odd: var(--ui-grid-row-odd, var(--app-ui-grid-row-odd, #fcfcfd));
   --_ui-grid-row-even: var(--ui-grid-row-even, var(--app-ui-grid-row-even, #f7f7f8));
-  --_ui-grid-row-hover: var(--ui-grid-row-hover, var(--app-ui-grid-row-hover, #eef4ff));
+  --_ui-grid-row-hover: var(
+    --ui-grid-row-hover,
+    var(
+      --app-ui-grid-row-hover,
+      color-mix(in srgb, var(--_ui-grid-accent) 4%, var(--_ui-grid-surface))
+    )
+  );
+  --_ui-grid-row-focus-background: var(
+    --ui-grid-row-focus-background,
+    var(
+      --app-ui-grid-row-focus-background,
+      color-mix(in srgb, var(--_ui-grid-accent) 9%, var(--_ui-grid-surface))
+    )
+  );
   --_ui-grid-cell-color: var(--ui-grid-cell-color, var(--app-ui-grid-cell-color, #111827));
   --_ui-grid-muted-color: var(--ui-grid-muted-color, var(--app-ui-grid-muted-color, #6b7280));
   --_ui-grid-surface: var(--ui-grid-surface, var(--app-ui-grid-surface, #ffffff));
@@ -362,7 +375,7 @@
     --ui-grid-cell-focus-background,
     var(
       --app-ui-grid-cell-focus-background,
-      color-mix(in srgb, var(--_ui-grid-accent) 10%, var(--_ui-grid-surface))
+      color-mix(in srgb, var(--_ui-grid-accent) 14%, var(--_ui-grid-surface))
     )
   );
   --_ui-grid-cell-focus-ring: var(
@@ -530,6 +543,7 @@
   --ui-grid-row-odd: var(--_ui-grid-row-odd);
   --ui-grid-row-even: var(--_ui-grid-row-even);
   --ui-grid-row-hover: var(--_ui-grid-row-hover);
+  --ui-grid-row-focus-background: var(--_ui-grid-row-focus-background);
   --ui-grid-cell-color: var(--_ui-grid-cell-color);
   --ui-grid-muted-color: var(--_ui-grid-muted-color);
   --ui-grid-surface: var(--_ui-grid-surface);
@@ -836,6 +850,7 @@ h1 {
   background: var(--ui-grid-header-background);
   font-weight: var(--ui-grid-header-weight);
   align-items: center;
+  position: relative;
 }
 
 .header-cell.is-active {
@@ -894,6 +909,38 @@ h1 {
   align-items: center;
   gap: var(--ui-grid-header-actions-gap);
   justify-self: end;
+}
+
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.column-resizer::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--_ui-grid-border-color) 80%, transparent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.header-cell:hover .column-resizer::after,
+.column-resizer:focus-visible::after {
+  opacity: 1;
 }
 
 .pin-control {
@@ -1153,8 +1200,14 @@ h1 {
   background: var(--ui-grid-expandable-row-background);
 }
 
-.body-grid > .body-cell:hover {
+.body-grid > .body-cell:hover:not(.row-focused):not(.cell-focused):not(.cell-editing) {
   background: var(--ui-grid-row-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-grid-accent) 10%, transparent);
+}
+
+.body-cell.row-focused,
+.body-grid > .body-cell.row-focused {
+  background: var(--ui-grid-row-focus-background);
 }
 
 .body-cell.cell-focused,

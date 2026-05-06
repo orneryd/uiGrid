@@ -186,6 +186,7 @@ export class UiGridComponent {
   protected readonly focusedCell = signal<GridCellPosition | null>(null);
   protected readonly editingCell = signal<GridCellPosition | null>(null);
   protected readonly editingValue = signal('');
+  protected readonly columnWidthOverrides = signal<Record<string, string>>({});
   protected readonly expandedRows = signal<Record<string, boolean>>({});
   protected readonly expandedTreeRows = signal<Record<string, boolean>>({});
   protected readonly pinnedColumns = signal<PinnedColumnState>({});
@@ -286,6 +287,7 @@ export class UiGridComponent {
       this.focusedCell.set(null);
       this.editingCell.set(null);
       this.editingValue.set('');
+      this.columnWidthOverrides.set({});
       this.expandedRows.set({});
       this.expandedTreeRows.set({});
       this.columnOrder.set(options.columnDefs.map((column) => column.name));
@@ -371,14 +373,21 @@ export class UiGridComponent {
 
   protected readonly visibleColumns = computed(() => {
     const order = this.columnOrder();
+    const widthOverrides = this.columnWidthOverrides();
     const orderedColumns = [...this.options().columnDefs]
       .filter((column) => column.visible !== false)
       .sort((left, right) => order.indexOf(left.name) - order.indexOf(right.name));
 
     const pinnedColumns = this.pinnedColumns();
     const pinnedEntries = Object.entries(pinnedColumns);
+    const withWidths = (columns: GridColumnDef[]): GridColumnDef[] =>
+      columns.map((column) => {
+        const override = widthOverrides[column.name];
+        return override == null ? column : { ...column, width: override };
+      });
+
     if (pinnedEntries.length === 0) {
-      return orderedColumns;
+      return withWidths(orderedColumns);
     }
 
     const columnByName = new Map(orderedColumns.map((column) => [column.name, column]));
@@ -394,7 +403,7 @@ export class UiGridComponent {
       (column) => pinnedColumns[column.name] === undefined,
     );
 
-    return [...pinnedLeft, ...centerColumns, ...pinnedRight];
+    return withWidths([...pinnedLeft, ...centerColumns, ...pinnedRight]);
   });
 
   private readonly pipeline = computed<PipelineResult>(() => this.buildPipeline());
@@ -562,6 +571,10 @@ export class UiGridComponent {
     return item.kind === 'expandable';
   }
 
+  protected isRowItem(item: DisplayItem): item is Extract<DisplayItem, { kind: 'row' }> {
+    return item.kind === 'row';
+  }
+
   protected isOddStripedRow(item: DisplayItem): boolean {
     return item.kind === 'row' && item.visibleIndex % 2 === 0;
   }
@@ -600,6 +613,10 @@ export class UiGridComponent {
 
   protected isFocusedCell(row: GridRow, column: GridColumnDef): boolean {
     return isGridCellPosition(this.focusedCell(), row.id, column.name);
+  }
+
+  protected isFocusedRow(row: GridRow): boolean {
+    return this.focusedCell()?.rowId === row.id || this.editingCell()?.rowId === row.id;
   }
 
   protected isEditingCell(row: GridRow, column: GridColumnDef): boolean {
@@ -680,6 +697,64 @@ export class UiGridComponent {
 
   protected columnWidth(column: GridColumnDef): string {
     return gridColumnWidth(column);
+  }
+
+  protected canResizeColumns(): boolean {
+    return this.options().enableColumnResizing !== false;
+  }
+
+  protected handleHeaderResizeMouseDown(column: GridColumnDef, event: MouseEvent): void {
+    if (!this.canResizeColumns()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.currentTarget as HTMLElement | null;
+    const headerCell = target?.closest('.header-cell') as HTMLElement | null;
+    const ownerWindow = this.hostElement.nativeElement.ownerDocument.defaultView;
+    if (headerCell == null || ownerWindow == null) {
+      return;
+    }
+
+    const startX = event.clientX;
+    const startWidth = headerCell.getBoundingClientRect().width;
+    let lastWidth = startWidth;
+
+    const handleMove = (moveEvent: MouseEvent): void => {
+      lastWidth = Math.max(88, startWidth + (moveEvent.clientX - startX));
+
+      // Write directly to DOM — skip the signal/computed/pipeline chain while dragging.
+      const widthStr = `${Math.round(lastWidth)}px`;
+      const newTemplate = this.visibleColumns()
+        .map((c) => gridColumnWidth(c.name === column.name ? { ...c, width: widthStr } : c))
+        .join(' ');
+      const root = this.hostElement.nativeElement.shadowRoot ?? this.hostElement.nativeElement;
+      root.querySelectorAll<HTMLElement>('.header-grid, .filter-grid, .body-grid').forEach((el) => {
+        el.style.gridTemplateColumns = newTemplate;
+      });
+    };
+
+    const handleUp = (): void => {
+      ownerWindow.removeEventListener('mousemove', handleMove);
+      ownerWindow.removeEventListener('mouseup', handleUp);
+      // Commit final width via signal once — one clean re-render.
+      this.setColumnWidthOverride(column.name, lastWidth);
+    };
+
+    ownerWindow.addEventListener('mousemove', handleMove);
+    ownerWindow.addEventListener('mouseup', handleUp);
+  }
+
+  protected autoSizeColumn(column: GridColumnDef, event: MouseEvent): void {
+    if (!this.canResizeColumns()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.setColumnWidthOverride(column.name, this.measureAutoColumnWidth(column.name));
   }
 
   protected isColumnSortable(column: GridColumnDef): boolean {
@@ -1045,35 +1120,46 @@ export class UiGridComponent {
   }
 
   protected handleCellKeyDown(row: GridRow, column: GridColumnDef, event: KeyboardEvent): void {
-    this.focusCell(row, column, event);
+    if (this.isGridNavigationKey(event.key)) {
+      this.focusedCell.set({ rowId: row.id, columnName: column.name });
+    } else {
+      this.focusCell(row, column, event);
+    }
 
     switch (event.key) {
       case 'ArrowLeft':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, 'left', event);
         return;
       case 'ArrowRight':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, 'right', event);
         return;
       case 'ArrowUp':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, 'up', event);
         return;
       case 'ArrowDown':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, 'down', event);
         return;
       case 'Tab':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, event.shiftKey ? 'left' : 'right', event);
         return;
       case 'Enter':
         event.preventDefault();
+        event.stopPropagation();
         this.moveFocus(row, column, event.shiftKey ? 'up' : 'down', event);
         return;
       case 'F2':
         event.preventDefault();
+        event.stopPropagation();
         if (this.isCellEditable(row, column, event)) {
           this.startCellEdit(row, column, event);
         }
@@ -1082,6 +1168,7 @@ export class UiGridComponent {
       case 'Delete':
         if (this.isCellEditable(row, column, event)) {
           event.preventDefault();
+          event.stopPropagation();
           this.startCellEdit(row, column, event, '');
         }
         return;
@@ -1091,6 +1178,7 @@ export class UiGridComponent {
 
     if (this.isPrintableKey(event) && this.isCellEditable(row, column, event)) {
       event.preventDefault();
+      event.stopPropagation();
       this.startCellEdit(row, column, event, event.key);
     }
   }
@@ -1109,19 +1197,46 @@ export class UiGridComponent {
   protected handleEditorKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       this.cancelCellEdit();
       return;
     }
 
     if (event.key === 'Enter') {
       event.preventDefault();
+      event.stopPropagation();
       this.commitCellEdit(event.shiftKey ? 'up' : 'down');
       return;
     }
 
     if (event.key === 'Tab') {
       event.preventDefault();
+      event.stopPropagation();
       this.commitCellEdit(event.shiftKey ? 'left' : 'right');
+      return;
+    }
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.commitCellEdit(event.key === 'ArrowUp' ? 'up' : 'down');
+    }
+  }
+
+  private isGridNavigationKey(key: string): boolean {
+    switch (key) {
+      case 'ArrowLeft':
+      case 'ArrowRight':
+      case 'ArrowUp':
+      case 'ArrowDown':
+      case 'Tab':
+      case 'Enter':
+      case 'F2':
+      case 'Backspace':
+      case 'Delete':
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -1317,6 +1432,48 @@ export class UiGridComponent {
     setPathValue(rowEntity, this.editFieldPath(column), value);
   }
 
+  private setColumnWidthOverride(columnName: string, widthPx: number): void {
+    const nextWidth = `${Math.max(88, Math.round(widthPx))}px`;
+    this.columnWidthOverrides.update((current) => ({
+      ...current,
+      [columnName]: nextWidth,
+    }));
+    queueMicrotask(() => this.measureStickyChrome());
+  }
+
+  private measureAutoColumnWidth(columnName: string): number {
+    const root = this.hostElement.nativeElement.shadowRoot;
+    if (root == null) {
+      return 176;
+    }
+
+    const escaped = this.escapeCssSelectorValue(columnName);
+    const selectors = [
+      `.header-cell[data-col-name="${escaped}"]`,
+      `.filter-cell[data-col-name="${escaped}"]`,
+      `.body-cell[data-col-name="${escaped}"] .cell-shell`,
+    ];
+
+    let maxWidth = 0;
+    for (const selector of selectors) {
+      const elements = root.querySelectorAll<HTMLElement>(selector);
+      for (const element of elements) {
+        maxWidth = Math.max(maxWidth, element.scrollWidth);
+      }
+    }
+
+    return maxWidth + 12;
+  }
+
+  private escapeCssSelectorValue(value: string): string {
+    const nativeEscape = globalThis.CSS?.escape;
+    if (typeof nativeEscape === 'function') {
+      return nativeEscape(value);
+    }
+
+    return value.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+  }
+
   private moveFocus(
     row: GridRow,
     column: GridColumnDef,
@@ -1325,7 +1482,9 @@ export class UiGridComponent {
     editableOnly = false,
   ): boolean {
     const nextCell = findNextGridCell({
-      rows: this.pipeline().visibleRows,
+      rows: this.displayItems()
+        .filter((item) => this.isRowItem(item))
+        .map((item) => item.row),
       columns: this.visibleColumns(),
       rowId: row.id,
       columnName: column.name,

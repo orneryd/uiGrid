@@ -63,7 +63,8 @@
             <h2>{{ options().title ?? 'UI Grid' }}</h2>
             <p>
               Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt with Angular signals,
-              CDK virtualization, grouping, sorting, filtering, and column ordering.
+              CDK virtualization, grouping, sorting, filtering, column ordering, and Excel-style
+              column resizing with drag handles plus double-click auto fit.
             </p>
           </div>
           <div class="angular-demo-shell__actions">
@@ -98,7 +99,7 @@
           </div>
           <p>
             <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
-            templating, and virtualized rendering.
+            column resizing, templating, and virtualized rendering.
           </p>
         </div>
 
@@ -190,7 +191,7 @@
           </div>
           <p>
             Same Angular package, routed through <code>@angular/elements</code> and configured with HTML attributes
-            instead of a bound <code>GridOptions</code> object.
+            instead of a bound <code>GridOptions</code> object, including declarative column resizing.
           </p>
         </div>
 
@@ -209,6 +210,7 @@
           enable-filtering
           enable-grouping
           enable-column-moving
+          enable-column-resizing
           enable-virtualization
           enable-cell-edit-on-focus>
         </ui-grid-element-ng>
@@ -274,6 +276,7 @@
           [attr.enable-filtering]="elementScenarioConfig().enableFiltering ? '' : null"
           [attr.enable-grouping]="elementScenarioConfig().enableGrouping ? '' : null"
           [attr.enable-column-moving]="elementScenarioConfig().enableColumnMoving ? '' : null"
+          [attr.enable-column-resizing]="elementScenarioConfig().enableColumnResizing ? '' : null"
           [attr.enable-virtualization]="elementScenarioConfig().enableVirtualization ? '' : null"
           [attr.enable-cell-edit-on-focus]="elementScenarioConfig().enableCellEditOnFocus ? '' : null"
           [attr.enable-pinning]="elementScenarioConfig().enablePinning ? '' : null"

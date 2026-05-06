@@ -36,6 +36,14 @@ export function focusGridRenderedCell(
 ): void {
   const selector = `.body-cell[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
 
+  const focusElement = (element: HTMLElement): void => {
+    try {
+      element.focus({ preventScroll: true });
+    } catch {
+      element.focus();
+    }
+  };
+
   const focusCell = (retry = true): void => {
     if (!isCurrent()) {
       return;
@@ -50,12 +58,13 @@ export function focusGridRenderedCell(
       return;
     }
 
-    target.focus();
+    focusElement(target);
     if (retry && shadowRoot?.activeElement !== target) {
       requestAnimationFrame(() => focusCell(false));
     }
   };
 
+  focusCell(true);
   queueMicrotask(() => focusCell(true));
 }
 
@@ -65,6 +74,15 @@ export function focusGridEditor(
   isCurrent: () => boolean
 ): void {
   const selector = `.cell-editor[data-row-id="${position.rowId}"][data-col-name="${position.columnName}"]`;
+
+  const focusInputElement = (input: HTMLInputElement): void => {
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+    input.select();
+  };
 
   const focusInput = (retry = true): void => {
     if (!isCurrent()) {
@@ -80,8 +98,10 @@ export function focusGridEditor(
       return;
     }
 
-    input.focus();
-    input.select();
+    focusInputElement(input);
+    if (retry && shadowRoot?.activeElement !== input) {
+      requestAnimationFrame(() => focusInput(false));
+    }
   };
 
   focusInput(true);

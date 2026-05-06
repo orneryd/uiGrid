@@ -56,6 +56,7 @@ import {
   buildGridFocusCellResult,
   findNextGridCell,
   isPrintableGridKey,
+  isGridNavigationKey,
   isGridCellPosition,
   exportCsvRows,
   buildGridRows,
@@ -222,6 +223,7 @@ export interface UseGridStateResult {
   paginationSelectedPageSize: number;
   rowSize: number;
   viewportHeightPx: string;
+  autoViewportHeight: number | null;
 
   // Display helpers
   headerLabel: (column: GridColumnDef) => string;
@@ -239,6 +241,7 @@ export interface UseGridStateResult {
   groupDisclosureLabel: (item: GroupItem) => string;
   displayValue: (row: GridRow, column: GridColumnDef) => string;
   isFocusedCell: (row: GridRow, column: GridColumnDef) => boolean;
+  isFocusedRow: (row: GridRow) => boolean;
   isEditingCell: (row: GridRow, column: GridColumnDef) => boolean;
   editorInputType: (column: GridColumnDef) => string;
   cellContext: (row: GridRow, column: GridColumnDef) => GridCellTemplateContext;
@@ -307,6 +310,9 @@ export interface UseGridStateResult {
   toggleTreeRow: (row: GridRow, event?: React.MouseEvent) => void;
   moveColumn: (fromIndex: number, toIndex: number) => void;
   moveVisibleColumn: (columnName: string, targetColumnName: string) => void;
+  canResizeColumns: () => boolean;
+  handleHeaderResizeMouseDown: (column: GridColumnDef, event: React.MouseEvent) => void;
+  autoSizeColumn: (column: GridColumnDef, event: React.MouseEvent) => void;
   nextPage: () => void;
   previousPage: () => void;
   onPageSizeChange: (value: string) => void;
@@ -344,6 +350,7 @@ export function useGridState(
   });
   const [autoViewportHeight, setAutoViewportHeight] = useState<number | null>(null);
   const [pinnedColumns, setPinnedColumns] = useState<PinnedColumnState>({});
+  const [columnWidthOverrides, setColumnWidthOverrides] = useState<Record<string, string>>({});
 
   const gridContainerRef = useRef<HTMLDivElement | null>(null);
   const initializedGridIdRef = useRef<string | null>(null);
@@ -393,9 +400,15 @@ export function useGridState(
 
   const visibleColumns = useMemo(() => {
     const orderedColumns = orderVisibleColumns(options.columnDefs, columnOrder);
+    const applyWidthOverrides = (columns: GridColumnDef[]): GridColumnDef[] =>
+      columns.map((col) => {
+        const override = columnWidthOverrides[col.name];
+        return override == null ? col : { ...col, width: override };
+      });
+
     const pinnedEntries = Object.entries(pinnedColumns);
     if (pinnedEntries.length === 0) {
-      return orderedColumns;
+      return applyWidthOverrides(orderedColumns);
     }
 
     const columnByName = new Map(orderedColumns.map((column) => [column.name, column]));
@@ -411,8 +424,8 @@ export function useGridState(
       (column) => pinnedColumns[column.name] === undefined,
     );
 
-    return [...pinnedLeft, ...centerColumns, ...pinnedRight];
-  }, [options.columnDefs, columnOrder, pinnedColumns]);
+    return applyWidthOverrides([...pinnedLeft, ...centerColumns, ...pinnedRight]);
+  }, [options.columnDefs, columnOrder, pinnedColumns, columnWidthOverrides]);
 
   const visibleColumnsRef = useRef(visibleColumns);
   visibleColumnsRef.current = visibleColumns;
@@ -578,12 +591,15 @@ export function useGridState(
         if (retry) requestAnimationFrame(() => doFocus(false));
         return;
       }
-      target.focus();
+      target.focus({ preventScroll: true });
       if (retry && container.ownerDocument.activeElement !== target) {
         requestAnimationFrame(() => doFocus(false));
       }
     };
 
+    // Attempt synchronous focus first to avoid the browser scrolling the viewport
+    // (e.g. when ArrowDown is pressed) before async focus runs.
+    doFocus(true);
     queueMicrotask(() => doFocus(true));
   }, []);
 
@@ -1019,7 +1035,9 @@ export function useGridState(
       triggerEvent?: Event | KeyboardEvent | null,
     ): boolean => {
       const nextCell = findNextGridCell({
-        rows: pipelineRef.current.visibleRows,
+        rows: pipelineRef.current.displayItems
+          .filter((item) => item.kind === 'row')
+          .map((item) => (item as RowItem).row),
         columns: visibleColumnsRef.current,
         rowId: row.id,
         columnName: column.name,
@@ -1155,8 +1173,11 @@ export function useGridState(
 
   // --- Auto resize effect ---
 
+  // Auto-resize is on by default so the grid fills its container. Setting an
+  // explicit `viewportHeight` opts back into fixed sizing because the observer
+  // only writes `autoViewportHeight` when `viewportHeight` is unset.
   useEffect(() => {
-    if (!FEATURE_AUTO_RESIZE || !options.enableAutoResize) return;
+    if (!FEATURE_AUTO_RESIZE) return;
 
     const container = gridContainerRef.current;
     if (!container) return;
@@ -1281,6 +1302,12 @@ export function useGridState(
 
   const isFocusedCellFn = useCallback((row: GridRow, column: GridColumnDef): boolean => {
     return isGridCellPosition(focusedCellRef.current, row.id, column.name);
+  }, []);
+
+  const isFocusedRowFn = useCallback((row: GridRow): boolean => {
+    return (
+      focusedCellRef.current?.rowId === row.id || editingCellRef.current?.rowId === row.id
+    );
   }, []);
 
   const isEditingCellFn = useCallback((row: GridRow, column: GridColumnDef): boolean => {
@@ -1445,35 +1472,46 @@ export function useGridState(
 
   const handleCellKeyDownFn = useCallback(
     (row: GridRow, column: GridColumnDef, event: React.KeyboardEvent): void => {
-      focusCellFn(row, column, event.nativeEvent);
+      if (isGridNavigationKey(event.key)) {
+        setFocusedCell({ rowId: row.id, columnName: column.name });
+      } else {
+        focusCellFn(row, column, event.nativeEvent);
+      }
 
       switch (event.key) {
         case 'ArrowLeft':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, 'left', event.nativeEvent);
           return;
         case 'ArrowRight':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, 'right', event.nativeEvent);
           return;
         case 'ArrowUp':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, 'up', event.nativeEvent);
           return;
         case 'ArrowDown':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, 'down', event.nativeEvent);
           return;
         case 'Tab':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, event.shiftKey ? 'left' : 'right', event.nativeEvent);
           return;
         case 'Enter':
           event.preventDefault();
+          event.stopPropagation();
           moveFocusFn(row, column, event.shiftKey ? 'up' : 'down', event.nativeEvent);
           return;
         case 'F2':
           event.preventDefault();
+          event.stopPropagation();
           if (isCellEditable(row, column, event.nativeEvent)) {
             startCellEditFn(row, column, event.nativeEvent);
           }
@@ -1482,6 +1520,7 @@ export function useGridState(
         case 'Delete':
           if (isCellEditable(row, column, event.nativeEvent)) {
             event.preventDefault();
+            event.stopPropagation();
             startCellEditFn(row, column, event.nativeEvent, '');
           }
           return;
@@ -1494,6 +1533,7 @@ export function useGridState(
         isCellEditable(row, column, event.nativeEvent)
       ) {
         event.preventDefault();
+        event.stopPropagation();
         startCellEditFn(row, column, event.nativeEvent, event.key);
       }
     },
@@ -1518,17 +1558,26 @@ export function useGridState(
     (event: React.KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopPropagation();
         cancelCellEditFn();
         return;
       }
       if (event.key === 'Enter') {
         event.preventDefault();
+        event.stopPropagation();
         commitCellEditFn(event.shiftKey ? 'up' : 'down');
         return;
       }
       if (event.key === 'Tab') {
         event.preventDefault();
+        event.stopPropagation();
         commitCellEditFn(event.shiftKey ? 'left' : 'right');
+        return;
+      }
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        commitCellEditFn(event.key === 'ArrowUp' ? 'up' : 'down');
       }
     },
     [cancelCellEditFn, commitCellEditFn],
@@ -1599,6 +1648,90 @@ export function useGridState(
     [setPaginationPageSizeFn],
   );
 
+  // --- Column resizing ---
+
+  const canResizeColumnsFn = useCallback((): boolean => {
+    return optionsRef.current.enableColumnResizing !== false;
+  }, []);
+
+  const setColumnWidthOverrideFn = useCallback((columnName: string, widthPx: number): void => {
+    const nextWidth = `${Math.max(88, Math.round(widthPx))}px`;
+    setColumnWidthOverrides((current) => ({ ...current, [columnName]: nextWidth }));
+  }, []);
+
+  const measureAutoColumnWidthFn = useCallback((columnName: string): number => {
+    const container = gridContainerRef.current;
+    if (container == null) return 176;
+    const escaped = CSS.escape ? CSS.escape(columnName) : columnName.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+    const selectors = [
+      `.header-cell[data-col-name="${escaped}"]`,
+      `.filter-cell[data-col-name="${escaped}"]`,
+      `.body-cell[data-col-name="${escaped}"] .cell-shell`,
+    ];
+    let maxWidth = 0;
+    for (const selector of selectors) {
+      const elements = container.querySelectorAll<HTMLElement>(selector);
+      for (const element of elements) {
+        maxWidth = Math.max(maxWidth, element.scrollWidth);
+      }
+    }
+    return maxWidth + 12;
+  }, []);
+
+  const handleHeaderResizeMouseDownFn = useCallback(
+    (column: GridColumnDef, event: React.MouseEvent): void => {
+      if (!canResizeColumnsFn()) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const headerCell = (event.currentTarget as HTMLElement).closest<HTMLElement>('.header-cell');
+      if (headerCell == null) return;
+
+      const startX = event.clientX;
+      const startWidth = headerCell.getBoundingClientRect().width;
+      let lastWidth = startWidth;
+
+      const handleMove = (moveEvent: MouseEvent): void => {
+        lastWidth = Math.max(88, startWidth + (moveEvent.clientX - startX));
+
+        // Compute the new column template directly — no React state, no re-render.
+        // This keeps virtualized resize smooth since the pipeline never re-runs mid-drag.
+        const widthStr = `${Math.round(lastWidth)}px`;
+        const newTemplate = buildGridTemplateColumns(
+          visibleColumnsRef.current.map((c) =>
+            c.name === column.name ? { ...c, width: widthStr } : c,
+          ),
+        );
+        gridContainerRef.current
+          ?.querySelectorAll<HTMLElement>('.header-grid, .filter-grid, .body-grid')
+          .forEach((el) => {
+            el.style.gridTemplateColumns = newTemplate;
+          });
+      };
+
+      const handleUp = (): void => {
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('mouseup', handleUp);
+        // Commit the final width to React state once — triggers one clean re-render.
+        setColumnWidthOverrideFn(column.name, lastWidth);
+      };
+
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+    },
+    [canResizeColumnsFn, setColumnWidthOverrideFn],
+  );
+
+  const autoSizeColumnFn = useCallback(
+    (column: GridColumnDef, event: React.MouseEvent): void => {
+      if (!canResizeColumnsFn()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setColumnWidthOverrideFn(column.name, measureAutoColumnWidthFn(column.name));
+    },
+    [canResizeColumnsFn, setColumnWidthOverrideFn, measureAutoColumnWidthFn],
+  );
+
   const onViewportScrollFn = useCallback((startIndex: number): void => {
     if (!scrollingRef.current) {
       scrollingRef.current = true;
@@ -1667,6 +1800,7 @@ export function useGridState(
     paginationSelectedPageSize,
     rowSize,
     viewportHeightPx,
+    autoViewportHeight,
 
     headerLabel: headerLabelFn,
     isGroupItem: isGroupItemFn,
@@ -1683,6 +1817,7 @@ export function useGridState(
     groupDisclosureLabel: groupDisclosureLabelFn,
     displayValue: displayValueFn,
     isFocusedCell: isFocusedCellFn,
+    isFocusedRow: isFocusedRowFn,
     isEditingCell: isEditingCellFn,
     editorInputType: editorInputTypeFn,
     cellContext: cellContextFn,
@@ -1732,6 +1867,9 @@ export function useGridState(
     toggleTreeRow: toggleTreeRowFn,
     moveColumn: moveColumnFn,
     moveVisibleColumn: moveVisibleColumnFn,
+    canResizeColumns: canResizeColumnsFn,
+    handleHeaderResizeMouseDown: handleHeaderResizeMouseDownFn,
+    autoSizeColumn: autoSizeColumnFn,
     nextPage: nextPageFn,
     previousPage: previousPageFn,
     onPageSizeChange: onPageSizeChangeFn,

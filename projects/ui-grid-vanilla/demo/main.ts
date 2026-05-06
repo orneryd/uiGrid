@@ -28,6 +28,7 @@ const options: GridOptions = {
   enableSorting: true,
   enableFiltering: true,
   enableGrouping: true,
+  enableColumnResizing: true,
   enableVirtualization: true,
   virtualizationThreshold: 25,
   grouping: { groupBy: ['status'] },

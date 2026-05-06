@@ -45,6 +45,7 @@ function App() {
       enableFiltering: true,
       enableGrouping: true,
       enableColumnMoving: true,
+      enableColumnResizing: true,
       enableVirtualization: true,
       enableCellEditOnFocus: true,
       virtualizationThreshold: 25,
@@ -121,7 +122,8 @@ function App() {
           <h2>{options.title ?? 'UI Grid'}</h2>
           <p>
             Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt with React
-            hooks, virtualization, grouping, sorting, filtering, and column ordering.
+            hooks, virtualization, grouping, sorting, filtering, column ordering, and Excel-style
+            column resizing with drag handles plus double-click auto fit.
           </p>
         </div>
 
@@ -169,7 +171,7 @@ function App() {
         </div>
         <p>
           <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
-          templating, and virtualized rendering.
+          column resizing, templating, and virtualized rendering.
         </p>
       </div>
 

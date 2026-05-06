@@ -1289,6 +1289,193 @@ describe('UiGridComponent', () => {
     ).toBeNull();
   });
 
+  it('keeps the destination cell selected when Tab opens its editor', async () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enableGrouping: false,
+        enableCellEditOnFocus: true,
+        columnDefs: [
+          { name: 'name' },
+          { name: 'owner', field: 'account.owner', enableCellEdit: true },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const nameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLElement;
+    nameCell.focus();
+    nameCell.dispatchEvent(keyDown(nameCell, { key: 'Tab', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const ownerCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLElement;
+    const ownerEditor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLInputElement;
+    expect(ownerCell.classList.contains('cell-focused')).toBe(true);
+    expect(ownerCell.classList.contains('cell-editing')).toBe(true);
+    expect(ownerEditor).toBeTruthy();
+  });
+
+  it('commits editor changes and navigates vertically on ArrowUp and ArrowDown', async () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enableGrouping: false,
+        enableCellEditOnFocus: true,
+        columnDefs: [
+          { name: 'name', enableCellEdit: true },
+          { name: 'status' },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const firstRowNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLElement;
+    firstRowNameCell.focus();
+    firstRowNameCell.dispatchEvent(keyDown(firstRowNameCell, { key: 'F2', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    let editor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLInputElement;
+    expect(editor).toBeTruthy();
+    editor.value = 'Renamed Customer';
+    editor.dispatchEvent(domEvent(editor, 'input'));
+    editor.dispatchEvent(keyDown(editor, { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const secondRowEditor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-2"][data-col-name="name"]',
+    ) as HTMLInputElement;
+    expect(secondRowEditor).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(secondRowEditor);
+
+    const secondRowNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-2"][data-col-name="name"]',
+    ) as HTMLElement;
+    secondRowEditor.dispatchEvent(keyDown(secondRowEditor, { key: 'ArrowUp', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    editor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLInputElement;
+    expect(editor).toBeTruthy();
+    expect(shadowRoot.activeElement).toBe(editor);
+    expect(secondRowNameCell.classList.contains('row-focused')).toBe(false);
+  });
+
+  it('moves the focused-row highlight when keyboard navigation changes rows', async () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enableGrouping: false,
+        enableCellEditOnFocus: false,
+      }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const firstRowNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLElement;
+    const secondRowNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-2"][data-col-name="name"]',
+    ) as HTMLElement;
+
+    firstRowNameCell.focus();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(
+      shadowRoot.querySelectorAll('.body-cell[data-row-id="row-1"].row-focused').length,
+    ).toBeGreaterThan(1);
+    expect(shadowRoot.querySelectorAll('.body-cell[data-row-id="row-2"].row-focused')).toHaveLength(0);
+
+    firstRowNameCell.dispatchEvent(keyDown(firstRowNameCell, { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(shadowRoot.querySelectorAll('.body-cell[data-row-id="row-1"].row-focused')).toHaveLength(0);
+    expect(
+      shadowRoot.querySelectorAll('.body-cell[data-row-id="row-2"].row-focused').length,
+    ).toBeGreaterThan(1);
+    expect(shadowRoot.activeElement).toBe(secondRowNameCell);
+  });
+
+  it('stops handled keyboard navigation from bubbling to parent listeners', async () => {
+    const fixture = TestBed.createComponent(UiGridComponent);
+    fixture.componentRef.setInput(
+      'options',
+      createOptions({
+        enableGrouping: false,
+        enableCellEditOnFocus: true,
+        columnDefs: [
+          { name: 'name', displayName: 'Customer', enableCellEdit: true },
+          { name: 'status' },
+          { name: 'owner', field: 'account.owner', enableCellEdit: true },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const shadowRoot = getShadowRoot(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const parentKeydown = vi.fn();
+    host.addEventListener('keydown', parentKeydown);
+
+    const firstNameCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="name"]',
+    ) as HTMLElement;
+    firstNameCell.focus();
+    firstNameCell.dispatchEvent(keyDown(firstNameCell, { key: 'ArrowRight', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(parentKeydown).not.toHaveBeenCalled();
+    expect(shadowRoot.activeElement).toBe(
+      shadowRoot.querySelector('.body-cell[data-row-id="row-1"][data-col-name="status"]'),
+    );
+
+    const statusCell = shadowRoot.querySelector(
+      '.body-cell[data-row-id="row-1"][data-col-name="status"]',
+    ) as HTMLElement;
+    statusCell.dispatchEvent(keyDown(statusCell, { key: 'Tab', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(parentKeydown).not.toHaveBeenCalled();
+    const ownerEditor = shadowRoot.querySelector(
+      '.cell-editor[data-row-id="row-1"][data-col-name="owner"]',
+    ) as HTMLInputElement;
+    expect(ownerEditor).toBeTruthy();
+
+    ownerEditor.dispatchEvent(keyDown(ownerEditor, { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(parentKeydown).not.toHaveBeenCalled();
+  });
+
   it('exercises edit api wrappers, parser fallbacks, and refresh cloning deterministically', async () => {
     let gridApi!: UiGridApi;
     const editData = [

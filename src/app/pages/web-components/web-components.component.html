@@ -31,7 +31,7 @@
                 <h2>100K Rows Demo</h2>
                 <p>
                     Same primary dataset and options as Angular home: sorting, filtering, grouping,
-                    column moving, virtualization, and inline editing.
+                    column moving, column resizing, virtualization, and inline editing.
                 </p>
             </div>
         </div>
@@ -42,7 +42,8 @@
                     <h3>UI Grid Modernized (Web Component)</h3>
                     <p>
                         Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt as a
-                        framework-neutral custom element with grouping, sorting, filtering, and virtualization.
+                        framework-neutral custom element with grouping, sorting, filtering, Excel-style
+                        resize handles, and virtualization.
                     </p>
                 </div>
                 <div class="web-primary-shell__actions">
@@ -79,7 +80,7 @@
                 </div>
                 <p>
                     <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
-                    templating, and virtualized rendering.
+                    column resizing, templating, and virtualized rendering.
                 </p>
             </div>
 
@@ -99,6 +100,7 @@
                     enable-filtering
                     enable-grouping
                     enable-column-moving
+                    enable-column-resizing
                     enable-virtualization
                     enable-cell-edit-on-focus>
                 </ui-grid-element>
@@ -163,6 +165,7 @@
                 [attr.enable-filtering]="demoConfig().enableFiltering ? '' : null"
                 [attr.enable-grouping]="demoConfig().enableGrouping ? '' : null"
                 [attr.enable-column-moving]="demoConfig().enableColumnMoving ? '' : null"
+                [attr.enable-column-resizing]="demoConfig().enableColumnResizing ? '' : null"
                 [attr.enable-virtualization]="demoConfig().enableVirtualization ? '' : null"
                 [attr.enable-cell-edit-on-focus]="demoConfig().enableCellEditOnFocus ? '' : null"
                 [attr.enable-pinning]="demoConfig().enablePinning ? '' : null"

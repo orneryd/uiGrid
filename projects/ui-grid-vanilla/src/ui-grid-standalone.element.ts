@@ -5,8 +5,11 @@ import {
   canGridMoveColumns,
   downloadGridCsvFile,
   exportCsvRows,
+  findNextGridCell,
   formatGridHeaderDisplayValue,
   getCellValue,
+  isGridNavigationKey,
+  isPrintableGridKey,
   sanitizeDownloadFilename,
   type DisplayItem,
   type GridColumnDef,
@@ -1096,10 +1099,63 @@ export class UiGridStandaloneElement extends HTMLElement {
       }
     });
 
+    root.addEventListener('mousedown', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !this.controller) return;
+
+      const resizer = target.closest<HTMLElement>('.column-resizer[data-column]');
+      if (!resizer || !this.controller.canResizeColumns()) return;
+
+      const columnName = resizer.dataset['column'];
+      if (!columnName) return;
+
+      const headerCell = resizer.closest<HTMLElement>('.header-cell');
+      if (!headerCell) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = (event as MouseEvent).clientX;
+      const startWidth = headerCell.getBoundingClientRect().width;
+      let lastWidth = startWidth;
+
+      const handleMove = (moveEvent: MouseEvent): void => {
+        lastWidth = Math.max(88, startWidth + (moveEvent.clientX - startX));
+
+        // Write directly to DOM — skip full refresh while dragging.
+        const newTemplate = this.controller!.buildTemplateColumnsWithOverride(columnName, lastWidth);
+        const root = this.shadowRoot ?? this;
+        (root as ShadowRoot | HTMLElement).querySelectorAll<HTMLElement>('.header-grid, .filter-grid, .body-grid').forEach((el) => {
+          el.style.gridTemplateColumns = newTemplate;
+        });
+      };
+
+      const handleUp = (): void => {
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('mouseup', handleUp);
+        // Commit final width once — triggers one full refresh.
+        this.controller!.setColumnWidthOverride(columnName, lastWidth);
+      };
+
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+    });
+
     root.addEventListener('dblclick', (event) => {
       const target = event.target as HTMLElement | null;
       if (!target || !this.controller) {
         return;
+      }
+
+      const resizer = target.closest<HTMLElement>('.column-resizer[data-column]');
+      if (resizer && this.controller.canResizeColumns()) {
+        const columnName = resizer.dataset['column'];
+        if (columnName) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.controller.setColumnWidthOverride(columnName, this.measureAutoColumnWidth(columnName));
+          return;
+        }
       }
 
       const cell = target.closest<HTMLElement>('.body-cell');
@@ -1532,9 +1588,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pinLabel = isPinned
       ? (this.snapshot?.labels.unpin ?? 'Unpin')
       : (this.snapshot?.labels.pinColumn ?? 'Pin');
+    const canResize = controller.canResizeColumns();
     const headerValue = escapeHtml(formatGridHeaderDisplayValue(buildGridHeaderContext(column)));
+    const resizerHtml = canResize
+      ? `<button type="button" class="column-resizer" data-action="resize" data-column="${escapeHtml(column.name)}" aria-label="Resize ${escapeHtml(headerValue)} column" title="Drag to resize, double-click to auto fit"></button>`
+      : '';
 
-    return `<div class="${classes}" data-column="${escapeHtml(column.name)}" ${draggable} style="${stickyStyle}"><span class="header-label">${headerValue}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span></div>`;
+    return `<div class="${classes}" data-column="${escapeHtml(column.name)}" ${draggable} style="${stickyStyle}"><span class="header-label">${headerValue}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span>${resizerHtml}</div>`;
   }
 
   private renderFilterCell(column: GridColumnDef): string {
@@ -1552,6 +1612,24 @@ export class UiGridStandaloneElement extends HTMLElement {
       .join(' ');
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
     return `<label class="${classes}" style="${stickyStyle}"><input class="ui-grid-filter-input" data-role="filter" data-column="${escapeHtml(column.name)}" placeholder="${escapeHtml(controller.filterPlaceholder(column))}" value="${escapeHtml(value)}" ${canFilter ? '' : 'disabled'}></label>`;
+  }
+
+  private measureAutoColumnWidth(columnName: string): number {
+    const root = this.shadowRoot;
+    if (root == null) return 176;
+    const escaped = CSS.escape ? CSS.escape(columnName) : columnName.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+    const selectors = [
+      `.header-cell[data-column="${escaped}"]`,
+      `.filter-cell[data-column="${escaped}"]`,
+      `.body-cell[data-column="${escaped}"] .cell-shell`,
+    ];
+    let maxWidth = 0;
+    for (const selector of selectors) {
+      for (const el of root.querySelectorAll<HTMLElement>(selector)) {
+        maxWidth = Math.max(maxWidth, el.scrollWidth);
+      }
+    }
+    return maxWidth + 12;
   }
 
   private renderDisplayItem(item: DisplayItem, displayIndex: number): string {

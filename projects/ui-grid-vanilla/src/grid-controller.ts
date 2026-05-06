@@ -134,6 +134,7 @@ export class VanillaGridController {
   private expandedTreeRows: Record<string, boolean> = {};
   private pinnedColumns: PinnedColumnState = {};
   private columnOrder: string[] = [];
+  private columnWidthOverrides: Record<string, string> = {};
   private currentPage = 1;
   private pageSize = 0;
   private editingCell: GridCellPosition | null = null;
@@ -590,6 +591,27 @@ export class VanillaGridController {
     this.refresh();
   }
 
+  canResizeColumns(): boolean {
+    return this.options.enableColumnResizing !== false;
+  }
+
+  setColumnWidthOverride(columnName: string, widthPx: number): void {
+    const nextWidth = `${Math.max(88, Math.round(widthPx))}px`;
+    this.columnWidthOverrides = { ...this.columnWidthOverrides, [columnName]: nextWidth };
+    this.refresh();
+  }
+
+  /** Returns the grid-template-columns string as if `columnName` had the given width,
+   * without triggering a full refresh. Used for smooth drag-resize DOM updates. */
+  buildTemplateColumnsWithOverride(columnName: string, widthPx: number): string {
+    const widthStr = `${Math.max(88, Math.round(widthPx))}px`;
+    return buildGridTemplateColumns(
+      this.visibleColumns.map((c) =>
+        c.name === columnName ? { ...c, width: widthStr } : c,
+      ),
+    );
+  }
+
   isGroupingEnabled(): boolean {
     return isGridGroupingEnabled(this.options);
   }
@@ -743,10 +765,15 @@ export class VanillaGridController {
 
   private refresh(): void {
     const orderedColumns = orderVisibleColumns(this.options.columnDefs, this.columnOrder);
+    const applyWidthOverrides = (columns: GridColumnDef[]): GridColumnDef[] =>
+      columns.map((col) => {
+        const override = this.columnWidthOverrides[col.name];
+        return override == null ? col : { ...col, width: override };
+      });
     const pinnedEntries = Object.entries(this.pinnedColumns);
 
     if (pinnedEntries.length === 0) {
-      this.visibleColumns = orderedColumns;
+      this.visibleColumns = applyWidthOverrides(orderedColumns);
     } else {
       const byName = new Map(orderedColumns.map((column) => [column.name, column]));
       const pinnedLeft = pinnedEntries
@@ -760,7 +787,7 @@ export class VanillaGridController {
       const middleColumns = orderedColumns.filter(
         (column) => this.pinnedColumns[column.name] === undefined,
       );
-      this.visibleColumns = [...pinnedLeft, ...middleColumns, ...pinnedRight];
+      this.visibleColumns = applyWidthOverrides([...pinnedLeft, ...middleColumns, ...pinnedRight]);
     }
 
     this.pipeline = defaultGridEngine.buildPipeline({

@@ -56,6 +56,7 @@ type DeclarativeGridConfig = {
   readonly enableFiltering: boolean;
   readonly enableGrouping: boolean;
   readonly enableColumnMoving: boolean;
+  readonly enableColumnResizing: boolean;
   readonly enableVirtualization: boolean;
   readonly enableCellEditOnFocus: boolean;
   readonly enablePinning: boolean;
@@ -211,6 +212,7 @@ export class AccountsGridComponent {
     enableFiltering: true,
     enableGrouping: true,
     enableColumnMoving: true,
+    enableColumnResizing: true,
     enableVirtualization: true,
     enableCellEditOnFocus: true,
     virtualizationThreshold: 25,
@@ -263,6 +265,7 @@ restoreState(): void {
     `  enable-filtering`,
     `  enable-grouping`,
     `  enable-column-moving`,
+    `  enable-column-resizing`,
     `  enable-virtualization`,
     `  enable-cell-edit-on-focus`,
     `  viewport-height="620"`,
@@ -298,6 +301,7 @@ restoreState(): void {
     enableFiltering: true,
     enableGrouping: true,
     enableColumnMoving: true,
+    enableColumnResizing: true,
     enableVirtualization: true,
     enableCellEditOnFocus: true,
     virtualizationThreshold: 25,
@@ -406,6 +410,7 @@ restoreState(): void {
     enableFiltering: true,
     enableGrouping: true,
     enableColumnMoving: true,
+    enableColumnResizing: true,
     enableVirtualization: true,
     enableCellEditOnFocus: true,
     enablePinning: false,
@@ -424,6 +429,7 @@ restoreState(): void {
       enableFiltering: true,
       enableGrouping: false,
       enableColumnMoving: false,
+      enableColumnResizing: true,
       enableVirtualization: true,
       enableCellEditOnFocus: false,
       enablePinning: false,

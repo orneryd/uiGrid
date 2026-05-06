@@ -41,6 +41,7 @@ export function UiGrid({
     virtualizationEnabled,
     rowSize,
     editingValue,
+    autoViewportHeight,
     sortingFeature,
     filteringFeature,
     groupingFeature,
@@ -59,10 +60,12 @@ export function UiGrid({
   const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
   const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
   const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
-  const bodyViewportHeight = Math.max(
-    rowSize,
-    (options.viewportHeight ?? 560) - stickyChromeHeight,
-  );
+  // Prefer the explicit viewportHeight, otherwise fall back to the container
+  // height measured by the autoresize observer so the grid fills its parent
+  // by default. The 560 fallback only applies before the first measurement.
+  const resolvedViewportHeight =
+    options.viewportHeight ?? (autoViewportHeight && autoViewportHeight > 0 ? autoViewportHeight : 560);
+  const bodyViewportHeight = Math.max(rowSize, resolvedViewportHeight - stickyChromeHeight);
 
   const virtualScroll = useVirtualScroll({
     itemCount: displayItems.length,
@@ -74,7 +77,7 @@ export function UiGrid({
   const [openPinMenuColumn, setOpenPinMenuColumn] = React.useState<string | null>(null);
   const [draggedColumnName, setDraggedColumnName] = React.useState<string | null>(null);
   const [dropTargetColumnName, setDropTargetColumnName] = React.useState<string | null>(null);
-  const scrollContainerHeight = `${options.viewportHeight ?? 560}px`;
+  const scrollContainerHeight = `${resolvedViewportHeight}px`;
 
   function renderHeaderContent(column: GridColumnDef): React.ReactNode {
     const value = state.headerLabel(column);
@@ -414,6 +417,7 @@ export function UiGrid({
     if (column.align === 'center') classes.push('align-center');
     if (column.align === 'end') classes.push('align-end');
     if (state.isFocusedCell(item.row, column)) classes.push('cell-focused');
+    if (state.isFocusedRow(item.row)) classes.push('row-focused');
     if (cellEditFeature && state.isEditingCell(item.row, column)) classes.push('cell-editing');
     return classes.join(' ');
   }
@@ -474,7 +478,7 @@ export function UiGrid({
                   key={column.name}
                   className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}${draggedColumnName === column.name ? ' is-dragging' : ''}${dropTargetColumnName === column.name ? ' is-drag-target' : ''}`}
                   data-part="header-cell"
-                  role="columnheader"
+                  data-col-name={column.name}
                   aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
                   draggable={columnMovingFeature}
                   onDragStart={(event) => handleHeaderDragStart(column, event)}
@@ -596,6 +600,18 @@ export function UiGrid({
                         </div>
                       )}
                   </div>
+
+                  {state.canResizeColumns() && (
+                    <button
+                      type="button"
+                      className="column-resizer"
+                      data-col-name={column.name}
+                      aria-label={`Resize ${state.headerLabel(column)} column`}
+                      title="Drag to resize, double-click to auto fit"
+                      onMouseDown={(event) => state.handleHeaderResizeMouseDown(column, event)}
+                      onDoubleClick={(event) => state.autoSizeColumn(column, event)}
+                    />
+                  )}
                 </div>
               );
             })}

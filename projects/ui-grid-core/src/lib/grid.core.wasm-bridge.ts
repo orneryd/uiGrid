@@ -337,6 +337,8 @@ export const isPrintableGridKey: typeof tsEdit.isPrintableGridKey = (
   metaKey,
   altKey,
 ) => tsEdit.isPrintableGridKey(key, ctrlKey, metaKey, altKey);
+export const isGridNavigationKey: typeof tsEdit.isGridNavigationKey = (key) =>
+  tsEdit.isGridNavigationKey(key);
 export const buildGridFocusCellResult: typeof tsEdit.buildGridFocusCellResult = (context) =>
   tsEdit.buildGridFocusCellResult(context);
 export const clearGridEditSession: typeof tsEdit.clearGridEditSession = () =>

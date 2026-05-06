@@ -482,11 +482,11 @@ function createTreeRows(): GridRecord[] {
     }
 
     .react-demo-host {
-      min-height: 34rem;
+      height: 34rem;
     }
 
     .react-demo-host-primary {
-      min-height: 54rem;
+      height: 54rem;
     }
 
     .react-demo-error {
@@ -855,7 +855,6 @@ mountUiGrid(host, {
       rowIdentity: (row: GridRecord) => String(row['id']),
       data: this.tradingRows,
       rowHeight: 40,
-      viewportHeight: 460,
       enableSorting: true,
       enableFiltering: false,
       enableGrouping: false,
@@ -872,7 +871,6 @@ mountUiGrid(host, {
       title: 'UI Grid Modernized (React)',
       emptyMessage: 'No rows match the current filters.',
       rowHeight: 48,
-      viewportHeight: 620,
       enableSorting: true,
       enableFiltering: true,
       enableGrouping: true,
@@ -953,7 +951,6 @@ mountUiGrid(host, {
       rowIdentity: (row) => String(row['id']),
       data,
       rowHeight: 46,
-      viewportHeight: 300,
       enableSorting: true,
       enableFiltering: true,
       enableGrouping: false,
@@ -1048,7 +1045,6 @@ mountUiGrid(host, {
       rowIdentity: (row) => String(row['id']),
       data,
       rowHeight: 46,
-      viewportHeight: 300,
       enableSorting: true,
       enableFiltering: true,
       enablePinning: true,

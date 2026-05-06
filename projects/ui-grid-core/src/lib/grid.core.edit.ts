@@ -26,6 +26,23 @@ export function isPrintableGridKey(key: string, ctrlKey: boolean, metaKey: boole
   return key.length === 1 && !ctrlKey && !metaKey && !altKey;
 }
 
+export function isGridNavigationKey(key: string): boolean {
+  switch (key) {
+    case 'ArrowLeft':
+    case 'ArrowRight':
+    case 'ArrowUp':
+    case 'ArrowDown':
+    case 'Tab':
+    case 'Enter':
+    case 'F2':
+    case 'Backspace':
+    case 'Delete':
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function buildGridFocusCellResult(context: {
   currentFocusedCell: GridCellPosition | null;
   currentEditingCell: GridCellPosition | null;

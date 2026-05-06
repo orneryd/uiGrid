@@ -57,6 +57,7 @@ type DeclarativeGridConfig = {
   readonly enableFiltering: boolean;
   readonly enableGrouping: boolean;
   readonly enableColumnMoving: boolean;
+  readonly enableColumnResizing: boolean;
   readonly enableVirtualization: boolean;
   readonly enableCellEditOnFocus: boolean;
   readonly enablePinning: boolean;
@@ -306,6 +307,7 @@ export class WebComponentsComponent {
     enableFiltering: true,
     enableGrouping: true,
     enableColumnMoving: true,
+    enableColumnResizing: true,
     enableVirtualization: true,
     enableCellEditOnFocus: true,
     enablePinning: false,
@@ -331,6 +333,7 @@ export class WebComponentsComponent {
           enableFiltering: true,
           enableGrouping: false,
           enableColumnMoving: false,
+          enableColumnResizing: true,
           enableVirtualization: true,
           enableCellEditOnFocus: false,
           enablePinning: false,
@@ -352,6 +355,7 @@ export class WebComponentsComponent {
           enableFiltering: true,
           enableGrouping: false,
           enableColumnMoving: false,
+          enableColumnResizing: true,
           enableVirtualization: true,
           enableCellEditOnFocus: false,
           enablePinning: false,
@@ -373,6 +377,7 @@ export class WebComponentsComponent {
           enableFiltering: true,
           enableGrouping: false,
           enableColumnMoving: false,
+          enableColumnResizing: true,
           enableVirtualization: true,
           enableCellEditOnFocus: false,
           enablePinning: true,
@@ -394,6 +399,7 @@ export class WebComponentsComponent {
           enableFiltering: false,
           enableGrouping: false,
           enableColumnMoving: false,
+          enableColumnResizing: true,
           enableVirtualization: false,
           enableCellEditOnFocus: false,
           enablePinning: false,
@@ -416,6 +422,7 @@ export class WebComponentsComponent {
           enableFiltering: true,
           enableGrouping: false,
           enableColumnMoving: false,
+          enableColumnResizing: true,
           enableVirtualization: true,
           enableCellEditOnFocus: false,
           enablePinning: false,
@@ -437,6 +444,7 @@ export class WebComponentsComponent {
   enable-filtering
   enable-grouping
   enable-column-moving
+  enable-column-resizing
   enable-virtualization
   enable-cell-edit-on-focus>
   <template slot="cell-status" ngNonBindable>
@@ -485,6 +493,7 @@ export class WebComponentsComponent {
   tree-indent="16"
   enable-sorting
   enable-filtering
+  enable-column-resizing
   enable-tree-view
   enable-virtualization>
 </ui-grid-element>
@@ -508,6 +517,7 @@ export class WebComponentsComponent {
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
+  enable-column-resizing
   enable-virtualization>
   <template slot="cell-status" ngNonBindable>
     <span class="status-pill status-pill-{{valueLower}}">{{value}}</span>
@@ -533,6 +543,7 @@ export class WebComponentsComponent {
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
+  enable-column-resizing
   enable-pinning
   enable-virtualization>
 </ui-grid-element>
@@ -554,6 +565,7 @@ export class WebComponentsComponent {
   row-height="40"
   viewport-height="460"
   enable-sorting
+  enable-column-resizing
   >
   <template slot="cell-price" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span></template>
   <template slot="cell-bid" ngNonBindable><span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span></template>
@@ -587,6 +599,7 @@ export class WebComponentsComponent {
   expandable-row-height="112"
   enable-sorting
   enable-filtering
+  enable-column-resizing
   enable-expandable
   enable-virtualization>
   <template slot="expandable-row" ngNonBindable>

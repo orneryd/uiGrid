@@ -9,6 +9,7 @@
         [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
         @for (column of visibleColumns(); track column.name) {
         <div class="header-cell ui-grid-header-cell" part="header-cell" role="columnheader"
+          [attr.data-col-name]="column.name"
           [attr.aria-sort]="sortingFeature ? sortAriaSort(column) : null" cdkDrag [cdkDragData]="column"
           [cdkDragDisabled]="!columnMovingFeature"
           [class.is-active]="sortingFeature && sortDirection(column) !== 'none'" [class.is-pinned]="isPinned(column)"
@@ -93,6 +94,18 @@
             </div>
             }
           </div>
+
+          @if (canResizeColumns()) {
+          <button
+            type="button"
+            class="column-resizer"
+            [attr.data-col-name]="column.name"
+            aria-label="Resize {{ headerLabel(column) }} column"
+            title="Drag to resize, double-click to auto fit"
+            (mousedown)="handleHeaderResizeMouseDown(column, $event)"
+            (dblclick)="autoSizeColumn(column, $event)">
+          </button>
+          }
         </div>
         }
       </div>
@@ -101,6 +114,7 @@
       <div class="filter-grid ui-grid-header" part="filters" [style.gridTemplateColumns]="gridTemplateColumns()">
         @for (column of visibleColumns(); track column.name) {
         <label class="filter-cell ui-grid-filter-container" part="filter-cell" [class.is-pinned]="isPinned(column)"
+          [attr.data-col-name]="column.name"
           [style.position]="isPinned(column) ? 'sticky' : null"
           [style.left]="pinnedOffset(column)?.side === 'left' ? pinnedOffset(column)?.offset : null"
           [style.right]="pinnedOffset(column)?.side === 'right' ? pinnedOffset(column)?.offset : null"
@@ -138,7 +152,8 @@
         <div class="body-cell ui-grid-cell" part="body-cell" role="gridcell" tabindex="0"
           [attr.data-row-id]="item.row.id" [attr.data-col-name]="column.name"
           [class.body-cell-odd]="isOddStripedRow(item)" [class.align-center]="column.align === 'center'"
-          [class.align-end]="column.align === 'end'" [class.cell-focused]="isFocusedCell(item.row, column)"
+          [class.align-end]="column.align === 'end'" [class.row-focused]="isFocusedRow(item.row)"
+          [class.cell-focused]="isFocusedCell(item.row, column)"
           [class.cell-editing]="cellEditFeature && isEditingCell(item.row, column)"
           (focus)="focusCell(item.row, column, $event)" (click)="focusCell(item.row, column, $event)"
           (dblclick)="handleCellDoubleClick(item.row, column, $event)"
