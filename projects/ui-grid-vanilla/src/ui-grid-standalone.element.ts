@@ -64,10 +64,64 @@ function setAttr(el: HTMLElement, name: string, value: string): void {
   }
 }
 
-function cssEscape(value: string): string {
-  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-    ? CSS.escape(value)
-    : value.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+function setClass(el: HTMLElement, value: string): void {
+  if (el.className !== value) {
+    el.className = value;
+  }
+}
+
+function setStyle(el: HTMLElement, value: string): void {
+  const current = el.getAttribute('style');
+  if (value) {
+    if (current !== value) el.setAttribute('style', value);
+  } else if (current !== null) {
+    el.removeAttribute('style');
+  }
+}
+
+/**
+ * Computes the class string for a body cell. Kept in one place so both the
+ * initial-render markup builder and the patch path produce identical output.
+ */
+function bodyCellClass(
+  isOdd: boolean,
+  align: string,
+  isPinned: boolean,
+  isPinnedLeftLast: boolean,
+  isPinnedRightFirst: boolean,
+  isFocused: boolean,
+  isEditing: boolean,
+): string {
+  let cls = 'body-cell ui-grid-cell';
+  if (isOdd) cls += ' body-cell-odd';
+  if (align === 'center') cls += ' align-center';
+  else if (align === 'end') cls += ' align-end';
+  if (isPinned) cls += ' is-pinned';
+  if (isPinnedLeftLast) cls += ' is-pinned-left-last';
+  if (isPinnedRightFirst) cls += ' is-pinned-right-first';
+  if (isFocused) cls += ' cell-focused';
+  if (isEditing) cls += ' cell-editing';
+  return cls;
+}
+
+function headerCellClass(
+  isSortActive: boolean,
+  isPinned: boolean,
+  isPinnedLeftLast: boolean,
+  isPinnedRightFirst: boolean,
+  isPinMenuOpen: boolean,
+  isDragTarget: boolean,
+  isDragging: boolean,
+): string {
+  let cls = 'header-cell';
+  if (isSortActive) cls += ' is-active';
+  if (isPinned) cls += ' is-pinned';
+  if (isPinnedLeftLast) cls += ' is-pinned-left-last';
+  if (isPinnedRightFirst) cls += ' is-pinned-right-first';
+  if (isPinMenuOpen) cls += ' is-pin-menu-open';
+  if (isDragTarget) cls += ' is-drag-target';
+  if (isDragging) cls += ' is-dragging';
+  return cls;
 }
 
 function asGroupItem(item: DisplayItem): GroupItem {
@@ -2146,15 +2200,25 @@ export class UiGridStandaloneElement extends HTMLElement {
     const rowId = row.id;
     const columnName = column.name;
     const editing = controller.isEditingCell(rowId, columnName);
-    const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
+    const isPinned = controller.isPinned(column);
+    const pinOffset = isPinned ? controller.pinnedOffset(column) : null;
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
     const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
+    const isPinnedLeftLast = controller.isPinnedLeftLast(column);
+    const isPinnedRightFirst = controller.isPinnedRightFirst(column);
+    const isOdd = displayIndex % 2 !== 0;
+    const align = column.align ?? '';
 
-    setAttr(cell, 'data-odd', String(displayIndex % 2 !== 0));
-    setAttr(cell, 'data-align', column.align ?? '');
-    setAttr(cell, 'data-pinned', String(controller.isPinned(column)));
-    setAttr(cell, 'data-pinned-left-last', String(controller.isPinnedLeftLast(column)));
-    setAttr(cell, 'data-pinned-right-first', String(controller.isPinnedRightFirst(column)));
+    // Visual state is written directly (className / style) since the
+    // <ui-grid-body-cell> custom element no longer translates data-* into
+    // visual state. data-* attrs still drive event delegation and CSS hooks.
+    setClass(cell, bodyCellClass(isOdd, align, isPinned, isPinnedLeftLast, isPinnedRightFirst, isFocused, editing));
+    setStyle(cell, stickyStyle);
+    setAttr(cell, 'data-odd', String(isOdd));
+    setAttr(cell, 'data-align', align);
+    setAttr(cell, 'data-pinned', String(isPinned));
+    setAttr(cell, 'data-pinned-left-last', String(isPinnedLeftLast));
+    setAttr(cell, 'data-pinned-right-first', String(isPinnedRightFirst));
     setAttr(cell, 'data-focused', String(isFocused));
     setAttr(cell, 'data-editing', String(editing));
     setAttr(cell, 'data-sticky-style', stickyStyle);
@@ -2288,7 +2352,24 @@ export class UiGridStandaloneElement extends HTMLElement {
       ? resizerMarkup(escapeHtml(column.name), escapeHtml(headerValue))
       : '';
 
-    return `<ui-grid-header-cell data-column="${escapeHtml(column.name)}" data-sort-active="${sortDirection !== SORT_DIRECTIONS.none}" data-pinned="${isPinned}" data-pinned-left-last="${controller.isPinnedLeftLast(column)}" data-pinned-right-first="${controller.isPinnedRightFirst(column)}" data-pin-menu-open="${this.openPinMenuColumn === column.name}" data-drag-target="${this.dropTargetColumnName === column.name}" data-dragging="${this.draggedColumnName === column.name}" data-draggable="${canGridMoveColumns(options)}" data-sticky-style="${escapeHtml(stickyStyle)}"><span class="header-label">${headerValue}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${this.openPinMenuColumn === column.name ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span>${resizerHtml}</ui-grid-header-cell>`;
+    const isPinnedLeftLast = controller.isPinnedLeftLast(column);
+    const isPinnedRightFirst = controller.isPinnedRightFirst(column);
+    const isPinMenuOpen = this.openPinMenuColumn === column.name;
+    const isDragTarget = this.dropTargetColumnName === column.name;
+    const isDragging = this.draggedColumnName === column.name;
+    const isDraggable = canGridMoveColumns(options);
+    const className = headerCellClass(
+      sortDirection !== SORT_DIRECTIONS.none,
+      isPinned,
+      isPinnedLeftLast,
+      isPinnedRightFirst,
+      isPinMenuOpen,
+      isDragTarget,
+      isDragging,
+    );
+    // className/style/draggable are pre-computed here so the <ui-grid-header-cell>
+    // upgrade is a no-op at parse time. `data-*` stay for event delegation.
+    return `<ui-grid-header-cell class="${className}"${isDraggable ? ' draggable="true"' : ''}${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''} data-column="${escapeHtml(column.name)}" data-sort-active="${sortDirection !== SORT_DIRECTIONS.none}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-pin-menu-open="${isPinMenuOpen}" data-drag-target="${isDragTarget}" data-dragging="${isDragging}" data-draggable="${isDraggable}" data-sticky-style="${escapeHtml(stickyStyle)}"><span class="header-label">${headerValue}</span><span class="header-actions">${sortEnabled ? `<button type="button" class="header-action" data-action="sort" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(sortLabel)}" ${canSort ? '' : 'disabled'}>${this.renderControlIcon(sortIconKey)}<span class="sr-only">${escapeHtml(sortLabel)}</span></button>` : ''}${groupingEnabled ? `<button type="button" class="chip-action${controller.isColumnGrouped(column) ? ' chip-action-active' : ''}" data-action="group" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(groupingLabel)}" ${canGroup ? '' : 'disabled'}>${this.renderControlIcon('group')}<span class="sr-only">${escapeHtml(groupingLabel)}</span></button>` : ''}${canPin ? `<div class="pin-control${isPinMenuOpen ? ' pin-control-open' : ''}"><button type="button" class="chip-action pin-trigger${isPinned ? ' chip-action-active' : ''}" data-action="pin-trigger" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(pinLabel)}">${this.renderControlIcon('pin')}<span class="sr-only">${escapeHtml(pinLabel)}</span></button><div class="pin-menu" role="menu" aria-label="${escapeHtml(pinLabel)}"><button type="button" class="pin-menu-action" data-action="pin-left" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}">${this.renderIconWithClass('control-icon', 'pinLeft')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinLeft ?? 'Pin left')}</span></button><button type="button" class="pin-menu-action" data-action="pin-right" data-column="${escapeHtml(column.name)}" aria-label="${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}">${this.renderIconWithClass('control-icon', 'pinRight')}<span class="sr-only">${escapeHtml(this.snapshot?.labels.pinRight ?? 'Pin right')}</span></button></div></div>` : ''}</span>${resizerHtml}</ui-grid-header-cell>`;
   }
 
   private renderFilterCell(column: GridColumnDef): string {
@@ -2328,7 +2409,7 @@ export class UiGridStandaloneElement extends HTMLElement {
       const iconKey = group.collapsed ? 'groupCollapsed' : 'groupExpanded';
       const icon = this.resolveIcon(iconKey);
       const disclosureLabel = this.controller.groupDisclosureLabel(group);
-      return `<ui-grid-group-row data-action="toggle-group" data-group="${escapeHtml(group.id)}" data-collapsed="${group.collapsed ? 'true' : 'false'}" data-field="${escapeHtml(group.field)}" data-label="${escapeHtml(group.label)}" data-count="${group.count}" data-depth="${group.depth}" data-disclosure-label="${escapeHtml(disclosureLabel)}" data-icon-path="${escapeHtml(icon.path)}" data-icon-view-box="${escapeHtml(icon.viewBox ?? '0 0 24 24')}" data-rows-suffix="${escapeHtml(this.snapshot.labels.groupRowsSuffix)}"></ui-grid-group-row>`;
+      return `<ui-grid-group-row data-action="toggle-group" data-group="${escapeHtml(group.id)}" data-collapsed="${group.collapsed ? 'true' : 'false'}" data-field="${escapeHtml(group.field)}" data-label="${escapeHtml(group.label)}" data-count="${group.count}" data-depth="${group.depth}" data-disclosure-label="${escapeHtml(disclosureLabel)}" data-icon-path="${icon.path}" data-icon-view-box="${icon.viewBox ?? '0 0 24 24'}" data-rows-suffix="${escapeHtml(this.snapshot.labels.groupRowsSuffix)}"></ui-grid-group-row>`;
     }
 
     if (item.kind === 'expandable') {
@@ -2359,14 +2440,14 @@ export class UiGridStandaloneElement extends HTMLElement {
       ? (() => {
           const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
           const treeIcon = this.resolveIcon(treeIconKey);
-          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), escapeHtml(treeIcon.viewBox ?? '0 0 24 24'), escapeHtml(treeIcon.path));
+          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), treeIcon.viewBox ?? '0 0 24 24', treeIcon.path);
         })()
       : '';
     const expandToggle = controller.showExpandToggle(row, column)
       ? (() => {
           const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
           const expIcon = this.resolveIcon(expIconKey);
-          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), escapeHtml(expIcon.viewBox ?? '0 0 24 24'), escapeHtml(expIcon.path));
+          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), expIcon.viewBox ?? '0 0 24 24', expIcon.path);
         })()
       : '';
 
@@ -2376,14 +2457,29 @@ export class UiGridStandaloneElement extends HTMLElement {
 
     const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
-    return `<ui-grid-body-cell data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(column.align ?? '')}" data-pinned="${controller.isPinned(column)}" data-pinned-left-last="${controller.isPinnedLeftLast(column)}" data-pinned-right-first="${controller.isPinnedRightFirst(column)}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></ui-grid-body-cell>`;
+    const isPinned = controller.isPinned(column);
+    const isPinnedLeftLast = controller.isPinnedLeftLast(column);
+    const isPinnedRightFirst = controller.isPinnedRightFirst(column);
+    const align = column.align ?? '';
+    const className = bodyCellClass(
+      displayIndex % 2 !== 0,
+      align,
+      isPinned,
+      isPinnedLeftLast,
+      isPinnedRightFirst,
+      isFocused,
+      editing,
+    );
+    // className/style/tabindex are pre-computed here so the <ui-grid-body-cell>
+    // upgrade is a no-op at parse time. `data-*` stay for event delegation.
+    return `<ui-grid-body-cell class="${className}" tabindex="0"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''} data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(align)}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></ui-grid-body-cell>`;
   }
 
   private renderPagination(snapshot: GridControllerSnapshot): string {
     const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
     const prevIcon = this.resolveIcon('paginationPrev');
     const nextIcon = this.resolveIcon('paginationNext');
-    return `<ui-grid-pagination data-range-label="${escapeHtml(`${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`)}" data-current-page="${snapshot.currentPage}" data-total-pages="${snapshot.totalPages}" data-page-label="${escapeHtml(snapshot.labels.paginationPage)}" data-of-label="${escapeHtml(snapshot.labels.paginationOf)}" data-prev-label="${escapeHtml(snapshot.labels.paginationPrevious)}" data-next-label="${escapeHtml(snapshot.labels.paginationNext)}" data-rows-label="${escapeHtml(snapshot.labels.paginationRows)}" data-prev-icon-path="${escapeHtml(prevIcon.path)}" data-prev-icon-view-box="${escapeHtml(prevIcon.viewBox ?? '0 0 24 24')}" data-next-icon-path="${escapeHtml(nextIcon.path)}" data-next-icon-view-box="${escapeHtml(nextIcon.viewBox ?? '0 0 24 24')}" data-page-sizes="${escapeHtml(JSON.stringify(pageSizes))}" data-page-size="${snapshot.pageSize}" data-prev-disabled="${snapshot.currentPage <= 1}" data-next-disabled="${snapshot.currentPage >= snapshot.totalPages}"></ui-grid-pagination>`;
+    return `<ui-grid-pagination data-range-label="${escapeHtml(`${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`)}" data-current-page="${snapshot.currentPage}" data-total-pages="${snapshot.totalPages}" data-page-label="${escapeHtml(snapshot.labels.paginationPage)}" data-of-label="${escapeHtml(snapshot.labels.paginationOf)}" data-prev-label="${escapeHtml(snapshot.labels.paginationPrevious)}" data-next-label="${escapeHtml(snapshot.labels.paginationNext)}" data-rows-label="${escapeHtml(snapshot.labels.paginationRows)}" data-prev-icon-path="${prevIcon.path}" data-prev-icon-view-box="${prevIcon.viewBox ?? '0 0 24 24'}" data-next-icon-path="${nextIcon.path}" data-next-icon-view-box="${nextIcon.viewBox ?? '0 0 24 24'}" data-page-sizes="${escapeHtml(JSON.stringify(pageSizes))}" data-page-size="${snapshot.pageSize}" data-prev-disabled="${snapshot.currentPage <= 1}" data-next-disabled="${snapshot.currentPage >= snapshot.totalPages}"></ui-grid-pagination>`;
   }
 
   private renderSlotRegistry(columns: readonly GridColumnDef[]): string {
