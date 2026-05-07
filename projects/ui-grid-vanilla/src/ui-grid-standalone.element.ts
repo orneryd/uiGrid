@@ -58,6 +58,12 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+function setAttr(el: HTMLElement, name: string, value: string): void {
+  if (el.getAttribute(name) !== value) {
+    el.setAttribute(name, value);
+  }
+}
+
 function cssEscape(value: string): string {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
     ? CSS.escape(value)
@@ -138,6 +144,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   private attributeOptions: Partial<GridOptions> = {};
   private attributeSyncScheduled = false;
   private iconOverrides: UiGridIconOverrides = {};
+  private resolvedIcons: Record<UiGridControlIconKey, UiGridIconDefinition> = { ...DEFAULT_ICONS };
   private templateObserver: MutationObserver | null = null;
   private openPinMenuColumn: string | null = null;
   private focusedCell: { rowId: string; columnName: string } | null = null;
@@ -233,6 +240,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   set options(value: GridOptions) {
     this.activeOptions = value as VanillaGridOptions;
     this.iconOverrides = this.activeOptions.iconOverrides ?? {};
+    this.rebuildResolvedIcons();
     this.ensureController(this.buildEffectiveOptions(this.activeOptions));
   }
 
@@ -445,7 +453,16 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   set controlIcons(value: UiGridIconOverrides) {
     this.iconOverrides = { ...value };
+    this.rebuildResolvedIcons();
     this.render();
+  }
+
+  private rebuildResolvedIcons(): void {
+    this.resolvedIcons = { ...DEFAULT_ICONS, ...this.iconOverrides };
+  }
+
+  private resolveIcon(key: UiGridControlIconKey): UiGridIconDefinition {
+    return this.resolvedIcons[key];
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -1917,20 +1934,13 @@ export class UiGridStandaloneElement extends HTMLElement {
       const canFilter = controller.isColumnFilterable(column);
       const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
       const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
-      const attrs: Record<string, string> = {
-        'data-value': value,
-        'data-placeholder': controller.filterPlaceholder(column),
-        'data-disabled': String(!canFilter),
-        'data-pinned': String(controller.isPinned(column)),
-        'data-pinned-left-last': String(controller.isPinnedLeftLast(column)),
-        'data-pinned-right-first': String(controller.isPinnedRightFirst(column)),
-        'data-sticky-style': stickyStyle,
-      };
-      for (const [name, next] of Object.entries(attrs)) {
-        if (el.getAttribute(name) !== next) {
-          el.setAttribute(name, next);
-        }
-      }
+      setAttr(el, 'data-value', value);
+      setAttr(el, 'data-placeholder', controller.filterPlaceholder(column));
+      setAttr(el, 'data-disabled', String(!canFilter));
+      setAttr(el, 'data-pinned', String(controller.isPinned(column)));
+      setAttr(el, 'data-pinned-left-last', String(controller.isPinnedLeftLast(column)));
+      setAttr(el, 'data-pinned-right-first', String(controller.isPinnedRightFirst(column)));
+      setAttr(el, 'data-sticky-style', stickyStyle);
     }
   }
 
@@ -2049,14 +2059,28 @@ export class UiGridStandaloneElement extends HTMLElement {
     const controller = this.controller!;
     const columns = snapshot.visibleColumns;
 
-    // Walk items in order; the DOM children are in the same order by
-    // fingerprint invariant. For rows we address cells by data-row +
-    // data-column (more robust than index since the cell layout order is
-    // already determined by the column list).
+    // Build O(1) lookup maps from a single pass over bodyContainer.children.
+    // This replaces the previous O(rows×cols) querySelector approach.
     const groupEls = new Map<string, HTMLElement>();
-    for (const el of bodyContainer.querySelectorAll<HTMLElement>('ui-grid-group-row[data-group]')) {
-      const id = el.dataset['group'];
-      if (id) groupEls.set(id, el);
+    const cellEls = new Map<string, Map<string, HTMLElement>>();
+    for (let c = 0; c < bodyContainer.children.length; c++) {
+      const el = bodyContainer.children[c] as HTMLElement;
+      const tag = el.tagName;
+      if (tag === 'UI-GRID-GROUP-ROW') {
+        const id = el.dataset['group'];
+        if (id) groupEls.set(id, el);
+      } else if (tag === 'UI-GRID-BODY-CELL') {
+        const rowId = el.dataset['row'];
+        const colName = el.dataset['column'];
+        if (rowId && colName) {
+          let rowMap = cellEls.get(rowId);
+          if (!rowMap) {
+            rowMap = new Map<string, HTMLElement>();
+            cellEls.set(rowId, rowMap);
+          }
+          rowMap.set(colName, el);
+        }
+      }
     }
 
     const templateMarkupMap = new Map<string, string | null>();
@@ -2085,10 +2109,10 @@ export class UiGridStandaloneElement extends HTMLElement {
       }
 
       const row = item.row;
+      const rowCells = cellEls.get(row.id);
+      if (!rowCells) continue;
       for (const column of columns) {
-        const cell = bodyContainer.querySelector<HTMLElement>(
-          `ui-grid-body-cell[data-row="${cssEscape(row.id)}"][data-column="${cssEscape(column.name)}"]`,
-        );
+        const cell = rowCells.get(column.name);
         if (!cell) continue;
         this.patchBodyCell(cell, row, column, displayIndex, templateMarkupMap);
       }
@@ -2099,23 +2123,16 @@ export class UiGridStandaloneElement extends HTMLElement {
     const snapshot = this.snapshot!;
     const controller = this.controller!;
     const iconKey = group.collapsed ? 'groupCollapsed' : 'groupExpanded';
-    const icon = this.iconOverrides[iconKey] ?? DEFAULT_ICONS[iconKey];
-    const attrs: Record<string, string> = {
-      'data-collapsed': group.collapsed ? 'true' : 'false',
-      'data-field': group.field,
-      'data-label': group.label,
-      'data-count': String(group.count),
-      'data-depth': String(group.depth),
-      'data-disclosure-label': controller.groupDisclosureLabel(group),
-      'data-icon-path': icon.path,
-      'data-icon-view-box': icon.viewBox ?? '0 0 24 24',
-      'data-rows-suffix': snapshot.labels.groupRowsSuffix,
-    };
-    for (const [name, next] of Object.entries(attrs)) {
-      if (el.getAttribute(name) !== next) {
-        el.setAttribute(name, next);
-      }
-    }
+    const icon = this.resolveIcon(iconKey);
+    setAttr(el, 'data-collapsed', group.collapsed ? 'true' : 'false');
+    setAttr(el, 'data-field', group.field);
+    setAttr(el, 'data-label', group.label);
+    setAttr(el, 'data-count', String(group.count));
+    setAttr(el, 'data-depth', String(group.depth));
+    setAttr(el, 'data-disclosure-label', controller.groupDisclosureLabel(group));
+    setAttr(el, 'data-icon-path', icon.path);
+    setAttr(el, 'data-icon-view-box', icon.viewBox ?? '0 0 24 24');
+    setAttr(el, 'data-rows-suffix', snapshot.labels.groupRowsSuffix);
   }
 
   private patchBodyCell(
@@ -2133,21 +2150,14 @@ export class UiGridStandaloneElement extends HTMLElement {
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
     const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
 
-    const attrs: Record<string, string> = {
-      'data-odd': String(displayIndex % 2 !== 0),
-      'data-align': column.align ?? '',
-      'data-pinned': String(controller.isPinned(column)),
-      'data-pinned-left-last': String(controller.isPinnedLeftLast(column)),
-      'data-pinned-right-first': String(controller.isPinnedRightFirst(column)),
-      'data-focused': String(isFocused),
-      'data-editing': String(editing),
-      'data-sticky-style': stickyStyle,
-    };
-    for (const [name, next] of Object.entries(attrs)) {
-      if (cell.getAttribute(name) !== next) {
-        cell.setAttribute(name, next);
-      }
-    }
+    setAttr(cell, 'data-odd', String(displayIndex % 2 !== 0));
+    setAttr(cell, 'data-align', column.align ?? '');
+    setAttr(cell, 'data-pinned', String(controller.isPinned(column)));
+    setAttr(cell, 'data-pinned-left-last', String(controller.isPinnedLeftLast(column)));
+    setAttr(cell, 'data-pinned-right-first', String(controller.isPinnedRightFirst(column)));
+    setAttr(cell, 'data-focused', String(isFocused));
+    setAttr(cell, 'data-editing', String(editing));
+    setAttr(cell, 'data-sticky-style', stickyStyle);
 
     const cellShell = cell.querySelector<HTMLElement>(':scope > .cell-shell');
     if (!cellShell) return;
@@ -2164,17 +2174,10 @@ export class UiGridStandaloneElement extends HTMLElement {
       const editor = cellShell.querySelector<HTMLElement>('ui-grid-cell-editor');
       const cellContent = cellShell.querySelector<HTMLElement>(':scope > .cell-content');
       if (editor && cellContent) {
-        const editorAttrs: Record<string, string> = {
-          'data-row': rowId,
-          'data-column': columnName,
-          'data-type': controller.editorInputType(column),
-          'data-value': this.snapshot?.editingValue ?? '',
-        };
-        for (const [name, next] of Object.entries(editorAttrs)) {
-          if (editor.getAttribute(name) !== next) {
-            editor.setAttribute(name, next);
-          }
-        }
+        setAttr(editor, 'data-row', rowId);
+        setAttr(editor, 'data-column', columnName);
+        setAttr(editor, 'data-type', controller.editorInputType(column));
+        setAttr(editor, 'data-value', this.snapshot?.editingValue ?? '');
         return;
       }
       // Transitioned from non-editing → editing: mount editor once by
@@ -2210,15 +2213,15 @@ export class UiGridStandaloneElement extends HTMLElement {
     const treeToggle = controller.showTreeToggle(row, column)
       ? (() => {
           const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
-          const treeIcon = this.iconOverrides[treeIconKey] ?? DEFAULT_ICONS[treeIconKey];
-          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), escapeHtml(treeIcon.viewBox ?? '0 0 24 24'), escapeHtml(treeIcon.path));
+          const treeIcon = this.resolveIcon(treeIconKey);
+          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), treeIcon.viewBox ?? '0 0 24 24', treeIcon.path);
         })()
       : '';
     const expandToggle = controller.showExpandToggle(row, column)
       ? (() => {
           const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
-          const expIcon = this.iconOverrides[expIconKey] ?? DEFAULT_ICONS[expIconKey];
-          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), escapeHtml(expIcon.viewBox ?? '0 0 24 24'), escapeHtml(expIcon.path));
+          const expIcon = this.resolveIcon(expIconKey);
+          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), expIcon.viewBox ?? '0 0 24 24', expIcon.path);
         })()
       : '';
     const content = editing
@@ -2231,31 +2234,24 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   private patchPagination(paginationEl: HTMLElement, snapshot: GridControllerSnapshot): void {
     const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
-    const prevIcon = this.iconOverrides['paginationPrev'] ?? DEFAULT_ICONS['paginationPrev'];
-    const nextIcon = this.iconOverrides['paginationNext'] ?? DEFAULT_ICONS['paginationNext'];
-    const attrs: Record<string, string> = {
-      'data-range-label': `${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`,
-      'data-current-page': String(snapshot.currentPage),
-      'data-total-pages': String(snapshot.totalPages),
-      'data-page-label': snapshot.labels.paginationPage,
-      'data-of-label': snapshot.labels.paginationOf,
-      'data-prev-label': snapshot.labels.paginationPrevious,
-      'data-next-label': snapshot.labels.paginationNext,
-      'data-rows-label': snapshot.labels.paginationRows,
-      'data-prev-icon-path': prevIcon.path,
-      'data-prev-icon-view-box': prevIcon.viewBox ?? '0 0 24 24',
-      'data-next-icon-path': nextIcon.path,
-      'data-next-icon-view-box': nextIcon.viewBox ?? '0 0 24 24',
-      'data-page-sizes': JSON.stringify(pageSizes),
-      'data-page-size': String(snapshot.pageSize),
-      'data-prev-disabled': String(snapshot.currentPage <= 1),
-      'data-next-disabled': String(snapshot.currentPage >= snapshot.totalPages),
-    };
-    for (const [name, next] of Object.entries(attrs)) {
-      if (paginationEl.getAttribute(name) !== next) {
-        paginationEl.setAttribute(name, next);
-      }
-    }
+    const prevIcon = this.resolveIcon('paginationPrev');
+    const nextIcon = this.resolveIcon('paginationNext');
+    setAttr(paginationEl, 'data-range-label', `${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`);
+    setAttr(paginationEl, 'data-current-page', String(snapshot.currentPage));
+    setAttr(paginationEl, 'data-total-pages', String(snapshot.totalPages));
+    setAttr(paginationEl, 'data-page-label', snapshot.labels.paginationPage);
+    setAttr(paginationEl, 'data-of-label', snapshot.labels.paginationOf);
+    setAttr(paginationEl, 'data-prev-label', snapshot.labels.paginationPrevious);
+    setAttr(paginationEl, 'data-next-label', snapshot.labels.paginationNext);
+    setAttr(paginationEl, 'data-rows-label', snapshot.labels.paginationRows);
+    setAttr(paginationEl, 'data-prev-icon-path', prevIcon.path);
+    setAttr(paginationEl, 'data-prev-icon-view-box', prevIcon.viewBox ?? '0 0 24 24');
+    setAttr(paginationEl, 'data-next-icon-path', nextIcon.path);
+    setAttr(paginationEl, 'data-next-icon-view-box', nextIcon.viewBox ?? '0 0 24 24');
+    setAttr(paginationEl, 'data-page-sizes', JSON.stringify(pageSizes));
+    setAttr(paginationEl, 'data-page-size', String(snapshot.pageSize));
+    setAttr(paginationEl, 'data-prev-disabled', String(snapshot.currentPage <= 1));
+    setAttr(paginationEl, 'data-next-disabled', String(snapshot.currentPage >= snapshot.totalPages));
   }
 
   private renderHeaderCell(
@@ -2330,7 +2326,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (item.kind === 'group') {
       const group = asGroupItem(item);
       const iconKey = group.collapsed ? 'groupCollapsed' : 'groupExpanded';
-      const icon = this.iconOverrides[iconKey] ?? DEFAULT_ICONS[iconKey];
+      const icon = this.resolveIcon(iconKey);
       const disclosureLabel = this.controller.groupDisclosureLabel(group);
       return `<ui-grid-group-row data-action="toggle-group" data-group="${escapeHtml(group.id)}" data-collapsed="${group.collapsed ? 'true' : 'false'}" data-field="${escapeHtml(group.field)}" data-label="${escapeHtml(group.label)}" data-count="${group.count}" data-depth="${group.depth}" data-disclosure-label="${escapeHtml(disclosureLabel)}" data-icon-path="${escapeHtml(icon.path)}" data-icon-view-box="${escapeHtml(icon.viewBox ?? '0 0 24 24')}" data-rows-suffix="${escapeHtml(this.snapshot.labels.groupRowsSuffix)}"></ui-grid-group-row>`;
     }
@@ -2362,14 +2358,14 @@ export class UiGridStandaloneElement extends HTMLElement {
     const treeToggle = controller.showTreeToggle(row, column)
       ? (() => {
           const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
-          const treeIcon = this.iconOverrides[treeIconKey] ?? DEFAULT_ICONS[treeIconKey];
+          const treeIcon = this.resolveIcon(treeIconKey);
           return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), escapeHtml(treeIcon.viewBox ?? '0 0 24 24'), escapeHtml(treeIcon.path));
         })()
       : '';
     const expandToggle = controller.showExpandToggle(row, column)
       ? (() => {
           const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
-          const expIcon = this.iconOverrides[expIconKey] ?? DEFAULT_ICONS[expIconKey];
+          const expIcon = this.resolveIcon(expIconKey);
           return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), escapeHtml(expIcon.viewBox ?? '0 0 24 24'), escapeHtml(expIcon.path));
         })()
       : '';
@@ -2385,8 +2381,8 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   private renderPagination(snapshot: GridControllerSnapshot): string {
     const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
-    const prevIcon = this.iconOverrides['paginationPrev'] ?? DEFAULT_ICONS['paginationPrev'];
-    const nextIcon = this.iconOverrides['paginationNext'] ?? DEFAULT_ICONS['paginationNext'];
+    const prevIcon = this.resolveIcon('paginationPrev');
+    const nextIcon = this.resolveIcon('paginationNext');
     return `<ui-grid-pagination data-range-label="${escapeHtml(`${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`)}" data-current-page="${snapshot.currentPage}" data-total-pages="${snapshot.totalPages}" data-page-label="${escapeHtml(snapshot.labels.paginationPage)}" data-of-label="${escapeHtml(snapshot.labels.paginationOf)}" data-prev-label="${escapeHtml(snapshot.labels.paginationPrevious)}" data-next-label="${escapeHtml(snapshot.labels.paginationNext)}" data-rows-label="${escapeHtml(snapshot.labels.paginationRows)}" data-prev-icon-path="${escapeHtml(prevIcon.path)}" data-prev-icon-view-box="${escapeHtml(prevIcon.viewBox ?? '0 0 24 24')}" data-next-icon-path="${escapeHtml(nextIcon.path)}" data-next-icon-view-box="${escapeHtml(nextIcon.viewBox ?? '0 0 24 24')}" data-page-sizes="${escapeHtml(JSON.stringify(pageSizes))}" data-page-size="${snapshot.pageSize}" data-prev-disabled="${snapshot.currentPage <= 1}" data-next-disabled="${snapshot.currentPage >= snapshot.totalPages}"></ui-grid-pagination>`;
   }
 
@@ -2595,10 +2591,8 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   private renderIconWithClass(svgClass: string, key: UiGridControlIconKey): string {
-    const icon = this.iconOverrides[key] ?? DEFAULT_ICONS[key];
-    const viewBox = escapeHtml(icon.viewBox ?? '0 0 24 24');
-    const path = escapeHtml(icon.path);
-    return iconMarkup(svgClass, viewBox, path);
+    const icon = this.resolveIcon(key);
+    return iconMarkup(svgClass, icon.viewBox ?? '0 0 24 24', icon.path);
   }
 }
 

@@ -56,6 +56,7 @@ export class UIGridBodyCell extends HTMLElement {
     const isPinnedRightFirst = this.getAttribute('data-pinned-right-first') === 'true';
     const isFocused = this.getAttribute('data-focused') === 'true';
     const isEditing = this.getAttribute('data-editing') === 'true';
+    const stickyStyle = this.getAttribute('data-sticky-style') ?? '';
 
     this.className = [
       'body-cell',
@@ -69,6 +70,14 @@ export class UIGridBodyCell extends HTMLElement {
       isFocused ? 'cell-focused' : '',
       isEditing ? 'cell-editing' : '',
     ].filter(Boolean).join(' ');
+
+    if (stickyStyle) {
+      if (this.getAttribute('style') !== stickyStyle) {
+        this.setAttribute('style', stickyStyle);
+      }
+    } else if (this.hasAttribute('style')) {
+      this.removeAttribute('style');
+    }
 
     this.tabIndex = 0;
   }
