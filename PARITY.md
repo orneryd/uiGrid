@@ -21,7 +21,7 @@ framework-neutral core + vanilla / Angular / React wrappers.
 | cellnav | ✅ ported | Arrow/Tab/Home/End, wrap/clamp, focus persistence across re-renders. Full `gridApi.cellNav` surface: `scrollToFocus` / `getFocusedCell` / `getCurrentSelection` / `rowColSelectIndex` + events (`navigate`, `viewPortKeyDown`, `viewPortKeyPress`), plus `keyDownOverrides` gridOption. 10 integration tests. |
 | selection | ✅ ported | Full parity with `packages/selection`: 13 options, 18 API methods, 3 events, mouse (click/shift/ctrl/drag-paint), keyboard (Space/Ctrl+A), row-header checkbox column, select-all header, `isRowSelectable` hook. 33 integration tests + 24 core tests. |
 | auto-resize | ✅ wired | ResizeObserver on the grid host. |
-| saveState | ⚠️ partial | `getState()` / `setState()` exist but don't cover every old-grid field. Pending: saveFocus/saveScroll/saveGroupingExpandedStates/saveSelection/saveWidths/saveOrder/saveVisible/savePinning/saveSort/saveFilter/savePagination/saveTreeView/saveFocusVisible. |
+| saveState | ✅ ported | `gridApi.saveState.save()` / `.restore()` covers sort, filters, grouping + collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position. Per-field opt-in flags: saveWidths, saveOrder, saveScroll, saveFocus, saveVisible, saveSort, saveFilter, saveSelection, saveGrouping, saveGroupingExpandedStates, savePinning, saveTreeView, savePagination. 9 integration tests. |
 | exporter | ⚠️ partial | `exportCsv()` works. Pending: CSV option matrix (exporterCsvColumnSeparator, exporterHeaderFilterUseName, exporterFieldCallback, exporterFieldFormatCallback, exporterSuppressColumns, exporterAllDataFn, exporterOlderExcelCompatibility, exporterExcelFilename, exporterExcelSheetName, exporterCsvLinkElement, exporterHeaderTemplate, exporterFieldApplyFilters), PDF export, menu items ("Export all/visible/selected as CSV/PDF"). |
 | infinite-scroll | ✅ ported | Scroll-driven `needLoadMoreData` / `needLoadMoreDataTop` events wired through the element's scroll handler; full public API (`dataLoaded`, `resetScroll`, `saveScrollPercentage`, `dataRemovedTop`, `dataRemovedBottom`, `setScrollDirections`) and all four options (`enableInfiniteScroll`, `infiniteScrollRowsFromEnd`, `infiniteScrollUp`, `infiniteScrollDown`). 5 core + 8 integration tests. |
 | i18n | ⚠️ partial | English labels live in a `GridLabels` default. Pending: language packs (es/fr/de/ja/zh/...), `setCurrentLang` API, `i18nService.add/get/getSupportedLanguages`, fallback chain. |
@@ -35,18 +35,22 @@ Working through the remaining rows in order. Completed items below in
 reverse chronological order; pending items at the top track directly with
 the task list.
 
-1. **saveState** (next) — expand `getState()` / `setState()` to cover every
-   old-grid flag (saveFocus/saveScroll/saveGroupingExpandedStates/
-   saveSelection/saveWidths/saveOrder/saveVisible/savePinning/saveSort/
-   saveFilter/savePagination/saveTreeView/saveFocusVisible).
-2. exporter — CSV options + PDF + menu.
-3. row-edit — dirty tracking + save batching.
-4. importer — file picker + CSV/JSON parse + menu item.
-5. validate — column validators + invalid-cell visuals.
-6. i18n — language packs + `setCurrentLang`.
+1. **exporter** (next) — CSV options matrix + PDF + menu.
+2. row-edit — dirty tracking + save batching.
+3. importer — file picker + CSV/JSON parse + menu item.
+4. validate — column validators + invalid-cell visuals.
+5. i18n — language packs + `setCurrentLang`.
 
 ## Completed this session
 
+- **saveState** (2026-05-07) — expanded `GridSaveState` to parity with the
+  old module (sort, filters, grouping+collapsed, pinning, column order,
+  column widths, pagination, selection, focused cell, expandable+tree
+  expansion, scroll). Each field is gated by a `save*` option matching
+  the old grid's defaults, including the `saveScroll` implicit-disable
+  of `saveFocus`. Controller registers scroll accessors with the element
+  so save/restore can reach the DOM without coupling the controller.
+  9 integration tests.
 - **infinite-scroll** (2026-05-07) — controller wires core's pure state
   helpers (`maybeRequestInfiniteScrollData` / `completeInfiniteScrollDataLoad`
   / `resetInfiniteScrollState` / `saveInfiniteScrollPercentage` /

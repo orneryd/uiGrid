@@ -282,6 +282,24 @@ export interface GridOptions {
   selectionRowHeaderWidth?: number;
   enableFooterTotalSelected?: boolean;
   isRowSelectable?: (row: GridRow) => boolean;
+  /** saveState — opt-in/out per field. Defaults mirror the old grid:
+   * true for saveWidths/saveOrder/saveVisible/saveSort/saveFilter/
+   * saveSelection/saveGrouping/savePinning/saveTreeView; false for
+   * saveScroll/saveGroupingExpandedStates; saveFocus defaults true unless
+   * saveScroll is true. */
+  saveWidths?: boolean;
+  saveOrder?: boolean;
+  saveScroll?: boolean;
+  saveFocus?: boolean;
+  saveVisible?: boolean;
+  saveSort?: boolean;
+  saveFilter?: boolean;
+  saveSelection?: boolean;
+  saveGrouping?: boolean;
+  saveGroupingExpandedStates?: boolean;
+  savePinning?: boolean;
+  saveTreeView?: boolean;
+  savePagination?: boolean;
   /** Cellnav — ports ui.grid.cellNav options. */
   modifierKeysToMultiSelectCells?: boolean;
   /** Key events that bypass cellNav's default handling and bubble up as

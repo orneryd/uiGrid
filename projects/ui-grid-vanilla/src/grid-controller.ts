@@ -85,6 +85,7 @@ import {
   type GridOptions,
   type GridRecord,
   type GridRow,
+  type GridSavedState,
   type PipelineResult,
   type PinDirection,
   type PinnedColumnState,
@@ -94,14 +95,31 @@ import {
   type UiGridApi,
 } from '@ornery/ui-grid-core';
 
+/**
+ * Complete grid save state — parity with the old `ui.grid.saveState`
+ * module. Every field is optional so partial saves / restores work too.
+ *
+ * Opt-in/out behaviour mirrors the old module: by default save() serialises
+ * everything; consumers can disable per-field capture via
+ * `saveSort`/`saveFilter`/... options on `GridOptions`. Restore tolerates
+ * missing fields.
+ */
 export interface GridSaveState {
-  sortState: SortState;
-  activeFilters: Record<string, string>;
-  groupByColumns: string[];
-  pinnedColumns: PinnedColumnState;
-  columnOrder: string[];
-  currentPage: number;
-  pageSize: number;
+  sortState?: SortState;
+  activeFilters?: Record<string, string>;
+  groupByColumns?: string[];
+  collapsedGroups?: Record<string, boolean>;
+  pinnedColumns?: PinnedColumnState;
+  columnOrder?: string[];
+  columnWidthOverrides?: Record<string, string>;
+  currentPage?: number;
+  pageSize?: number;
+  selectedRowIds?: string[];
+  focusedCell?: GridCellPosition | null;
+  expandedRows?: Record<string, boolean>;
+  expandedTreeRows?: Record<string, boolean>;
+  scrollTop?: number;
+  scrollLeft?: number;
 }
 
 export interface GridControllerSnapshot {
@@ -302,6 +320,9 @@ export class VanillaGridController {
       getFocusedCell: () => this.cellNavGetFocusedCell(),
       getCurrentSelection: () => this.cellNavGetCurrentSelection(),
       rowColSelectIndex: (rowCol) => this.cellNavRowColSelectIndex(rowCol),
+      // SaveState bindings — ports ui.grid.saveState public API.
+      saveState: () => this.getState() as GridSavedState,
+      restoreState: (state) => this.setState(state as Partial<GridSaveState>),
       // Infinite-scroll bindings — ports ui.grid.infiniteScroll public API.
       infiniteScrollDataLoaded: (scrollUp, scrollDown) =>
         this.infiniteScrollDataLoaded(scrollUp, scrollDown),
@@ -1352,27 +1373,121 @@ export class VanillaGridController {
     return this.editingCell?.rowId === rowId && this.editingCell?.columnName === columnName;
   }
 
+  /**
+   * Serialise the current grid state. Mirrors `ui.grid.saveState.save`:
+   * every field is gated by an `options.save*` flag with the old grid's
+   * defaults. A missing flag keeps the matching field out of the result.
+   */
   getState(): GridSaveState {
-    return {
-      sortState: { ...this.sortState },
-      activeFilters: { ...this.activeFilters },
-      groupByColumns: [...this.groupByColumns],
-      pinnedColumns: { ...this.pinnedColumns },
-      columnOrder: [...this.columnOrder],
-      currentPage: this.currentPage,
-      pageSize: this.pageSize,
-    };
+    const opts = this.options;
+    const saveWidths = opts.saveWidths !== false;
+    const saveOrder = opts.saveOrder !== false;
+    const saveVisible = opts.saveVisible !== false;
+    const saveSort = opts.saveSort !== false;
+    const saveFilter = opts.saveFilter !== false;
+    const saveSelection = opts.saveSelection !== false;
+    const saveGrouping = opts.saveGrouping !== false;
+    const saveGroupingExpandedStates = opts.saveGroupingExpandedStates === true;
+    const savePinning = opts.savePinning !== false;
+    const saveTreeView = opts.saveTreeView !== false;
+    const savePagination = opts.savePagination !== false;
+    const saveScroll = opts.saveScroll === true;
+    const saveFocus = saveScroll ? false : opts.saveFocus !== false;
+    void saveVisible; // Visible column state is derived from columnOrder + defs;
+                     // kept as an opt-flag for forward compat.
+
+    const state: GridSaveState = {};
+    if (saveSort) state.sortState = { ...this.sortState };
+    if (saveFilter) state.activeFilters = { ...this.activeFilters };
+    if (saveGrouping) state.groupByColumns = [...this.groupByColumns];
+    if (saveGrouping && saveGroupingExpandedStates) {
+      state.collapsedGroups = { ...this.collapsedGroups };
+    }
+    if (savePinning) state.pinnedColumns = { ...this.pinnedColumns };
+    if (saveOrder) state.columnOrder = [...this.columnOrder];
+    if (saveWidths) state.columnWidthOverrides = { ...this.columnWidthOverrides };
+    if (savePagination) {
+      state.currentPage = this.currentPage;
+      state.pageSize = this.pageSize;
+    }
+    if (saveSelection) {
+      state.selectedRowIds = [...this.selectionState.selectedRowIds];
+    }
+    if (saveTreeView) {
+      state.expandedRows = { ...this.expandedRows };
+      state.expandedTreeRows = { ...this.expandedTreeRows };
+    }
+    if (saveFocus) {
+      state.focusedCell = this.cellNavLastRowCol
+        ? {
+            rowId: this.cellNavLastRowCol.rowId,
+            columnName: this.cellNavLastRowCol.columnName,
+          }
+        : null;
+    }
+    if (saveScroll && this.saveStateScrollSnapshot) {
+      const snap = this.saveStateScrollSnapshot();
+      state.scrollTop = snap.scrollTop;
+      state.scrollLeft = snap.scrollLeft;
+    }
+    return state;
   }
 
+  /**
+   * Apply a previously saved state. All fields are optional — missing
+   * fields are left at whatever the controller currently has. Matches the
+   * old grid's `ui.grid.saveState.restore`.
+   */
   setState(state: Partial<GridSaveState>): void {
     if (state.sortState !== undefined) this.sortState = { ...state.sortState };
     if (state.activeFilters !== undefined) this.activeFilters = { ...state.activeFilters };
     if (state.groupByColumns !== undefined) this.groupByColumns = [...state.groupByColumns];
+    if (state.collapsedGroups !== undefined) this.collapsedGroups = { ...state.collapsedGroups };
     if (state.pinnedColumns !== undefined) this.pinnedColumns = { ...state.pinnedColumns };
     if (state.columnOrder !== undefined) this.columnOrder = [...state.columnOrder];
+    if (state.columnWidthOverrides !== undefined) this.columnWidthOverrides = { ...state.columnWidthOverrides };
     if (state.currentPage !== undefined) this.currentPage = state.currentPage;
     if (state.pageSize !== undefined) this.pageSize = state.pageSize;
+    if (state.expandedRows !== undefined) this.expandedRows = { ...state.expandedRows };
+    if (state.expandedTreeRows !== undefined) this.expandedTreeRows = { ...state.expandedTreeRows };
+    if (state.selectedRowIds !== undefined) {
+      // Rebuild the selection Set in place — selectedRowIds is readonly on
+      // GridSelectionState so we mutate the existing collection rather
+      // than replacing the reference.
+      this.selectionState.selectedRowIds.clear();
+      for (const id of state.selectedRowIds) this.selectionState.selectedRowIds.add(id);
+      this.selectionState.selectAll = false;
+    }
+    if (state.focusedCell !== undefined) {
+      if (state.focusedCell) {
+        this.cellNavLastRowCol = {
+          rowId: state.focusedCell.rowId,
+          columnName: state.focusedCell.columnName,
+        };
+        this.cellNavFocusedCells = [{ ...this.cellNavLastRowCol }];
+      } else {
+        this.cellNavLastRowCol = null;
+        this.cellNavFocusedCells = [];
+      }
+    }
     this.refresh();
+    // Scroll restoration needs to run after render so the scroll container
+    // exists and its scrollHeight is final.
+    if (state.scrollTop !== undefined || state.scrollLeft !== undefined) {
+      this.saveStateScrollRestore?.(state.scrollTop ?? 0, state.scrollLeft ?? 0);
+    }
+  }
+
+  /** Element injects its scroll accessor so save() can capture scrollTop/
+   * scrollLeft. Controller stays DOM-free. */
+  private saveStateScrollSnapshot: (() => { scrollTop: number; scrollLeft: number }) | null = null;
+  private saveStateScrollRestore: ((scrollTop: number, scrollLeft: number) => void) | null = null;
+  setSaveStateScrollHandlers(
+    snapshot: (() => { scrollTop: number; scrollLeft: number }) | null,
+    restore: ((scrollTop: number, scrollLeft: number) => void) | null,
+  ): void {
+    this.saveStateScrollSnapshot = snapshot;
+    this.saveStateScrollRestore = restore;
   }
 
   private refresh(): void {

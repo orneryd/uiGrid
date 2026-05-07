@@ -1087,6 +1087,23 @@ export class UiGridStandaloneElement extends HTMLElement {
         this.scrollPosition = 0;
       }
     });
+    // saveState scroll capture/restore — element owns the DOM element, so
+    // it provides the accessors the controller uses when save()/setState()
+    // handle scroll-position fields.
+    this.controller.setSaveStateScrollHandlers(
+      () => ({ scrollTop: this.scrollPosition, scrollLeft: this.horizontalScrollPosition }),
+      (scrollTop, scrollLeft) => {
+        const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
+        if (!gridTable) return;
+        // Defer to a rAF so the body has finished laying out after refresh.
+        requestAnimationFrame(() => {
+          gridTable.scrollTop = scrollTop;
+          gridTable.scrollLeft = scrollLeft;
+          this.scrollPosition = scrollTop;
+          this.horizontalScrollPosition = scrollLeft;
+        });
+      },
+    );
     this.unsubscribe = this.controller.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.render();
