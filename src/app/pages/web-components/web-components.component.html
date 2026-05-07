@@ -68,6 +68,10 @@
                     <span>group columns</span>
                 </article>
                 <article>
+                    <strong>{{ selectedRowCount() }}</strong>
+                    <span>selected rows</span>
+                </article>
+                <article>
                     <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
                     <span>benchmark avg</span>
                 </article>
@@ -102,7 +106,9 @@
                     enable-column-moving
                     enable-column-resizing
                     enable-virtualization
-                    enable-cell-edit-on-focus>
+                    enable-cell-edit-on-focus
+                    enable-row-selection
+                    enable-full-row-selection>
                 </ui-grid-element>
             }
         </section>

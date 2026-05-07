@@ -91,6 +91,8 @@ function bodyCellClass(
   isPinnedRightFirst: boolean,
   isFocused: boolean,
   isEditing: boolean,
+  isRowSelected: boolean,
+  isRowFocused: boolean,
 ): string {
   let cls = 'body-cell ui-grid-cell';
   if (isOdd) cls += ' body-cell-odd';
@@ -101,6 +103,10 @@ function bodyCellClass(
   if (isPinnedRightFirst) cls += ' is-pinned-right-first';
   if (isFocused) cls += ' cell-focused';
   if (isEditing) cls += ' cell-editing';
+  // Matches the old ui.grid.selection directive's ng-class output. Row-level
+  // state shows on every cell so selection stripes work across the whole row.
+  if (isRowSelected) cls += ' ui-grid-row-selected';
+  if (isRowFocused) cls += ' ui-grid-row-focused';
   return cls;
 }
 
@@ -281,6 +287,19 @@ export class UiGridStandaloneElement extends HTMLElement {
       'enable-virtualization',
       'infinite-scroll-up',
       'infinite-scroll-down',
+      // Selection — ported from ui.grid.selection options.
+      'enable-row-selection',
+      'multi-select',
+      'no-unselect',
+      'modifier-keys-to-multi-select',
+      'enable-row-header-selection',
+      'enable-full-row-selection',
+      'enable-focus-row-on-row-header-click',
+      'enable-select-row-on-focus',
+      'enable-select-all',
+      'enable-selection-batch-event',
+      'enable-footer-total-selected',
+      'selection-row-header-width',
     ];
   }
 
@@ -442,6 +461,52 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (infiniteScrollDown !== undefined)
       this.attributeOptions.infiniteScrollDown = infiniteScrollDown;
 
+    // Selection — most flags default to true in the old grid, so we use
+    // the tri-state parser to let consumers opt out with attr="false".
+    const enableRowSelection = this.parseTriStateBooleanAttribute('enable-row-selection');
+    if (enableRowSelection !== undefined)
+      this.attributeOptions.enableRowSelection = enableRowSelection;
+    const multiSelect = this.parseTriStateBooleanAttribute('multi-select');
+    if (multiSelect !== undefined) this.attributeOptions.multiSelect = multiSelect;
+    const noUnselect = this.parseTriStateBooleanAttribute('no-unselect');
+    if (noUnselect !== undefined) this.attributeOptions.noUnselect = noUnselect;
+    const modifierKeysToMultiSelect = this.parseTriStateBooleanAttribute(
+      'modifier-keys-to-multi-select',
+    );
+    if (modifierKeysToMultiSelect !== undefined)
+      this.attributeOptions.modifierKeysToMultiSelect = modifierKeysToMultiSelect;
+    const enableRowHeaderSelection = this.parseTriStateBooleanAttribute(
+      'enable-row-header-selection',
+    );
+    if (enableRowHeaderSelection !== undefined)
+      this.attributeOptions.enableRowHeaderSelection = enableRowHeaderSelection;
+    const enableFullRowSelection = this.parseTriStateBooleanAttribute('enable-full-row-selection');
+    if (enableFullRowSelection !== undefined)
+      this.attributeOptions.enableFullRowSelection = enableFullRowSelection;
+    const enableFocusRowOnRowHeaderClick = this.parseTriStateBooleanAttribute(
+      'enable-focus-row-on-row-header-click',
+    );
+    if (enableFocusRowOnRowHeaderClick !== undefined)
+      this.attributeOptions.enableFocusRowOnRowHeaderClick = enableFocusRowOnRowHeaderClick;
+    const enableSelectRowOnFocus = this.parseTriStateBooleanAttribute('enable-select-row-on-focus');
+    if (enableSelectRowOnFocus !== undefined)
+      this.attributeOptions.enableSelectRowOnFocus = enableSelectRowOnFocus;
+    const enableSelectAll = this.parseTriStateBooleanAttribute('enable-select-all');
+    if (enableSelectAll !== undefined) this.attributeOptions.enableSelectAll = enableSelectAll;
+    const enableSelectionBatchEvent = this.parseTriStateBooleanAttribute(
+      'enable-selection-batch-event',
+    );
+    if (enableSelectionBatchEvent !== undefined)
+      this.attributeOptions.enableSelectionBatchEvent = enableSelectionBatchEvent;
+    const enableFooterTotalSelected = this.parseTriStateBooleanAttribute(
+      'enable-footer-total-selected',
+    );
+    if (enableFooterTotalSelected !== undefined)
+      this.attributeOptions.enableFooterTotalSelected = enableFooterTotalSelected;
+    const selectionRowHeaderWidth = this.parseNumberAttribute('selection-row-header-width');
+    if (selectionRowHeaderWidth !== undefined)
+      this.attributeOptions.selectionRowHeaderWidth = selectionRowHeaderWidth;
+
     // JSON attributes
     const columnDefs = this.parseJsonAttribute<GridColumnDef[]>('column-defs');
     if (columnDefs !== undefined) this.attributeOptions.columnDefs = columnDefs;
@@ -472,6 +537,19 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   private parseBooleanAttribute(name: string): boolean | undefined {
     return this.hasAttribute(name) ? true : undefined;
+  }
+
+  /** Tri-state boolean attribute. Returns true for present/"" /"true", false
+   * for "false", undefined when the attribute is absent. Use this for flags
+   * that default to true in the model, so consumers can explicitly opt out
+   * with attr="false" without having to remove the attribute. */
+  private parseTriStateBooleanAttribute(name: string): boolean | undefined {
+    if (!this.hasAttribute(name)) return undefined;
+    const raw = this.getAttribute(name);
+    if (raw === null) return undefined;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'false' || normalized === '0' || normalized === 'off') return false;
+    return true;
   }
 
   private parseNumberAttribute(name: string): number | undefined {
@@ -1074,6 +1152,25 @@ export class UiGridStandaloneElement extends HTMLElement {
               clickedCell.focus();
             }
           }
+          // Row selection side effect — only fires when clicking a "real"
+          // body cell (not a checkbox-column cell) and the corresponding
+          // selection option is on. Ports the old uiGridSelection.uiGridCell
+          // directive's click handler.
+          this.handleRowSelectionClick(rowId, columnName, event);
+        }
+      }
+
+      // Row-header checkbox column click — mirrors the old
+      // selectionRowHeaderButtons directive: even when enableFullRowSelection
+      // is off, clicking the header checkbox selects the row.
+      const checkboxNode = realTarget.closest?.<HTMLElement>(
+        '.body-cell[data-row][data-column="selectionRowHeaderCol"]',
+      );
+      if (checkboxNode) {
+        const rowId = checkboxNode.dataset['row'];
+        if (rowId) {
+          event.stopPropagation();
+          this.handleRowHeaderCheckboxClick(rowId, event);
         }
       }
 
@@ -1104,6 +1201,22 @@ export class UiGridStandaloneElement extends HTMLElement {
         const columnName = actionNode.dataset['column'];
         if (columnName) {
           this.controller.toggleSort(columnName);
+        }
+        return;
+      }
+
+      if (action === 'select-all') {
+        // Select-all / clear-all header checkbox — ports the old
+        // headerButtonClick behavior: if currently selectAll, clear; else
+        // selectAllVisible (plus special handling for noUnselect).
+        const resolvedSel = this.controller.getResolvedSelectionOptions();
+        if (this.snapshot?.selectAll) {
+          this.controller.clearSelectedRows(event);
+          if (resolvedSel.noUnselect) {
+            this.controller.selectRowByVisibleIndex(0, event);
+          }
+        } else if (resolvedSel.multiSelect) {
+          this.controller.selectAllVisibleRows(event);
         }
         return;
       }
@@ -1238,6 +1351,98 @@ export class UiGridStandaloneElement extends HTMLElement {
       }
     }) as EventListener);
 
+    // Row-drag selection. Ports the old grid's "click-and-drag to paint a
+    // selection across rows" UX. Initial direction (add-to-selection vs
+    // remove-from-selection) is picked from the starting row's current
+    // state, then every row the pointer drags across is forced to that
+    // state. Stops on mouseup anywhere in the document.
+    root.addEventListener('mousedown', (event) => {
+      const mouseEvent = event as MouseEvent;
+      if (mouseEvent.button !== 0) return;
+      const realTarget = (event.composedPath()[0] ?? event.target) as HTMLElement | null;
+      if (!realTarget || !this.controller || !this.snapshot) return;
+      // Don't interfere with column resize / actions / editor / anything in
+      // the header or filter row.
+      if (realTarget.closest('.column-resizer')) return;
+      if (realTarget.closest('[data-role="editor"]')) return;
+      if (realTarget.closest('.header-cell')) return;
+      if (realTarget.closest('.filter-cell')) return;
+      const resolved = this.controller.getResolvedSelectionOptions();
+      if (!resolved.enableRowSelection || !resolved.multiSelect) return;
+      const startCell = realTarget.closest<HTMLElement>(
+        '.body-cell[data-row][data-column]',
+      );
+      if (!startCell) return;
+      const startRowId = startCell.dataset['row'];
+      if (!startRowId) return;
+      const isCheckboxCol = startCell.dataset['column'] === 'selectionRowHeaderCol';
+      if (!isCheckboxCol && !resolved.enableFullRowSelection) return;
+      // Clicks with modifier keys go through the single-click handler
+      // instead of drag-paint, so shift/ctrl don't accidentally commit a
+      // one-row drag on mouseup.
+      if (mouseEvent.shiftKey || mouseEvent.ctrlKey || mouseEvent.metaKey) return;
+
+      // Drag-paint tracking. We don't touch the start row on mousedown — the
+      // click handler owns single-click semantics. The starting row only
+      // gets painted once we observe an actual mousemove onto a DIFFERENT
+      // row (i.e. the user is dragging). This avoids the flicker a plain
+      // click used to cause, where mousedown-paint and click-toggle fired
+      // back-to-back on the same row.
+      const startSelected = this.snapshot.selectedRowIds.has(startRowId);
+      const targetSelected = !startSelected;
+      const touched = new Set<string>();
+      let dragStarted = false;
+
+      const paintRow = (rowId: string): void => {
+        if (touched.has(rowId)) return;
+        touched.add(rowId);
+        const currentlySelected = this.snapshot?.selectedRowIds.has(rowId) ?? false;
+        if (currentlySelected === targetSelected) return;
+        const row = this.controller!.findRowByIdPublic(rowId);
+        if (!row) return;
+        if (targetSelected) this.controller!.selectRow(row.entity, event);
+        else this.controller!.unSelectRow(row.entity, event);
+      };
+
+      const handleMove = (moveEvent: MouseEvent): void => {
+        const path = moveEvent.composedPath();
+        const firstEl = path[0] as HTMLElement | undefined;
+        const cell = firstEl?.closest?.<HTMLElement>('.body-cell[data-row][data-column]');
+        if (!cell) return;
+        const rowId = cell.dataset['row'];
+        if (!rowId) return;
+        if (!dragStarted) {
+          // First move that lands on a different row promotes this gesture
+          // to a drag — at that point paint the starting row too, and
+          // suppress the subsequent click so single-click semantics don't
+          // double-fire on mouseup.
+          if (rowId === startRowId) return;
+          dragStarted = true;
+          paintRow(startRowId);
+        }
+        paintRow(rowId);
+      };
+
+      const suppressNextClick = (e: Event): void => {
+        e.stopPropagation();
+        e.preventDefault();
+        root.removeEventListener('click', suppressNextClick, true);
+      };
+
+      const handleUp = (): void => {
+        window.removeEventListener('mousemove', handleMove, true);
+        window.removeEventListener('mouseup', handleUp, true);
+        if (dragStarted) {
+          // Block the trailing `click` that fires after mouseup — its
+          // selection semantics would clobber the drag result.
+          root.addEventListener('click', suppressNextClick, true);
+        }
+      };
+
+      window.addEventListener('mousemove', handleMove, true);
+      window.addEventListener('mouseup', handleUp, true);
+    });
+
     root.addEventListener('mousedown', (event) => {
       const target = event.target as HTMLElement | null;
       if (!target || !this.controller) return;
@@ -1322,6 +1527,53 @@ export class UiGridStandaloneElement extends HTMLElement {
       const target = event.target as HTMLElement | null;
       if (!target || !this.controller) {
         return;
+      }
+
+      // Ctrl/Cmd+A on a body cell — select all rows in the grid. Matches
+      // the old selection module's keyboard affordance. Safely gated by
+      // enableRowSelection + multiSelect.
+      if (
+        (keyboardEvent.ctrlKey || keyboardEvent.metaKey) &&
+        (keyboardEvent.key === 'a' || keyboardEvent.key === 'A') &&
+        target.closest('.body-cell')
+      ) {
+        const resolved = this.controller.getResolvedSelectionOptions();
+        if (resolved.enableRowSelection && resolved.multiSelect) {
+          event.preventDefault();
+          this.controller.selectAllRows(event);
+          return;
+        }
+      }
+
+      // Space on the row-header checkbox column toggles the row. Matches
+      // the old selection module's cellNav-integrated Space handler. We
+      // also allow Space on the focused cell row when full-row selection
+      // is enabled, since the old "full row selection" mode let the user
+      // drive selection without a checkbox column.
+      if (keyboardEvent.key === ' ' || keyboardEvent.key === 'Spacebar') {
+        const cell = target.closest<HTMLElement>('.body-cell[data-row][data-column]');
+        const rowId = cell?.dataset['row'];
+        const columnName = cell?.dataset['column'];
+        if (cell && rowId && columnName) {
+          const resolved = this.controller.getResolvedSelectionOptions();
+          if (resolved.enableRowSelection) {
+            const onCheckboxCol = columnName === 'selectionRowHeaderCol';
+            if (onCheckboxCol || resolved.enableFullRowSelection) {
+              event.preventDefault();
+              const row = this.controller.findRowByIdPublic(rowId);
+              if (row) {
+                if (resolved.multiSelect && !resolved.modifierKeysToMultiSelect) {
+                  this.controller.toggleRowSelectionByEntity(row.entity, event);
+                } else {
+                  this.controller.setMultiSelect(false);
+                  this.controller.toggleRowSelectionByEntity(row.entity, event);
+                  this.controller.setMultiSelect(resolved.multiSelect);
+                }
+              }
+              return;
+            }
+          }
+        }
       }
 
       if (target instanceof HTMLInputElement && target.dataset['role'] === 'editor') {
@@ -2312,6 +2564,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const isOdd = displayIndex % 2 !== 0;
     const align = column.align ?? '';
 
+    const isRowSelected = this.snapshot?.selectedRowIds.has(rowId) ?? false;
+    const isRowFocused = this.snapshot?.focusedRowId === rowId;
     // Visual state is written directly (className / style) since the
     // <ui-grid-body-cell> custom element no longer translates data-* into
     // visual state. data-* attrs still drive event delegation and CSS hooks.
@@ -2325,6 +2579,8 @@ export class UiGridStandaloneElement extends HTMLElement {
         isPinnedRightFirst,
         isFocused,
         editing,
+        isRowSelected,
+        isRowFocused,
       ),
     );
     setStyle(cell, stickyStyle);
@@ -2474,6 +2730,17 @@ export class UiGridStandaloneElement extends HTMLElement {
     options: GridOptions,
   ): string {
     const controller = this.controller!;
+    // Row-header selection column — emit a select-all checkbox instead of
+    // the normal column header controls.
+    if (column.name === 'selectionRowHeaderCol') {
+      const resolvedSel = controller.getResolvedSelectionOptions();
+      const selectAll = this.snapshot?.selectAll === true;
+      const showSelectAll = resolvedSel.enableSelectAll && resolvedSel.multiSelect;
+      const inner = showSelectAll
+        ? `<button type="button" class="ui-grid-selection-select-all" data-action="select-all" aria-label="Select all rows"${selectAll ? ' aria-checked="true"' : ' aria-checked="false"'}><span class="ui-grid-selection-checkbox${selectAll ? ' ui-grid-selection-checkbox-checked' : ''}"></span></button>`
+        : '';
+      return `<ui-grid-header-cell class="header-cell ui-grid-selection-row-header" data-column="selectionRowHeaderCol">${inner}</ui-grid-header-cell>`;
+    }
     const sortDirection = controller.getSortDirection(column);
     const sortLabel = controller.sortButtonLabel(column);
     const groupingLabel = controller.groupingButtonLabel(column);
@@ -2521,6 +2788,17 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   private renderFilterCell(column: GridColumnDef): string {
+    // The selection row-header column renders a plain spacer <div> instead
+    // of a real filter-cell — matches the old grid, which used a dedicated
+    // header template for that column and never emitted a ui-grid-filter
+    // slot there. The spacer keeps the grid-template-columns track aligned
+    // but carries none of the filter-cell chrome (no padding / border /
+    // input).
+    if (column.name === 'selectionRowHeaderCol') {
+      const pinOffset = this.controller!.isPinned(column) ? this.controller!.pinnedOffset(column) : null;
+      const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+      return `<div class="filter-cell ui-grid-selection-row-header" data-column="selectionRowHeaderCol"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''}></div>`;
+    }
     const value = this.snapshot?.activeFilters[column.name] ?? '';
     const controller = this.controller!;
     const canFilter = controller.isColumnFilterable(column);
@@ -2653,6 +2931,87 @@ export class UiGridStandaloneElement extends HTMLElement {
       gridTable.scrollTop = Math.max(0, rowTop - stickyChromeHeight);
     } else if (rowBottom > visibleBottom) {
       gridTable.scrollTop = rowBottom - viewportHeight;
+    }
+  }
+
+  /**
+   * Selection dispatch for a plain click on a body cell. Mirrors the old
+   * ui.grid.selection.uiGridCell directive: shift-click = range, ctrl/meta
+   * = toggle single, everything else toggles based on enableFullRowSelection
+   * + enableSelectRowOnFocus + modifierKeysToMultiSelect.
+   */
+  private handleRowSelectionClick(
+    rowId: string,
+    columnName: string,
+    event: Event,
+  ): void {
+    const controller = this.controller;
+    if (!controller) return;
+    const resolved = controller.getResolvedSelectionOptions();
+    if (!resolved.enableRowSelection) return;
+    // The checkbox column has its own click path.
+    if (columnName === 'selectionRowHeaderCol') return;
+    if (!resolved.enableFullRowSelection) {
+      // Full-row selection is off — only the checkbox column selects, but
+      // focus-row-changed should still fire.
+      const row = controller.findRowByIdPublic(rowId);
+      if (row) {
+        controller.setRowFocused(rowId, true, event);
+      }
+      return;
+    }
+    const row = controller.findRowByIdPublic(rowId);
+    if (!row) return;
+    const mouseEvent = event as MouseEvent;
+    if (mouseEvent.shiftKey) {
+      controller.shiftSelectRow(row.entity, event);
+    } else if (mouseEvent.ctrlKey || mouseEvent.metaKey) {
+      controller.toggleRowSelectionByEntity(row.entity, event);
+    } else if (resolved.enableSelectRowOnFocus) {
+      // Plain click. With modifierKeysToMultiSelect=true we fall back to
+      // single-select mode (multiSelect=false) so the click replaces the
+      // selection instead of adding to it.
+      if (resolved.multiSelect && !resolved.modifierKeysToMultiSelect) {
+        controller.toggleRowSelectionByEntity(row.entity, event);
+      } else {
+        // Single-select semantics: clear everything else first.
+        // toggleGridRowSelection already handles this internally when
+        // multiSelect=false, but we need to pass multiSelect=false through
+        // the API. Emulate by temporarily calling with multiSelect logic.
+        controller.setMultiSelect(false);
+        controller.toggleRowSelectionByEntity(row.entity, event);
+        controller.setMultiSelect(resolved.multiSelect);
+      }
+    }
+    controller.setRowFocused(rowId, true, event);
+  }
+
+  /** Click on the row-header checkbox column. Differs from full-row click
+   * only in that shift/ctrl semantics behave like the old selection module
+   * (shift-select pulls from lastSelectedRow regardless of modifier). */
+  private handleRowHeaderCheckboxClick(rowId: string, event: Event): void {
+    const controller = this.controller;
+    if (!controller) return;
+    const resolved = controller.getResolvedSelectionOptions();
+    if (!resolved.enableRowSelection) return;
+    const row = controller.findRowByIdPublic(rowId);
+    if (!row) return;
+    const mouseEvent = event as MouseEvent;
+    if (mouseEvent.shiftKey) {
+      controller.shiftSelectRow(row.entity, event);
+    } else if (mouseEvent.ctrlKey || mouseEvent.metaKey) {
+      controller.toggleRowSelectionByEntity(row.entity, event);
+    } else {
+      if (resolved.multiSelect && !resolved.modifierKeysToMultiSelect) {
+        controller.toggleRowSelectionByEntity(row.entity, event);
+      } else {
+        controller.setMultiSelect(false);
+        controller.toggleRowSelectionByEntity(row.entity, event);
+        controller.setMultiSelect(resolved.multiSelect);
+      }
+    }
+    if (resolved.enableFocusRowOnRowHeaderClick) {
+      controller.setRowFocused(rowId, true, event);
     }
   }
 
@@ -2804,6 +3163,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const isPinnedLeftLast = controller.isPinnedLeftLast(column);
     const isPinnedRightFirst = controller.isPinnedRightFirst(column);
     const align = column.align ?? '';
+    const isRowSelected = this.snapshot?.selectedRowIds.has(rowId) ?? false;
+    const isRowFocused = this.snapshot?.focusedRowId === rowId;
     const className = bodyCellClass(
       displayIndex % 2 !== 0,
       align,
@@ -2812,6 +3173,8 @@ export class UiGridStandaloneElement extends HTMLElement {
       isPinnedRightFirst,
       isFocused,
       editing,
+      isRowSelected,
+      isRowFocused,
     );
     // className/style/tabindex are pre-computed here so the <ui-grid-body-cell>
     // upgrade is a no-op at parse time. `data-*` stay for event delegation.
@@ -2843,6 +3206,14 @@ export class UiGridStandaloneElement extends HTMLElement {
     displayIndex: number,
     templateMarkup: string | null,
   ): string {
+    // Special-case the selection row-header column — render a checkbox
+    // whose checked state tracks the row's isSelected. Matches the old
+    // selectionRowHeaderButtons template.
+    if (column.name === 'selectionRowHeaderCol') {
+      const checked = this.snapshot?.selectedRowIds.has(row.id) ?? false;
+      const disabled = row.enableSelection === false;
+      return `<span class="ui-grid-selection-row-header-buttons" role="checkbox" tabindex="-1"${checked ? ' aria-checked="true"' : ' aria-checked="false"'}${disabled ? ' aria-disabled="true"' : ''}><span class="ui-grid-selection-checkbox${checked ? ' ui-grid-selection-checkbox-checked' : ''}${disabled ? ' ui-grid-selection-checkbox-disabled' : ''}"></span></span>`;
+    }
     if (!templateMarkup) {
       return cellValueMarkup(escapeHtml(this.controller?.displayValue(row, column) ?? ''));
     }

@@ -198,6 +198,8 @@ export class WebComponentsComponent {
   private primaryGridApi: UiGridApi | null = null;
   private disposePrimaryVisibleRows: (() => void) | null = null;
   private disposePrimaryBenchmark: (() => void) | null = null;
+  private disposePrimarySelection: (() => void) | null = null;
+  private disposePrimarySelectionBatch: (() => void) | null = null;
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0x1a2b3c4d);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -302,6 +304,7 @@ export class WebComponentsComponent {
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly visibleRowCount = signal(0);
+  protected readonly selectedRowCount = signal(0);
   protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
   protected readonly totalRows = signal(this.primaryData.length);
@@ -713,8 +716,12 @@ export class WebComponentsComponent {
     inject(DestroyRef).onDestroy(() => {
       this.disposePrimaryVisibleRows?.();
       this.disposePrimaryBenchmark?.();
+      this.disposePrimarySelection?.();
+      this.disposePrimarySelectionBatch?.();
       this.disposePrimaryVisibleRows = null;
       this.disposePrimaryBenchmark = null;
+      this.disposePrimarySelection = null;
+      this.disposePrimarySelectionBatch = null;
       this.primaryGridApi = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
@@ -757,6 +764,7 @@ export class WebComponentsComponent {
   protected resetDemo(): void {
     this.savedGridState = null;
     this.visibleRowCount.set(0);
+    this.selectedRowCount.set(0);
     this.benchmarkResult.set(null);
     this.savedStateJson.set('No saved state captured yet.');
     this.disposePrimaryVisibleRows?.();
@@ -804,6 +812,7 @@ export class WebComponentsComponent {
     this.disposePrimaryBenchmark = null;
     this.primaryGridApi = null;
     this.visibleRowCount.set(0);
+    this.selectedRowCount.set(0);
     this.benchmarkResult.set(null);
     grid.options = {
       ...grid.options,
@@ -813,14 +822,28 @@ export class WebComponentsComponent {
       onRegisterApi: (api) => {
         this.primaryGridApi = api as UiGridApi;
         this.visibleRowCount.set(this.primaryGridApi.core.getVisibleRows().length);
+        this.selectedRowCount.set(this.primaryGridApi.selection.getSelectedCount());
         this.disposePrimaryVisibleRows?.();
         this.disposePrimaryBenchmark?.();
+        this.disposePrimarySelection?.();
+        this.disposePrimarySelectionBatch?.();
         this.disposePrimaryVisibleRows = this.primaryGridApi.core.on.rowsVisibleChanged((rows) => {
           this.visibleRowCount.set(rows.length);
         });
         this.disposePrimaryBenchmark = this.primaryGridApi.core.on.benchmarkComplete((result) => {
           this.benchmarkResult.set(result as GridBenchmarkResult);
         });
+        // Refresh the selected-rows stat on every selection change. Both
+        // single and batch paths feed the same counter.
+        const syncSelected = (): void => {
+          if (this.primaryGridApi) {
+            this.selectedRowCount.set(this.primaryGridApi.selection.getSelectedCount());
+          }
+        };
+        this.disposePrimarySelection =
+          this.primaryGridApi.selection.on.rowSelectionChanged(syncSelected);
+        this.disposePrimarySelectionBatch =
+          this.primaryGridApi.selection.on.rowSelectionChangedBatch(syncSelected);
       },
     } as GridOptions;
   }

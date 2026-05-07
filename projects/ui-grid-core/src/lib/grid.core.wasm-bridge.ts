@@ -19,6 +19,7 @@ import * as tsPagination from './grid.core.pagination';
 import * as tsPinning from './grid.core.pinning';
 import * as tsPipeline from './grid.core.pipeline';
 import * as tsRowState from './grid.core.row-state';
+import * as tsSelection from './grid.core.selection';
 import * as tsSorting from './grid.core.sorting';
 import * as tsState from './grid.core.state';
 import * as tsTree from './grid.core.tree';
@@ -572,6 +573,23 @@ export const buildGridDisplayItems: typeof tsGrouping.buildGridDisplayItems = (
           }),
         () => tsGrouping.buildGridDisplayItems(rows, columns, options, groupBy, collapsedGroups),
       );
+
+// ---- Selection ---------------------------------------------------------
+export type {
+  GridSelectionState,
+  GridSelectionResolvedOptions,
+  SelectionChange,
+} from './grid.core.selection';
+export const createGridSelectionState = tsSelection.createGridSelectionState;
+export const resolveGridSelectionOptions = tsSelection.resolveGridSelectionOptions;
+export const toggleGridRowSelection = tsSelection.toggleGridRowSelection;
+export const shiftGridRowSelection = tsSelection.shiftGridRowSelection;
+export const selectAllGridRows = tsSelection.selectAllGridRows;
+export const selectAllVisibleGridRows = tsSelection.selectAllVisibleGridRows;
+export const clearAllGridSelection = tsSelection.clearAllGridSelection;
+export const findGridRowByKey = tsSelection.findGridRowByKey;
+export const reconcileGridSelection = tsSelection.reconcileGridSelection;
+export const mapSelectedRowsToEntities = tsSelection.mapSelectedRowsToEntities;
 
 export const headerLabel: typeof tsExport.headerLabel = (column) => tsExport.headerLabel(column);
 export const exportCsvRows: typeof tsExport.exportCsvRows = (columns, rows, formatCell) => {

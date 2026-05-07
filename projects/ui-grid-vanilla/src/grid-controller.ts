@@ -49,6 +49,17 @@ import {
   pinGridColumnCommand,
   resolveGridLabels,
   resolveGridRowId as coreResolveGridRowId,
+  resolveGridSelectionOptions,
+  createGridSelectionState,
+  toggleGridRowSelection as coreToggleGridRowSelection,
+  shiftGridRowSelection as coreShiftGridRowSelection,
+  selectAllGridRows as coreSelectAllGridRows,
+  selectAllVisibleGridRows as coreSelectAllVisibleGridRows,
+  clearAllGridSelection as coreClearAllGridSelection,
+  findGridRowByKey as coreFindGridRowByKey,
+  reconcileGridSelection as coreReconcileGridSelection,
+  mapSelectedRowsToEntities as coreMapSelectedRowsToEntities,
+  type GridSelectionState,
   seekGridPaginationCommand,
   setGridPaginationPageSizeCommand,
   setPathValue,
@@ -104,6 +115,13 @@ export interface GridControllerSnapshot {
   pageSize: number;
   editingCell: GridCellPosition | null;
   editingValue: string;
+  /** Row ids currently selected. A ReadonlySet for surgical DOM updates —
+   * the renderer toggles the .ui-grid-row-selected class on every cell
+   * whose data-row matches one of these ids. */
+  selectedRowIds: ReadonlySet<string>;
+  selectAll: boolean;
+  focusedRowId: string | null;
+  selectedCount: number;
 }
 
 export type GridControllerSubscriber = (snapshot: GridControllerSnapshot) => void;
@@ -140,6 +158,7 @@ export class VanillaGridController {
   private pageSize = 0;
   private editingCell: GridCellPosition | null = null;
   private editingValue = '';
+  private selectionState: GridSelectionState = createGridSelectionState();
   private pipeline: PipelineResult;
   private labels: GridLabels;
   private visibleColumns: GridColumnDef[] = [];
@@ -228,6 +247,27 @@ export class VanillaGridController {
         this.cancelCellEdit();
       },
       getEditingCell: () => this.editingCell,
+      toggleRowSelection: (rowEntity, evt) => this.toggleRowSelectionByEntity(rowEntity, evt),
+      selectRow: (rowEntity, evt) => this.selectRow(rowEntity, evt),
+      selectRowByVisibleIndex: (rowNum, evt) => this.selectRowByVisibleIndex(rowNum, evt),
+      selectRowByKey: (isInEntity, key, comparator, evt, lookInRows) =>
+        this.selectRowByKey(isInEntity, key, comparator, evt, lookInRows),
+      unSelectRow: (rowEntity, evt) => this.unSelectRow(rowEntity, evt),
+      unSelectRowByVisibleIndex: (rowNum, evt) => this.unSelectRowByVisibleIndex(rowNum, evt),
+      unSelectRowByKey: (isInEntity, key, comparator, evt, lookInRows) =>
+        this.unSelectRowByKey(isInEntity, key, comparator, evt, lookInRows),
+      selectAllRows: (evt) => this.selectAllRows(evt),
+      selectAllVisibleRows: (evt) => this.selectAllVisibleRows(evt),
+      clearSelectedRows: (evt) => this.clearSelectedRows(evt),
+      getSelectedRows: () => this.getSelectedRows(),
+      getUnSelectedRows: () => this.getUnSelectedRows(),
+      getSelectedGridRows: () => this.getSelectedGridRows(),
+      getUnSelectedGridRows: () => this.getUnSelectedGridRows(),
+      getSelectedCount: () => this.selectionState.selectedRowIds.size,
+      setMultiSelect: (multiSelect) => this.setMultiSelect(multiSelect),
+      setModifierKeysToMultiSelect: (value) => this.setModifierKeysToMultiSelect(value),
+      getSelectAllState: () => this.selectionState.selectAll,
+      shiftSelectRow: (rowEntity, evt) => this.shiftSelectRow(rowEntity, evt),
     });
 
     this.refresh();
@@ -324,6 +364,10 @@ export class VanillaGridController {
       pageSize: this.getEffectivePageSize(),
       editingCell: this.editingCell,
       editingValue: this.editingValue,
+      selectedRowIds: this.selectionState.selectedRowIds,
+      selectAll: this.selectionState.selectAll,
+      focusedRowId: this.selectionState.focusedRowId,
+      selectedCount: this.selectionState.selectedRowIds.size,
     };
   }
 
@@ -629,6 +673,266 @@ export class VanillaGridController {
     this.refresh();
   }
 
+  // ---- Row selection -------------------------------------------------
+  // Thin method layer on top of grid.core.selection. Each call mutates
+  // this.selectionState + row instances in place, raises the appropriate
+  // public-API event (single vs batch), then refreshes so the element
+  // re-renders with the updated `isSelected` / `isFocused` flags.
+
+  /** Internal: run a core selection mutation, raise events, trigger a render. */
+  private applySelectionChange(
+    apply: () => { changed: GridRow[] },
+    evt?: Event | null,
+  ): void {
+    const { changed } = apply();
+    if (changed.length === 0) {
+      return;
+    }
+    if (this.options.enableSelectionBatchEvent !== false && changed.length > 1) {
+      this.gridApi.selection.raise.rowSelectionChangedBatch(changed, evt);
+    } else {
+      for (const row of changed) {
+        this.gridApi.selection.raise.rowSelectionChanged(row, evt);
+      }
+    }
+    this.refresh();
+  }
+
+  private allGridRows(): GridRow[] {
+    // Use the cached pipeline row list when possible — it already reflects
+    // `options.data`. Fall back to rebuilding when the pipeline is empty
+    // (e.g. before first refresh).
+    return this.pipeline.visibleRows.length > 0
+      ? this.pipeline.visibleRows
+      : this.buildRowsFromData(this.options.data);
+  }
+
+  toggleRowSelectionByEntity(rowEntity: GridRecord, evt?: Event | null): void {
+    const row = this.findRowById(this.resolveRowId(rowEntity));
+    if (!row) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+        }),
+      evt,
+    );
+  }
+
+  selectRow(rowEntity: GridRecord, evt?: Event | null): void {
+    const row = this.findRowById(this.resolveRowId(rowEntity));
+    if (!row || row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+        }),
+      evt,
+    );
+  }
+
+  selectRowByVisibleIndex(rowNum: number, evt?: Event | null): void {
+    const rows = this.pipeline.visibleRows;
+    const row = rows[rowNum];
+    if (!row || row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, rows, row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+          canBeInvisible: false,
+        }),
+      evt,
+    );
+  }
+
+  selectRowByKey(
+    isInEntity: boolean,
+    key: string,
+    comparator: unknown,
+    evt?: Event | null,
+    lookInRows?: readonly GridRow[],
+  ): void {
+    const rows = lookInRows ?? this.allGridRows();
+    const row = coreFindGridRowByKey(rows, isInEntity, key, comparator);
+    if (!row || row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+          canBeInvisible: false,
+        }),
+      evt,
+    );
+  }
+
+  unSelectRow(rowEntity: GridRecord, evt?: Event | null): void {
+    const row = this.findRowById(this.resolveRowId(rowEntity));
+    if (!row || !row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+        }),
+      evt,
+    );
+  }
+
+  unSelectRowByVisibleIndex(rowNum: number, evt?: Event | null): void {
+    const row = this.pipeline.visibleRows[rowNum];
+    if (!row || !row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+          canBeInvisible: false,
+        }),
+      evt,
+    );
+  }
+
+  unSelectRowByKey(
+    isInEntity: boolean,
+    key: string,
+    comparator: unknown,
+    evt?: Event | null,
+    lookInRows?: readonly GridRow[],
+  ): void {
+    const rows = lookInRows ?? this.allGridRows();
+    const row = coreFindGridRowByKey(rows, isInEntity, key, comparator);
+    if (!row || !row.isSelected) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreToggleGridRowSelection(this.selectionState, this.allGridRows(), row, {
+          multiSelect: resolved.multiSelect,
+          noUnselect: resolved.noUnselect,
+          canBeInvisible: false,
+        }),
+      evt,
+    );
+  }
+
+  selectAllRows(evt?: Event | null): void {
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreSelectAllGridRows(this.selectionState, this.allGridRows(), {
+          multiSelect: resolved.multiSelect,
+          isRowSelectable: resolved.isRowSelectable,
+        }),
+      evt,
+    );
+  }
+
+  selectAllVisibleRows(evt?: Event | null): void {
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreSelectAllVisibleGridRows(this.selectionState, this.allGridRows(), {
+          multiSelect: resolved.multiSelect,
+          isRowSelectable: resolved.isRowSelectable,
+        }),
+      evt,
+    );
+  }
+
+  clearSelectedRows(evt?: Event | null): void {
+    this.applySelectionChange(
+      () => coreClearAllGridSelection(this.selectionState, this.allGridRows()),
+      evt,
+    );
+  }
+
+  shiftSelectRow(rowEntity: GridRecord, evt?: Event | null): void {
+    const row = this.findRowById(this.resolveRowId(rowEntity));
+    if (!row) return;
+    const resolved = resolveGridSelectionOptions(this.options);
+    this.applySelectionChange(
+      () =>
+        coreShiftGridRowSelection(this.selectionState, this.pipeline.visibleRows, row, {
+          multiSelect: resolved.multiSelect,
+        }),
+      evt,
+    );
+  }
+
+  getSelectedRows(): GridRecord[] {
+    return coreMapSelectedRowsToEntities(this.getSelectedGridRows());
+  }
+
+  getUnSelectedRows(): GridRecord[] {
+    return coreMapSelectedRowsToEntities(this.getUnSelectedGridRows());
+  }
+
+  getSelectedGridRows(): GridRow[] {
+    return this.allGridRows().filter((row) => row.isSelected);
+  }
+
+  getUnSelectedGridRows(): GridRow[] {
+    return this.allGridRows().filter((row) => !row.isSelected);
+  }
+
+  setMultiSelect(multiSelect: boolean): void {
+    this.options = { ...this.options, multiSelect };
+  }
+
+  setModifierKeysToMultiSelect(value: boolean): void {
+    this.options = { ...this.options, modifierKeysToMultiSelect: value };
+  }
+
+  /** Focus a row by id — the old module's `row.setFocused(true)` with all
+   * the book-keeping. Raises rowFocusChanged and refreshes. */
+  setRowFocused(rowId: string, focused: boolean, evt?: Event | null): void {
+    const row = this.findRowById(rowId);
+    if (!row) return;
+    const previousFocusedId = this.selectionState.focusedRowId;
+    if (focused) {
+      if (previousFocusedId && previousFocusedId !== rowId) {
+        const previous = this.findRowById(previousFocusedId);
+        previous?.setFocused(false);
+      }
+      row.setFocused(true);
+      this.selectionState.focusedRowId = rowId;
+    } else {
+      row.setFocused(false);
+      if (previousFocusedId === rowId) this.selectionState.focusedRowId = null;
+    }
+    this.gridApi.selection.raise.rowFocusChanged(row, evt);
+    this.refresh();
+  }
+
+  getRowSelectionState(): Readonly<GridSelectionState> {
+    return this.selectionState;
+  }
+
+  /** Resolved/defaulted selection options — exposed for the element layer
+   * so it can decide whether to wire pointer handlers without duplicating
+   * default logic. */
+  getResolvedSelectionOptions(): ReturnType<typeof resolveGridSelectionOptions> {
+    return resolveGridSelectionOptions(this.options);
+  }
+
+  /** Public analogue of findRowById — the element uses this during drag
+   * painting to resolve a row-id back to its entity without calling the
+   * selection API methods that would double-raise events. */
+  findRowByIdPublic(rowId: string): GridRow | null {
+    return this.findRowById(rowId);
+  }
+
+  // ---- End row selection ---------------------------------------------
+
   canResizeColumns(): boolean {
     return this.options.enableColumnResizing !== false;
   }
@@ -843,6 +1147,29 @@ export class VanillaGridController {
       this.visibleColumns = applyWidthOverrides([...pinnedLeft, ...middleColumns, ...pinnedRight]);
     }
 
+    // Selection row-header column. Injected in front of everything else
+    // (including left-pinned columns) so it always sits at the far left,
+    // mirroring the old grid's addRowHeaderColumn(def, 0). The width is
+    // configurable via selectionRowHeaderWidth.
+    const resolvedSelection = resolveGridSelectionOptions(this.options);
+    if (resolvedSelection.enableRowSelection && resolvedSelection.enableRowHeaderSelection) {
+      const selectionCol: GridColumnDef = {
+        name: 'selectionRowHeaderCol',
+        displayName: '',
+        width: `${resolvedSelection.selectionRowHeaderWidth}px`,
+        enableSorting: false,
+        enableFiltering: false,
+        enableGrouping: false,
+        enableCellEdit: false,
+        enablePinning: false,
+        align: 'center',
+      };
+      // Dedupe if already present (setOptions could be re-entering).
+      if (!this.visibleColumns.some((c) => c.name === 'selectionRowHeaderCol')) {
+        this.visibleColumns = [selectionCol, ...this.visibleColumns];
+      }
+    }
+
     this.pipeline = defaultGridEngine.buildPipeline({
       options: this.options,
       columns: this.visibleColumns,
@@ -857,6 +1184,16 @@ export class VanillaGridController {
       pageSize: this.pageSize,
       rowSize: this.getRowSize(),
     });
+
+    // Re-apply the persisted selection/focus flags to the fresh row instances
+    // produced by the pipeline. Without this, every refresh would wipe the
+    // selected-row indicators because new GridRow objects default to
+    // isSelected=false. Also evaluates isRowSelectable per row.
+    coreReconcileGridSelection(
+      this.selectionState,
+      this.pipeline.visibleRows,
+      this.options.isRowSelectable ?? null,
+    );
 
     if (!this.apiRegistered) {
       this.options.onRegisterApi?.(this.gridApi);
@@ -874,6 +1211,12 @@ export class VanillaGridController {
   }
 
   private findRowById(rowId: string): GridRow | null {
+    // Prefer the pipeline's current row instances — they carry the live
+    // isSelected / isFocused / enableSelection flags that callers mutate.
+    // Fall back to a fresh build when the pipeline is still empty (before
+    // the first refresh).
+    const fromPipeline = coreFindGridRowById(this.pipeline.visibleRows, rowId);
+    if (fromPipeline) return fromPipeline;
     return coreFindGridRowById(this.buildRowsFromData(this.options.data), rowId);
   }
 

@@ -11,6 +11,7 @@
   "include": [
     "src/**/*.d.ts",
     "src/**/*.spec.ts",
-    "projects/ui-grid/src/**/*.spec.ts"
+    "projects/ui-grid/src/**/*.spec.ts",
+    "projects/ui-grid-core/src/**/*.spec.ts"
   ]
 }

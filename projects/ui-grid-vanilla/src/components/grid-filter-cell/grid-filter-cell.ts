@@ -105,6 +105,11 @@ export class UIGridFilterCell extends HTMLElement {
       if (input.disabled !== disabled) {
         input.disabled = disabled;
       }
+      // Non-filterable columns hide the input entirely — matching the old
+      // grid's empty ui-grid-filter-container behaviour. `display: none` is
+      // CSS-only (no DOM detach) so focus / value preservation still work
+      // when a column flips filterable on.
+      input.style.display = disabled ? 'none' : '';
     }
   }
 

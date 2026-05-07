@@ -34,6 +34,9 @@ function sampleOptions(): GridOptions {
   let capturedApi: UiGridApi | undefined;
   const options: GridOptions = {
     id: 'vanilla-keyboard-grid',
+    // Selection defaults to on in the old grid; nav tests assert against
+    // the two declared columns, so we explicitly opt out here.
+    enableRowSelection: false,
     data: [
       { id: 'r1', name: 'Alpha', status: 'Active' },
       { id: 'r2', name: 'Beta', status: 'Pilot' },
@@ -87,6 +90,7 @@ function editableOptions(): GridOptions {
   const options: GridOptions = {
     id: 'vanilla-keyboard-editable-grid',
     enableCellEdit: true,
+    enableRowSelection: false,
     data: [
       { id: 'r1', name: 'Alpha', status: 'Active' },
       { id: 'r2', name: 'Beta', status: 'Pilot' },
@@ -125,6 +129,7 @@ function groupedOptions(): GridOptions {
   const options: GridOptions = {
     id: 'vanilla-keyboard-grouped-grid',
     enableGrouping: true,
+    enableRowSelection: false,
     grouping: { groupBy: ['status'] },
     data: [
       { id: 'r1', name: 'Alpha', status: 'Active' },

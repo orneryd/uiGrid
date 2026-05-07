@@ -65,6 +65,27 @@ export interface GridApiBindings {
   endCellEdit?: () => void;
   cancelCellEdit?: () => void;
   getEditingCell?: () => GridCellPosition | null;
+
+  // Selection — ported from ui.grid.selection public API.
+  toggleRowSelection?: (rowEntity: GridRecord, evt?: Event | null) => void;
+  selectRow?: (rowEntity: GridRecord, evt?: Event | null) => void;
+  selectRowByVisibleIndex?: (rowNum: number, evt?: Event | null) => void;
+  selectRowByKey?: (isInEntity: boolean, key: string, comparator: unknown, evt?: Event | null, lookInRows?: readonly GridRow[]) => void;
+  unSelectRow?: (rowEntity: GridRecord, evt?: Event | null) => void;
+  unSelectRowByVisibleIndex?: (rowNum: number, evt?: Event | null) => void;
+  unSelectRowByKey?: (isInEntity: boolean, key: string, comparator: unknown, evt?: Event | null, lookInRows?: readonly GridRow[]) => void;
+  selectAllRows?: (evt?: Event | null) => void;
+  selectAllVisibleRows?: (evt?: Event | null) => void;
+  clearSelectedRows?: (evt?: Event | null) => void;
+  getSelectedRows?: () => GridRecord[];
+  getUnSelectedRows?: () => GridRecord[];
+  getSelectedGridRows?: () => GridRow[];
+  getUnSelectedGridRows?: () => GridRow[];
+  getSelectedCount?: () => number;
+  setMultiSelect?: (multiSelect: boolean) => void;
+  setModifierKeysToMultiSelect?: (value: boolean) => void;
+  getSelectAllState?: () => boolean;
+  shiftSelectRow?: (rowEntity: GridRecord, evt?: Event | null) => void;
 }
 
 export interface UiGridApi {
@@ -206,6 +227,37 @@ export interface UiGridApi {
     cancelCellEdit: () => void;
     getEditingCell: () => GridCellPosition | null;
   };
+  selection: {
+    on: {
+      rowSelectionChanged: (listener: Listener<[GridRow, Event | null | undefined]>) => () => void;
+      rowSelectionChangedBatch: (listener: Listener<[GridRow[], Event | null | undefined]>) => () => void;
+      rowFocusChanged: (listener: Listener<[GridRow, Event | null | undefined]>) => () => void;
+    };
+    raise: {
+      rowSelectionChanged: (row: GridRow, evt?: Event | null) => void;
+      rowSelectionChangedBatch: (rows: GridRow[], evt?: Event | null) => void;
+      rowFocusChanged: (row: GridRow, evt?: Event | null) => void;
+    };
+    toggleRowSelection: (rowEntity: GridRecord, evt?: Event | null) => void;
+    selectRow: (rowEntity: GridRecord, evt?: Event | null) => void;
+    selectRowByVisibleIndex: (rowNum: number, evt?: Event | null) => void;
+    selectRowByKey: (isInEntity: boolean, key: string, comparator: unknown, evt?: Event | null, lookInRows?: readonly GridRow[]) => void;
+    unSelectRow: (rowEntity: GridRecord, evt?: Event | null) => void;
+    unSelectRowByVisibleIndex: (rowNum: number, evt?: Event | null) => void;
+    unSelectRowByKey: (isInEntity: boolean, key: string, comparator: unknown, evt?: Event | null, lookInRows?: readonly GridRow[]) => void;
+    selectAllRows: (evt?: Event | null) => void;
+    selectAllVisibleRows: (evt?: Event | null) => void;
+    clearSelectedRows: (evt?: Event | null) => void;
+    getSelectedRows: () => GridRecord[];
+    getUnSelectedRows: () => GridRecord[];
+    getSelectedGridRows: () => GridRow[];
+    getUnSelectedGridRows: () => GridRow[];
+    getSelectedCount: () => number;
+    setMultiSelect: (multiSelect: boolean) => void;
+    setModifierKeysToMultiSelect: (value: boolean) => void;
+    getSelectAllState: () => boolean;
+    shiftSelectRow: (rowEntity: GridRecord, evt?: Event | null) => void;
+  };
 }
 
 export function createGridApi(bindings: GridApiBindings): UiGridApi {
@@ -231,6 +283,9 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const afterCellEditEvent = new GridEvent<[GridRecord, GridColumnDef, unknown, unknown]>();
   const cancelCellEditEvent = new GridEvent<[GridRecord, GridColumnDef]>();
   const columnPinnedEvent = new GridEvent<[string, PinDirection]>();
+  const rowSelectionChangedEvent = new GridEvent<[GridRow, Event | null | undefined]>();
+  const rowSelectionChangedBatchEvent = new GridEvent<[GridRow[], Event | null | undefined]>();
+  const rowFocusChangedEvent = new GridEvent<[GridRow, Event | null | undefined]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -269,6 +324,28 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const cancelCellEdit = bindings.cancelCellEdit ?? noop;
   const getEditingCell = bindings.getEditingCell ?? (() => null);
   const pinColumnBinding = bindings.pinColumn ?? (() => {});
+
+  // Selection bindings — each one has a safe default so a wrapper that
+  // doesn't opt into selection never throws on api.selection.xxx().
+  const toggleRowSelectionBinding = bindings.toggleRowSelection ?? noop;
+  const selectRowBinding = bindings.selectRow ?? noop;
+  const selectRowByVisibleIndexBinding = bindings.selectRowByVisibleIndex ?? noop;
+  const selectRowByKeyBinding = bindings.selectRowByKey ?? noop;
+  const unSelectRowBinding = bindings.unSelectRow ?? noop;
+  const unSelectRowByVisibleIndexBinding = bindings.unSelectRowByVisibleIndex ?? noop;
+  const unSelectRowByKeyBinding = bindings.unSelectRowByKey ?? noop;
+  const selectAllRowsBinding = bindings.selectAllRows ?? noop;
+  const selectAllVisibleRowsBinding = bindings.selectAllVisibleRows ?? noop;
+  const clearSelectedRowsBinding = bindings.clearSelectedRows ?? noop;
+  const getSelectedRowsBinding = bindings.getSelectedRows ?? ((): GridRecord[] => []);
+  const getUnSelectedRowsBinding = bindings.getUnSelectedRows ?? ((): GridRecord[] => []);
+  const getSelectedGridRowsBinding = bindings.getSelectedGridRows ?? emptyRows;
+  const getUnSelectedGridRowsBinding = bindings.getUnSelectedGridRows ?? emptyRows;
+  const getSelectedCountBinding = bindings.getSelectedCount ?? (() => 0);
+  const setMultiSelectBinding = bindings.setMultiSelect ?? noop;
+  const setModifierKeysToMultiSelectBinding = bindings.setModifierKeysToMultiSelect ?? noop;
+  const getSelectAllStateBinding = bindings.getSelectAllState ?? (() => false);
+  const shiftSelectRowBinding = bindings.shiftSelectRow ?? noop;
 
   const api: UiGridApi = {
     core: {
@@ -409,6 +486,37 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       endCellEdit,
       cancelCellEdit,
       getEditingCell
+    },
+    selection: {
+      on: {
+        rowSelectionChanged: (listener) => rowSelectionChangedEvent.subscribe(listener),
+        rowSelectionChangedBatch: (listener) => rowSelectionChangedBatchEvent.subscribe(listener),
+        rowFocusChanged: (listener) => rowFocusChangedEvent.subscribe(listener)
+      },
+      raise: {
+        rowSelectionChanged: (row, evt) => rowSelectionChangedEvent.emit(row, evt),
+        rowSelectionChangedBatch: (rows, evt) => rowSelectionChangedBatchEvent.emit(rows, evt),
+        rowFocusChanged: (row, evt) => rowFocusChangedEvent.emit(row, evt)
+      },
+      toggleRowSelection: toggleRowSelectionBinding,
+      selectRow: selectRowBinding,
+      selectRowByVisibleIndex: selectRowByVisibleIndexBinding,
+      selectRowByKey: selectRowByKeyBinding,
+      unSelectRow: unSelectRowBinding,
+      unSelectRowByVisibleIndex: unSelectRowByVisibleIndexBinding,
+      unSelectRowByKey: unSelectRowByKeyBinding,
+      selectAllRows: selectAllRowsBinding,
+      selectAllVisibleRows: selectAllVisibleRowsBinding,
+      clearSelectedRows: clearSelectedRowsBinding,
+      getSelectedRows: getSelectedRowsBinding,
+      getUnSelectedRows: getUnSelectedRowsBinding,
+      getSelectedGridRows: getSelectedGridRowsBinding,
+      getUnSelectedGridRows: getUnSelectedGridRowsBinding,
+      getSelectedCount: getSelectedCountBinding,
+      setMultiSelect: setMultiSelectBinding,
+      setModifierKeysToMultiSelect: setModifierKeysToMultiSelectBinding,
+      getSelectAllState: getSelectAllStateBinding,
+      shiftSelectRow: shiftSelectRowBinding
     }
   };
 

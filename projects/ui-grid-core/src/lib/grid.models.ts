@@ -241,6 +241,21 @@ export interface GridOptions {
   grouping?: GridGroupingOptions;
   /** Enable column pinning (freeze left/right) */
   enablePinning?: boolean;
+  /** Selection — ports ui.grid.selection options. Defaults match the
+   * original module so existing consumers get identical behaviour. */
+  enableRowSelection?: boolean;
+  multiSelect?: boolean;
+  noUnselect?: boolean;
+  modifierKeysToMultiSelect?: boolean;
+  enableRowHeaderSelection?: boolean;
+  enableFullRowSelection?: boolean;
+  enableFocusRowOnRowHeaderClick?: boolean;
+  enableSelectRowOnFocus?: boolean;
+  enableSelectAll?: boolean;
+  enableSelectionBatchEvent?: boolean;
+  selectionRowHeaderWidth?: number;
+  enableFooterTotalSelected?: boolean;
+  isRowSelectable?: (row: GridRow) => boolean;
   benchmark?: GridBenchmarkOptions;
   onRegisterApi?: (gridApi: unknown) => void;
   rowIdentity?: (row: GridRecord, index: number) => string;
@@ -264,6 +279,13 @@ export class GridRow {
   readonly invisibleReasons = new Set<string>();
   visible = true;
   isSelected = false;
+  /** Whether this row is the one currently drawing row-level focus. Ported
+   * from ui.grid.selection's `isFocused`. Mutually exclusive across rows. */
+  isFocused = false;
+  /** False disables all selection mechanics for this row (mouse, keyboard,
+   * programmatic). Populated from `options.isRowSelectable(row)` before
+   * each render cycle. */
+  enableSelection = true;
   treeLevel = 0;
   parentId: string | null = null;
   hasChildren = false;
@@ -277,6 +299,17 @@ export class GridRow {
     readonly index: number,
     readonly height = 44,
   ) {}
+
+  /** Mirrors ui.grid.selection's GridRow.setSelected — the ONLY supported
+   * path to flip isSelected, because it also keeps the grid-level selected
+   * count in sync through the controller that owns this row. */
+  setSelected(selected: boolean): void {
+    if (selected !== this.isSelected) this.isSelected = selected;
+  }
+
+  setFocused(focused: boolean): void {
+    if (focused !== this.isFocused) this.isFocused = focused;
+  }
 
   setThisRowInvisible(reason: string): void {
     this.invisibleReasons.add(reason);
