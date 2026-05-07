@@ -407,6 +407,30 @@ describe('vanilla grid row selection', () => {
       expect(api.selection.getSelectedCount()).toBe(0);
     });
 
+    it('full-row single click (mousedown + mouseup + click) toggles once, not twice', async () => {
+      // Regression: the drag-paint handler used to commit the starting row
+      // on mousedown AND then the click handler toggled again, producing a
+      // visible flicker and a net "no change" for single clicks. This test
+      // simulates the browser's full click sequence and asserts exactly one
+      // toggle ends up applied.
+      const options = baseOptions({ enableFullRowSelection: true });
+      const { shadow } = await mountGrid(options);
+      const api = getApi(options);
+      const events: number[] = [];
+      api.selection.on.rowSelectionChanged(() => {
+        events.push(api.selection.getSelectedCount());
+      });
+      const target = cellIn(shadow, 'r2', 'name');
+      dispatchMouse(target, 'mousedown');
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      dispatchMouse(target, 'click');
+      await waitFor(() => (api.selection.getSelectedCount() === 1 ? {} : null));
+      // Exactly one selection-change event should fire. Two events (0→1→0)
+      // or zero events would both indicate flicker/re-entry.
+      expect(events).toEqual([1]);
+      expect(api.selection.getSelectedRows()[0]!['id']).toBe('r2');
+    });
+
     it('click-drag paints selection across multiple rows', async () => {
       const options = baseOptions({ enableFullRowSelection: true });
       const { shadow } = await mountGrid(options);
