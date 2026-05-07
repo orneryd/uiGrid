@@ -536,17 +536,29 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (paginationPageSizes !== undefined)
       this.attributeOptions.paginationPageSizes = paginationPageSizes;
 
-    // Re-render with the merged options.
+    // Re-render with the merged options. Both paths funnel through
+    // buildEffectiveOptions so derived fields (e.g. the default
+    // `expandableRowTemplate` when `enableExpandable` is true) are applied
+    // regardless of whether options came from an imperative `grid.options =`
+    // assignment or purely from HTML attributes.
     if (this.activeOptions !== null) {
       this.ensureController(this.buildEffectiveOptions(this.activeOptions));
     } else {
-      // Purely declarative path: attributes drive the grid without an imperative bridge.
-      this.ensureController({
-        id: '__ui-grid-pending__',
-        data: [],
-        columnDefs: [],
-        ...this.attributeOptions,
-      } as VanillaGridOptions);
+      // Purely declarative path: the attribute-only options are already
+      // populated on `this.attributeOptions` (including `data` / `columnDefs`
+      // when the consumer set `[attr.data]` / `[attr.column-defs]`). Pass
+      // the minimum identity so `buildEffectiveOptions`'s merge doesn't
+      // clobber attribute-provided arrays with empty fallbacks — the
+      // attribute values always win because the spread order is
+      // `{ ...attributeOptions, ...options }`.
+      const fallbackId = this.attributeOptions.id ?? '__ui-grid-pending__';
+      this.ensureController(
+        this.buildEffectiveOptions({
+          id: fallbackId,
+          data: this.attributeOptions.data ?? [],
+          columnDefs: this.attributeOptions.columnDefs ?? [],
+        } as VanillaGridOptions),
+      );
     }
   }
 
@@ -1845,10 +1857,24 @@ export class UiGridStandaloneElement extends HTMLElement {
     });
 
     root.addEventListener('dragleave', (event) => {
+      // `dragleave` bubbles from every descendant as the cursor moves over
+      // child nodes (the header-label span, the sort/pin buttons, etc.), so
+      // we must only clear the drop indicator when the pointer has actually
+      // left the header cell — i.e. when `relatedTarget` is outside it.
+      // Otherwise the class flickers on once (dragover) and then off again
+      // (dragleave from a child), leaving the indicator invisible until the
+      // user drags over a different header.
+      const dragEvent = event as DragEvent;
       const target = event.target as HTMLElement | null;
       const headerCell = target?.closest<HTMLElement>('.header-cell[data-column]');
-      if (headerCell && headerCell.dataset['column'] === this.dropTargetColumnName) {
+      if (!headerCell) return;
+      const related = dragEvent.relatedTarget as Node | null;
+      if (related && headerCell.contains(related)) {
+        return; // still inside the same header cell
+      }
+      if (headerCell.dataset['column'] === this.dropTargetColumnName) {
         headerCell.classList.remove('is-drag-target');
+        this.dropTargetColumnName = null;
       }
     });
 

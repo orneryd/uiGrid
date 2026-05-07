@@ -994,14 +994,48 @@ export class UiGridComponent {
     return this.options().rowHeight ?? 44;
   }
 
-  protected onGridTableScroll(event: Event): void {
+  protected onBodyViewportScroll(event: Event): void {
     const target = event.target as HTMLElement | null;
     if (!target) {
       return;
     }
 
     this.scrollTop.set(target.scrollTop);
+    this.syncHeaderHorizontalScroll(target.scrollLeft);
     this.onViewportIndexChange(this.resolveVirtualStartIndex(Math.max(0, target.scrollTop)));
+  }
+
+  /**
+   * Forward wheel gestures on header/filter strips to the body viewport.
+   * The strips are scroll containers (for sticky positioning) but we don't
+   * want the user scrolling them independently — that would desync from body.
+   */
+  protected onStripWheel(event: WheelEvent): void {
+    const root = this.hostElement.nativeElement.shadowRoot ?? this.hostElement.nativeElement;
+    const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
+    if (!bodyViewport) {
+      return;
+    }
+
+    event.preventDefault();
+    bodyViewport.scrollLeft += event.deltaX;
+    bodyViewport.scrollTop += event.deltaY;
+  }
+
+  /**
+   * Mirror horizontal scroll from the body viewport onto the header + filter
+   * strips so pinned column alignment stays perfect across all three regions.
+   */
+  private syncHeaderHorizontalScroll(scrollLeft: number): void {
+    const root = this.hostElement.nativeElement.shadowRoot ?? this.hostElement.nativeElement;
+    const headerStrip = root.querySelector<HTMLElement>('.grid-header-strip');
+    const filterStrip = root.querySelector<HTMLElement>('.grid-filter-strip');
+    if (headerStrip && headerStrip.scrollLeft !== scrollLeft) {
+      headerStrip.scrollLeft = scrollLeft;
+    }
+    if (filterStrip && filterStrip.scrollLeft !== scrollLeft) {
+      filterStrip.scrollLeft = scrollLeft;
+    }
   }
 
   protected ssrVisibleItemCount(): number {

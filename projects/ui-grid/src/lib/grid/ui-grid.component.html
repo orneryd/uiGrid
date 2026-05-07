@@ -2,8 +2,8 @@
 
     <div class="grid-table ui-grid-contents-wrapper" part="grid-table"
       [style.height]="renderVirtualViewport() ? scrollContainerHeight() : null"
-      [style.--ui-grid-header-sticky-top.px]="headerStickyHeight()"
-      (scroll)="renderVirtualViewport() ? onGridTableScroll($event) : null">
+      [style.--ui-grid-header-sticky-top.px]="headerStickyHeight()">
+      <div class="grid-header-strip" (wheel)="onStripWheel($event)">
       <div class="header-grid ui-grid-header ui-grid-header-canvas" part="header" role="row"
         [style.gridTemplateColumns]="gridTemplateColumns()" cdkDropList cdkDropListOrientation="horizontal"
         [cdkDropListData]="visibleColumns()" (cdkDropListDropped)="onColumnDrop($event)">
@@ -109,8 +109,10 @@
         </div>
         }
       </div>
+      </div>
 
       @if (filteringFeature && isFilteringEnabled()) {
+      <div class="grid-filter-strip" (wheel)="onStripWheel($event)">
       <div class="filter-grid ui-grid-header" part="filters" [style.gridTemplateColumns]="gridTemplateColumns()">
         @for (column of visibleColumns(); track column.name) {
         <label class="filter-cell ui-grid-filter-container" part="filter-cell" [class.is-pinned]="isPinned(column)"
@@ -125,6 +127,7 @@
             (input)="updateFilter(column.name, $any($event.target).value)" />
         </label>
         }
+      </div>
       </div>
       }
 
@@ -199,6 +202,9 @@
         }
       </ng-template>
 
+      <div class="grid-body-viewport"
+        [style.overflow-y]="renderVirtualViewport() ? 'auto' : null"
+        (scroll)="onBodyViewportScroll($event)">
       @if (displayItems().length) {
       @if (renderVirtualViewport()) {
       <div class="grid-virtual-spacer" [style.height.px]="virtualContentHeight()">
@@ -223,6 +229,7 @@
         <p>{{ labels().emptyDescription }}</p>
       </div>
       }
+      </div>
 
       @if (paginationFeature && showPaginationControls()) {
       <footer class="pagination-bar ui-grid-pagination" part="pagination" role="navigation"

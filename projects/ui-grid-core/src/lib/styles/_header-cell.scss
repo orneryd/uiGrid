@@ -17,6 +17,32 @@
   background: var(--ui-grid-header-cell-background-active);
 }
 
+// HTML5 drag/drop column-move visuals. The vanilla element uses the native
+// dragstart/dragover lifecycle (rather than CDK drag-and-drop), so it applies
+// `.is-dragging` to the source header while the drag is in flight and
+// `.is-drag-target` to whichever header the cursor is over — matching the
+// React wrapper's own drag-state classes so the column reorder UX looks
+// identical across every wrapper.
+.header-cell[draggable='true'] {
+  cursor: grab;
+}
+
+.header-cell.is-dragging {
+  opacity: 0.6;
+}
+
+.header-cell.is-drag-target {
+  background: color-mix(
+    in srgb,
+    var(--ui-grid-accent) 9%,
+    var(--ui-grid-header-background)
+  );
+  border: 1px dashed
+    color-mix(in srgb, var(--ui-grid-accent) 45%, var(--ui-grid-border-color));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--ui-grid-accent) 18%, transparent);
+}
+
 .header-cell.is-pin-menu-open {
   z-index: var(--ui-grid-pin-menu-open-z-index);
 }

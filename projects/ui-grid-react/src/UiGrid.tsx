@@ -22,13 +22,28 @@ export interface UiGridProps {
 }
 
 export function UiGrid({
-  options,
+  options: rawOptions,
   onRegisterApi,
   cellRenderer,
   headerRenderer,
   expandableRenderer,
   className,
 }: UiGridProps) {
+  // Normalize options: when `enableExpandable` is true but the consumer
+  // didn't supply an `expandableRowTemplate`, inject a dummy one so
+  // `canGridExpandRows` returns true and the expand toggle renders. The
+  // React wrapper always has an `expandableRenderer` hook available, so the
+  // template's `createEmbeddedView` implementation can stay a no-op — the
+  // actual expandable row content is rendered by the React tree below.
+  const options = React.useMemo<GridOptions>(() => {
+    if (rawOptions.enableExpandable === true && !rawOptions.expandableRowTemplate) {
+      return {
+        ...rawOptions,
+        expandableRowTemplate: { createEmbeddedView: () => undefined },
+      };
+    }
+    return rawOptions;
+  }, [rawOptions]);
   const state = useGridState(options, onRegisterApi);
 
   const {

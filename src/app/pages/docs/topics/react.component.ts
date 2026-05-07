@@ -393,6 +393,8 @@ function createTreeRows(): GridRecord[] {
       border-radius: calc(var(--theme-radius) - 6px);
       padding: clamp(0.5rem, 1.2vw, 0.9rem);
       background: color-mix(in srgb, var(--panel-surface-strong) 86%, transparent);
+      width: 100%;
+      overflow-x: auto;
     }
 
     .react-primary-shell {
