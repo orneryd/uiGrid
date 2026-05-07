@@ -76,7 +76,13 @@ import {
   markGridRowError,
   isGridRowEditTimerEnabled,
   resolveGridRowEditWaitInterval,
+  resolveGridImporterOptions,
+  parseGridImporterJson,
+  parseGridImporterCsv,
+  buildGridImporterObjectsFromCsv,
+  buildGridImporterObjectsFromJson,
   type GridRowEditState,
+  type GridImporterOptions,
   type GridExporterExcelSheetData,
   type GridExporterMenuItem,
   type GridExporterOptions,
@@ -380,6 +386,10 @@ export class VanillaGridController {
       rowEditFlushDirtyRows: () => this.rowEditFlushDirtyRows(),
       rowEditSetRowsDirty: (rowEntities) => this.rowEditSetRowsDirty(rowEntities),
       rowEditSetRowsClean: (rowEntities) => this.rowEditSetRowsClean(rowEntities),
+      // Importer bindings — port of ui.grid.importer public API.
+      importerImportAFile: () => this.importerRequestFile(),
+      importerImportThisFile: (file) => this.importerImportThisFile(file),
+      importerImportText: (text, type) => this.importerImportText(text, type),
     });
 
     // Subscribe row-edit to the edit events so a committed change flips the
@@ -1928,6 +1938,104 @@ export class VanillaGridController {
       URL.revokeObjectURL(url);
     });
     return sheetData;
+  }
+
+  // ---- Importer — ports ui.grid.importer ---------------------------------
+
+  /** Set by the element so `importAFile()` can trigger its file-picker flow.
+   * Controller stays DOM-free: it just invokes whatever handler was wired. */
+  private importerFilePickerRequest: (() => void) | null = null;
+  setImporterFilePickerHandler(handler: (() => void) | null): void {
+    this.importerFilePickerRequest = handler;
+  }
+
+  private resolveImporterOptions(): GridImporterOptions {
+    return resolveGridImporterOptions(this.options);
+  }
+
+  private importerRequestFile(): void {
+    this.importerFilePickerRequest?.();
+  }
+
+  private importerDispatchObjects(objects: readonly GridRecord[]): void {
+    if (objects.length === 0) return;
+    const opts = this.resolveImporterOptions();
+    if (opts.dataAddCallback) {
+      opts.dataAddCallback(objects);
+    } else {
+      // No callback configured — append to the in-memory data array so the
+      // grid reflects the imported rows immediately. Matches the
+      // "importerDataAddCallback is required" hint from the old module
+      // but without breaking the common case of a simple local data source.
+      this.options = { ...this.options, data: [...this.options.data, ...objects] };
+      this.refresh();
+    }
+    // If rowEdit is active, flip every freshly-added row dirty so the
+    // consumer's saveRow hook sees them. Mirrors
+    // `service.addObjects → rowEdit.setRowsDirty`.
+    if (this.rowEditState.dirtyRowIds.size >= 0 && this.options.rowEditWaitInterval !== undefined) {
+      // rowEdit is configured — queue the dirty marking on the next
+      // refresh so the new rows are in the pipeline before we flip them.
+      queueMicrotask(() => this.rowEditSetRowsDirty(objects));
+    }
+  }
+
+  private importerImportText(text: string, type?: 'json' | 'csv'): void {
+    const opts = this.resolveImporterOptions();
+    // Type inference: explicit `type` wins. Otherwise try JSON first; if
+    // JSON.parse returns null (meaning invalidJson already reported) AND
+    // the caller didn't force JSON, fall through to CSV. The old module
+    // decided purely based on MIME type; `importText` is a newer entry
+    // point we provide for drag/drop flows.
+    const asJson = type === 'csv' ? null : parseGridImporterJson(text, { errorCallback: type === 'json' ? opts.errorCallback : undefined });
+    if (asJson && asJson.length > 0) {
+      const objects = buildGridImporterObjectsFromJson(asJson, opts);
+      this.importerDispatchObjects(objects);
+      return;
+    }
+    if (type === 'json') return;
+
+    const csv = parseGridImporterCsv(text);
+    if (!csv) {
+      opts.errorCallback?.(
+        'importer.invalidCsv',
+        'File could not be processed, is it valid csv? Content was: ',
+        text,
+      );
+      return;
+    }
+    const objects = buildGridImporterObjectsFromCsv(csv, this.options.columnDefs, opts);
+    if (!objects || objects.length === 0) {
+      opts.errorCallback?.(
+        'importer.noObjects',
+        'Objects were not able to be derived, content was: ',
+        text,
+      );
+      return;
+    }
+    this.importerDispatchObjects(objects);
+  }
+
+  private importerImportThisFile(file: File): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof FileReader === 'undefined') {
+        resolve();
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = typeof reader.result === 'string' ? reader.result : '';
+        // MIME sniff: old module switched on file.type, with `application/json`
+        // as JSON and everything else as CSV. Preserve that default while
+        // still letting the auto-detect path in `importerImportText` recover
+        // when a consumer stores JSON with the wrong MIME.
+        const type: 'json' | 'csv' = file.type === 'application/json' ? 'json' : 'csv';
+        this.importerImportText(text, type);
+        resolve();
+      };
+      reader.onerror = () => resolve();
+      reader.readAsText(file);
+    });
   }
 
   private buildExporterMenuItems(): GridExporterMenuItem[] {

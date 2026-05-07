@@ -1115,10 +1115,41 @@ export class UiGridStandaloneElement extends HTMLElement {
         });
       },
     );
+    // Importer file-picker: the element mounts a hidden <input type="file">
+    // the first time the controller asks for one, then keeps it around so
+    // subsequent imports reuse it. The controller stays DOM-free.
+    this.controller.setImporterFilePickerHandler(() => {
+      this.openImporterFilePicker();
+    });
     this.unsubscribe = this.controller.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.render();
     });
+  }
+
+  /** Hidden file input used by `gridApi.importer.importAFile()`. Lazily
+   * created on first use and reused thereafter. */
+  private importerFileInput: HTMLInputElement | null = null;
+
+  private openImporterFilePicker(): void {
+    if (!this.controller) return;
+    if (!this.importerFileInput) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,.json,text/csv,application/json,text/plain';
+      input.style.display = 'none';
+      input.addEventListener('change', () => {
+        const file = input.files?.[0];
+        if (file && this.controller) {
+          void this.controller.gridApi.importer.importThisFile(file);
+        }
+        // Clear so the same file can be re-imported.
+        input.value = '';
+      });
+      this.appendChild(input);
+      this.importerFileInput = input;
+    }
+    this.importerFileInput.click();
   }
 
   private observeTemplateSlots(): void {

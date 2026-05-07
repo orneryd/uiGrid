@@ -26,7 +26,7 @@ framework-neutral core + vanilla / Angular / React wrappers.
 | infinite-scroll | ✅ ported | Scroll-driven `needLoadMoreData` / `needLoadMoreDataTop` events wired through the element's scroll handler; full public API (`dataLoaded`, `resetScroll`, `saveScrollPercentage`, `dataRemovedTop`, `dataRemovedBottom`, `setScrollDirections`) and all four options (`enableInfiniteScroll`, `infiniteScrollRowsFromEnd`, `infiniteScrollUp`, `infiniteScrollDown`). 5 core + 8 integration tests. |
 | i18n | ⚠️ partial | English labels live in a `GridLabels` default. Pending: language packs (es/fr/de/ja/zh/...), `setCurrentLang` API, `i18nService.add/get/getSupportedLanguages`, fallback chain. |
 | row-edit | ✅ ported | `gridApi.rowEdit.{saveRow event, setSavePromise, getDirtyRows, getErrorRows, flushDirtyRows, setRowsDirty, setRowsClean}`. Row flags `isDirty`/`isSaving`/`isError` surface as `.ui-grid-row-dirty`/`.ui-grid-row-saving`/`.ui-grid-row-error` on every cell. `rowEditWaitInterval` option (-1 disables timer, defaults to 2000 ms). Auto-marks dirty on `afterCellEdit`; resolves clean when consumer's save promise resolves, moves to error on rejection (row stays dirty so retry works). 9 core + 7 integration tests. |
-| importer | ❌ not ported | ui-grid-importer-menu, file picker, `importerProcessHeaders`, `importerDataAddCallback`, `importerNewObject`, `importerErrorCallback`, CSV/JSON import. |
+| importer | ✅ ported | `gridApi.importer.{importAFile, importThisFile, importText}`. Full option matrix: `enableImporter`, `importerShowMenu`, `importerProcessHeaders`, `importerHeaderFilter`, `importerErrorCallback`, `importerDataAddCallback`, `importerNewObject`, `importerObjectCallback`. Core helpers: `parseGridImporterJson`, `parseGridImporterCsv` (full CSV parser with quotes + CRLF), `buildGridImporterObjectsFromCsv/Json`, `flattenGridColumnDefsForImport`, `defaultGridImporterProcessHeaders`. Element owns a lazily-mounted hidden `<input type="file">` for `importAFile()`; controller runs the FileReader + type-sniff (`application/json` → JSON, else auto-detect). Integrates with rowEdit: newly-imported rows are flipped dirty via `setRowsDirty`. Error i18n tokens (`importer.invalidJson`/`jsonNotarray`/`invalidCsv`/`noObjects`/`noHeaders`) live in the locale JSON. 15 core + 5 integration tests. |
 | validate | ❌ not ported | Column `validators` (required/minLength/maxLength/regex/custom), invalid-cell class + error badge, `gridApi.validate.getInvalidRows`, integration with `afterCellEdit`. |
 
 ## Active plan
@@ -35,13 +35,29 @@ Working through the remaining rows in order. Completed items below in
 reverse chronological order; pending items at the top track directly with
 the task list.
 
-1. **importer** (next) — file picker + CSV/JSON parse + menu item.
-2. validate — column validators + invalid-cell visuals.
-3. i18n — language packs + `setCurrentLang`.
-4. row-edit menu — add retry + flush actions.
+1. **validate** (next) — column validators + invalid-cell visuals.
+2. i18n — language packs + `setCurrentLang`.
+3. row-edit menu — add retry + flush actions.
+4. importer menu — hook the gridMenu "Import" entry.
 
 ## Completed this session
 
+- **importer** (2026-05-07) — ported `ui.grid.importer` end-to-end. New
+  pure core module `grid.core.importer.ts` owns JSON + CSV parsing
+  (full CSV parser with quoted values, escaped quotes, CRLF support),
+  header → column mapping (`flattenGridColumnDefsForImport`,
+  `defaultGridImporterProcessHeaders`), object construction
+  (`createGridImporterNewObject` honors `importerNewObject` prototype),
+  and the `importerObjectCallback` hook. Controller routes the parsed
+  entities through `importerDataAddCallback` or appends to in-memory
+  `options.data` when no callback is configured; rowEdit-enabled grids
+  auto-flip newly-imported rows dirty (parity with
+  `service.addObjects → rowEdit.setRowsDirty`). Element mounts a hidden
+  `<input type="file">` on-demand for `gridApi.importer.importAFile()`,
+  and handles the FileReader for `importThisFile(file)` (MIME-based type
+  sniff). Error i18n tokens (`importer.invalidJson/jsonNotarray/
+  invalidCsv/noObjects/noHeaders`) are centralized in `en-US.json`.
+  15 core + 5 integration tests.
 - **row-edit** (2026-05-07) — ported `ui.grid.rowEdit` in full: new core
   `grid.core.row-edit.ts` owns the pure state (dirty / error / saving sets
   + save-promise map). Controller subscribes to edit events so committing a

@@ -12,6 +12,7 @@ import * as tsDisplay from './grid.core.display';
 import * as tsEdit from './grid.core.edit';
 import * as tsExport from './grid.core.export';
 import * as tsExporterMenu from './grid.core.exporter-menu';
+import * as tsImporter from './grid.core.importer';
 import * as tsFiltering from './grid.core.filtering';
 import * as tsGrouping from './grid.core.grouping';
 import * as tsIdentity from './grid.core.identity';
@@ -623,6 +624,23 @@ export type {
   GridExporterMenuLabels,
   GridExporterMenuActions,
 } from './grid.core.exporter-menu';
+// Importer — pure state-free helpers. The vanilla element owns the DOM
+// (file picker) and FileReader, then hands the raw text to these parsers.
+export const resolveGridImporterOptions = tsImporter.resolveGridImporterOptions;
+export const flattenGridColumnDefsForImport = tsImporter.flattenGridColumnDefsForImport;
+export const defaultGridImporterProcessHeaders = tsImporter.defaultGridImporterProcessHeaders;
+export const createGridImporterNewObject = tsImporter.createGridImporterNewObject;
+export const applyGridImporterObjectCallback = tsImporter.applyGridImporterObjectCallback;
+export const parseGridImporterJson = tsImporter.parseGridImporterJson;
+export const parseGridImporterCsv = tsImporter.parseGridImporterCsv;
+export const buildGridImporterObjectsFromCsv = tsImporter.buildGridImporterObjectsFromCsv;
+export const buildGridImporterObjectsFromJson = tsImporter.buildGridImporterObjectsFromJson;
+export type {
+  GridImporterOptions,
+  GridImporterHeaderMapping,
+  GridImporterErrorKey,
+} from './grid.core.importer';
+
 // Row-edit pure helpers. All of these are DOM-free — the vanilla controller
 // wires them to edit events + a timer for auto-save.
 export const createGridRowEditState = tsRowEdit.createGridRowEditState;

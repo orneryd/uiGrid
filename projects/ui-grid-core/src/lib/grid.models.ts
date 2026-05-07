@@ -395,6 +395,26 @@ export interface GridOptions {
    * keyDownOverrides array — each entry specifies the key + modifier
    * combination that should be overridden. */
   keyDownOverrides?: readonly GridKeyEventOverride[];
+  /** Importer — ports the `importer*` option bundle from
+   * `ui.grid.importer`. See `GridImporterOptions` in grid.core.importer.ts
+   * for the detailed shape. */
+  enableImporter?: boolean;
+  importerShowMenu?: boolean;
+  importerProcessHeaders?: (headerRow: readonly string[]) => ReadonlyArray<string | null>;
+  importerHeaderFilter?: (displayName: string) => string;
+  importerErrorCallback?: (
+    errorKey:
+      | 'importer.invalidJson'
+      | 'importer.jsonNotarray'
+      | 'importer.invalidCsv'
+      | 'importer.noObjects'
+      | 'importer.noHeaders',
+    consoleMessage: string,
+    context: unknown,
+  ) => void;
+  importerDataAddCallback?: (newObjects: readonly GridRecord[]) => void;
+  importerNewObject?: new () => GridRecord;
+  importerObjectCallback?: (newObject: GridRecord) => GridRecord;
   /** Row-edit — ports `ui.grid.rowEdit.GridOptions`. `rowEditWaitInterval`
    * controls how long the grid waits for additional edits on the same row
    * before firing the save event. -1 disables the timer so consumers must

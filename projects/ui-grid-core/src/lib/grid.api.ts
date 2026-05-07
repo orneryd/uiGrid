@@ -117,6 +117,11 @@ export interface GridApiBindings {
   getCurrentSelection?: () => GridRowColumn[];
   rowColSelectIndex?: (rowCol: GridRowColumn) => number;
 
+  // importer bindings — ports ui.grid.importer public API.
+  importerImportAFile?: () => void;
+  importerImportThisFile?: (file: File) => Promise<void>;
+  importerImportText?: (text: string, type?: 'json' | 'csv') => void;
+
   // rowEdit bindings — ports ui.grid.rowEdit public API. The consumer
   // resolves save promises via `setSavePromise()` and flushes dirty rows
   // either by timer (automatic) or explicitly via `flushDirtyRows()`.
@@ -350,6 +355,19 @@ export interface UiGridApi {
     getCurrentSelection: () => GridRowColumn[];
     rowColSelectIndex: (rowCol: GridRowColumn) => number;
   };
+  importer: {
+    /** Trigger the consumer's file-picker flow — the vanilla element
+     * mounts a hidden `<input type="file">` and dispatches a click when
+     * invoked. Parity with `gridApi.importer.importAFile()` from the old
+     * module. */
+    importAFile: () => void;
+    /** Parse + add an already-acquired File object. Parity with
+     * `gridApi.importer.importThisFile(fileObject)`. */
+    importThisFile: (file: File) => Promise<void>;
+    /** Parse + add an already-loaded text payload. `type` forces one
+     * parser over auto-detection (JSON tried first, CSV fallback). */
+    importText: (text: string, type?: 'json' | 'csv') => void;
+  };
   rowEdit: {
     on: {
       /** Fired when the configured wait interval elapses (or
@@ -466,6 +484,13 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const setModifierKeysToMultiSelectBinding = bindings.setModifierKeysToMultiSelect ?? noop;
   const getSelectAllStateBinding = bindings.getSelectAllState ?? (() => false);
   const shiftSelectRowBinding = bindings.shiftSelectRow ?? noop;
+
+  // Importer bindings — no-op defaults so consumers that skip `enableImporter`
+  // can still read api.importer.* without throwing.
+  const importerImportAFileBinding = bindings.importerImportAFile ?? noop;
+  const importerImportThisFileBinding =
+    bindings.importerImportThisFile ?? ((): Promise<void> => Promise.resolve());
+  const importerImportTextBinding = bindings.importerImportText ?? noop;
 
   // rowEdit bindings — default implementations are no-ops / empty-array so
   // a consumer that doesn't wire rowEdit never throws on api.rowEdit.xxx().
@@ -693,6 +718,11 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       getFocusedCell: getFocusedCellBinding,
       getCurrentSelection: getCurrentSelectionBinding,
       rowColSelectIndex: rowColSelectIndexBinding
+    },
+    importer: {
+      importAFile: importerImportAFileBinding,
+      importThisFile: importerImportThisFileBinding,
+      importText: importerImportTextBinding
     },
     rowEdit: {
       on: {
