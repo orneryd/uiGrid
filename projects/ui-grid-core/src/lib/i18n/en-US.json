@@ -43,5 +43,11 @@
   "importerJsonNotArray": "Import failed, file is not an array",
   "importerInvalidCsv": "File could not be processed as CSV",
   "importerNoObjects": "Objects could not be derived from the imported file",
-  "importerNoHeaders": "Column names could not be derived"
+  "importerNoHeaders": "Column names could not be derived",
+  "validateError": "Error:",
+  "validateRequired": "Field required",
+  "validateMinLength": "Value must be longer than or equal to THRESHOLD characters",
+  "validateMaxLength": "Value must be shorter than or equal to THRESHOLD characters",
+  "rowEditFlushAll": "Save changes",
+  "rowEditRetryErrors": "Retry errored rows"
 }

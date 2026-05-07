@@ -24,10 +24,10 @@ framework-neutral core + vanilla / Angular / React wrappers.
 | saveState | ✅ ported | `gridApi.saveState.save()` / `.restore()` covers sort, filters, grouping + collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position. Per-field opt-in flags: saveWidths, saveOrder, saveScroll, saveFocus, saveVisible, saveSort, saveFilter, saveSelection, saveGrouping, saveGroupingExpandedStates, savePinning, saveTreeView, savePagination. 9 integration tests. |
 | exporter | ✅ ported | `gridApi.exporter.{csvExport, buildCsv, pdfExport, buildPdfDocDefinition, excelExport, buildExcelSheetData, getMenuItems, getOptions, setOptions}`. CSV matrix: `exporterCsvColumnSeparator`, `exporterCsvFilename` (string or fn), `exporterHeaderFilterUseName`, `exporterHeaderFilter`, `exporterHeaderTemplate`, `exporterShowHeader`, `exporterFieldCallback`, `exporterFieldFormatCallback`, `exporterFieldApplyFilters`, `exporterSuppressColumns`, `exporterOlderExcelCompatibility` (BOM), `exporterAllDataFn`, `exporterCsvLinkElement`. PDF matrix: `exporterPdfFilename/Orientation/PageSize/MaxGridWidth/DefaultStyle/TableStyle/TableHeaderStyle/Layout/Header/Footer/CustomFormatter`. pdfMake auto-detected via `window.pdfMake`. Excel matrix: `exporterExcelFilename/SheetName/Header/CustomFormatters/ColumnScaleFactor`; `buildGridExcelSheetData()` emits ExcelBuilder-compatible `{value, metadata}` cells with native numeric / boolean types preserved; `window.ExcelBuilder` triggers xlsx download when available. Column-level `exporterSuppressExport` + `exporterPdfAlign`, row-level `exporterEnableExporting`, auto-suppression of `selectionRowHeaderCol`/`treeBaseRowHeaderCol`. Menu split into `grid.core.exporter-menu.ts` — `buildGridExporterMenuItems()` gated by `exporterMenuCsv/Pdf/Excel/AllData/VisibleData/SelectedData` flags + i18n labels centralized in `i18n/en-US.json` (`exporterAllAsCsv`/`…AsPdf`/`…AsExcel`). `GRID_EXPORTER_CONSTANTS` mirrors `uiGridExporterConstants`. 37 core + 9 integration tests. |
 | infinite-scroll | ✅ ported | Scroll-driven `needLoadMoreData` / `needLoadMoreDataTop` events wired through the element's scroll handler; full public API (`dataLoaded`, `resetScroll`, `saveScrollPercentage`, `dataRemovedTop`, `dataRemovedBottom`, `setScrollDirections`) and all four options (`enableInfiniteScroll`, `infiniteScrollRowsFromEnd`, `infiniteScrollUp`, `infiniteScrollDown`). 5 core + 8 integration tests. |
-| i18n | ⚠️ partial | English labels live in a `GridLabels` default. Pending: language packs (es/fr/de/ja/zh/...), `setCurrentLang` API, `i18nService.add/get/getSupportedLanguages`, fallback chain. |
+| i18n | ✅ ported | `gridApi.i18n.{get, add, setCurrentLang, getCurrentLang, getSupportedLanguages, on.languageChanged}`. Core `GridI18nService` singleton (`gridI18n`) ships English + Spanish + French + German + Japanese + Simplified Chinese bundles out of the box; consumers register more via `gridApi.i18n.add(lang, labels)`. Full fallback chain in `resolveGridLabels`: `options.labels` override → current locale → en-US default (so any unset key gracefully falls back). Language swaps fire `languageChanged`, which the controller subscribes to — rebuilding built-in validator messages + re-rendering so every cell/tooltip picks up the new strings. Locale files in `i18n/en-US.json` / `es.json` / `fr.json` / `de.json` / `ja.json` / `zh-CN.json`. 10 core tests. |
 | row-edit | ✅ ported | `gridApi.rowEdit.{saveRow event, setSavePromise, getDirtyRows, getErrorRows, flushDirtyRows, setRowsDirty, setRowsClean}`. Row flags `isDirty`/`isSaving`/`isError` surface as `.ui-grid-row-dirty`/`.ui-grid-row-saving`/`.ui-grid-row-error` on every cell. `rowEditWaitInterval` option (-1 disables timer, defaults to 2000 ms). Auto-marks dirty on `afterCellEdit`; resolves clean when consumer's save promise resolves, moves to error on rejection (row stays dirty so retry works). 9 core + 7 integration tests. |
 | importer | ✅ ported | `gridApi.importer.{importAFile, importThisFile, importText}`. Full option matrix: `enableImporter`, `importerShowMenu`, `importerProcessHeaders`, `importerHeaderFilter`, `importerErrorCallback`, `importerDataAddCallback`, `importerNewObject`, `importerObjectCallback`. Core helpers: `parseGridImporterJson`, `parseGridImporterCsv` (full CSV parser with quotes + CRLF), `buildGridImporterObjectsFromCsv/Json`, `flattenGridColumnDefsForImport`, `defaultGridImporterProcessHeaders`. Element owns a lazily-mounted hidden `<input type="file">` for `importAFile()`; controller runs the FileReader + type-sniff (`application/json` → JSON, else auto-detect). Integrates with rowEdit: newly-imported rows are flipped dirty via `setRowsDirty`. Error i18n tokens (`importer.invalidJson`/`jsonNotarray`/`invalidCsv`/`noObjects`/`noHeaders`) live in the locale JSON. 15 core + 5 integration tests. |
-| validate | ❌ not ported | Column `validators` (required/minLength/maxLength/regex/custom), invalid-cell class + error badge, `gridApi.validate.getInvalidRows`, integration with `afterCellEdit`. |
+| validate | ✅ ported | `gridApi.validate.{isInvalid, getErrorMessages, getFormattedErrors, getTitleFormattedErrors, runValidators, setValidator, getInvalidRows, on.validationFailed}`. Core `GridValidatorRegistry` preloaded with built-in `required` / `minLength` / `maxLength`; `colDef.validators: { name: argument }` declaration matches the old module. Validation flags stored on the row entity as `$$invalid<col>` / `$$errors<col>` (same keys the old module used, so legacy cellTemplates keep working). Invalid cells render `.ui-grid-cell-invalid` + red corner marker + `title` attribute with the joined error messages. `afterCellEdit` auto-runs the column's validators; async validators are awaited and re-emit the snapshot on settle. 14 core + 5 integration tests. |
 
 ## Active plan
 
@@ -35,13 +35,41 @@ Working through the remaining rows in order. Completed items below in
 reverse chronological order; pending items at the top track directly with
 the task list.
 
-1. **validate** (next) — column validators + invalid-cell visuals.
-2. i18n — language packs + `setCurrentLang`.
-3. row-edit menu — add retry + flush actions.
-4. importer menu — hook the gridMenu "Import" entry.
+1. **row-edit menu** (next) — add retry + flush actions.
+2. importer menu — hook the gridMenu "Import" entry.
+3. Additional locale packs beyond the six shipped (ar, bg, cs, da, fa, fi, he, hy, it, nl, no, pl, pt, pt-br, ro, ru, sk, sv, tr, uk).
 
 ## Completed this session
 
+- **i18n** (2026-05-07) — ported `ui.grid.i18n` onto the modern label
+  shape. New core module `grid.core.i18n.ts` hosts `GridI18nService`
+  (`setCurrentLang` / `getCurrentLang` / `add` / `get` /
+  `getSupportedLanguages` / `onLanguageChanged`) plus a module-level
+  singleton `gridI18n` so consumers can register locales without
+  threading the service through every mount. Six bundled locales
+  (English, Spanish, French, German, Japanese, Simplified Chinese) live
+  in `i18n/*.json`. `resolveGridLabels` now consults the i18n service,
+  so the fallback chain is `options.labels` → current locale → en-US
+  default. Language swaps fire `languageChanged`; the vanilla controller
+  subscribes so built-in validator messages get re-rendered (they read
+  from the labels) and the whole grid repaints. New `gridApi.i18n`
+  namespace exposes the full surface. 10 core tests.
+- **validate** (2026-05-07) — ported `ui.grid.validate` end-to-end. New
+  pure core module `grid.core.validate.ts` owns the validator registry
+  (`GridValidatorRegistry` with `setValidator` / `getValidator` /
+  `getMessage`), built-in validators (`required`, `minLength`,
+  `maxLength`), cell-level marker helpers (`setGridCellInvalid` /
+  `setGridCellValid` / `setGridCellError` / `clearGridCellError`), and
+  `runGridCellValidators` which awaits sync + async validators and raises
+  per-failure callbacks. Validation flags live on the row entity under
+  `$$invalid<col>` / `$$errors<col>` (identical to the old module so
+  cellTemplates keep working). Invalid cells paint `.ui-grid-cell-invalid`
+  (red corner triangle + themed background + `title` attr with joined
+  validator messages). Controller auto-runs validators on
+  `afterCellEdit` and re-emits the snapshot once async validators settle.
+  Built-in error messages centralized in the locale JSON
+  (`validateRequired`, `validateMinLength`, `validateMaxLength`,
+  `validateError`). 14 core + 5 integration tests.
 - **importer** (2026-05-07) — ported `ui.grid.importer` end-to-end. New
   pure core module `grid.core.importer.ts` owns JSON + CSV parsing
   (full CSV parser with quoted values, escaped quotes, CRLF support),

@@ -93,6 +93,7 @@ function bodyCellClass(
   isRowDirty: boolean,
   isRowSaving: boolean,
   isRowError: boolean,
+  isCellInvalid: boolean,
 ): string {
   let cls = 'body-cell ui-grid-cell';
   if (isOdd) cls += ' body-cell-odd';
@@ -112,6 +113,9 @@ function bodyCellClass(
   if (isRowDirty) cls += ' ui-grid-row-dirty';
   if (isRowSaving) cls += ' ui-grid-row-saving';
   if (isRowError) cls += ' ui-grid-row-error';
+  // Validate — paints the invalid-cell badge + background when a validator
+  // has flagged this cell. Ports the `.invalid` class from ui.grid.validate.
+  if (isCellInvalid) cls += ' ui-grid-cell-invalid';
   return cls;
 }
 
@@ -1181,8 +1185,7 @@ export class UiGridStandaloneElement extends HTMLElement {
       ...options,
     } as VanillaGridOptions;
 
-    const hasExpandableSlot = this.getTemplateMarkup('expandable-row') !== null;
-    if (merged.enableExpandable && hasExpandableSlot && !merged.expandableRowTemplate) {
+    if (merged.enableExpandable && !merged.expandableRowTemplate) {
       merged.expandableRowTemplate = {
         createEmbeddedView: () => undefined,
       };
@@ -2773,6 +2776,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     // Visual state is written directly (className / style) since the
     // <ui-grid-body-cell> custom element no longer translates data-* into
     // visual state. data-* attrs still drive event delegation and CSS hooks.
+    const isCellInvalid = this.controller?.gridApi.validate.isInvalid(row.entity, column) ?? false;
     setClass(
       cell,
       bodyCellClass(
@@ -2788,6 +2792,7 @@ export class UiGridStandaloneElement extends HTMLElement {
         row.isDirty,
         row.isSaving,
         row.isError,
+        isCellInvalid,
       ),
     );
     setStyle(cell, stickyStyle);
@@ -3394,6 +3399,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     const align = column.align ?? '';
     const isRowSelected = this.snapshot?.selectedRowIds.has(rowId) ?? false;
     const isRowFocused = this.snapshot?.focusedRowId === rowId;
+    const isCellInvalid = controller.gridApi.validate.isInvalid(row.entity, column);
     const className = bodyCellClass(
       displayIndex % 2 !== 0,
       align,
@@ -3407,10 +3413,16 @@ export class UiGridStandaloneElement extends HTMLElement {
       row.isDirty,
       row.isSaving,
       row.isError,
+      isCellInvalid,
     );
     // className/style/tabindex are pre-computed here so the <ui-grid-body-cell>
     // upgrade is a no-op at parse time. `data-*` stay for event delegation.
-    return `<ui-grid-body-cell class="${className}" tabindex="0"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''} data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(align)}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></ui-grid-body-cell>`;
+    // When invalid, surface the joined validator messages as a title attr —
+    // matches the old `getTitleFormattedErrors` contract.
+    const titleAttr = isCellInvalid
+      ? ` title="${escapeHtml(controller.gridApi.validate.getTitleFormattedErrors(row.entity, column))}"`
+      : '';
+    return `<ui-grid-body-cell class="${className}" tabindex="0"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''}${titleAttr} data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(align)}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></ui-grid-body-cell>`;
   }
 
   private renderPagination(snapshot: GridControllerSnapshot): string {

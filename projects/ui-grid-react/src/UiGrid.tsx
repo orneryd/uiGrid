@@ -57,6 +57,9 @@ export function UiGrid({
 
   const headerGridRef = React.useRef<HTMLDivElement | null>(null);
   const filterGridRef = React.useRef<HTMLDivElement | null>(null);
+  const headerStripRef = React.useRef<HTMLDivElement | null>(null);
+  const filterStripRef = React.useRef<HTMLDivElement | null>(null);
+  const bodyViewportRef = React.useRef<HTMLDivElement | null>(null);
   const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
   const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
   const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
@@ -262,12 +265,33 @@ export function UiGrid({
     ? displayItems.slice(virtualScroll.visibleRange.start, virtualScroll.visibleRange.end)
     : displayItems;
 
-  const onGridTableScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const bodyScrollTop = Math.max(0, event.currentTarget.scrollTop - stickyChromeHeight);
+  const syncHeaderHorizontalScroll = React.useCallback((scrollLeft: number) => {
+    const headerStrip = headerStripRef.current;
+    const filterStrip = filterStripRef.current;
+    if (headerStrip && headerStrip.scrollLeft !== scrollLeft) {
+      headerStrip.scrollLeft = scrollLeft;
+    }
+    if (filterStrip && filterStrip.scrollLeft !== scrollLeft) {
+      filterStrip.scrollLeft = scrollLeft;
+    }
+  }, []);
+
+  const onBodyViewportScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const bodyScrollTop = Math.max(0, target.scrollTop);
     virtualScroll.setScrollTop(bodyScrollTop);
+    syncHeaderHorizontalScroll(target.scrollLeft);
     const startIndex = Math.floor(bodyScrollTop / rowSize);
     state.onViewportScroll(startIndex);
   };
+
+  const onStripWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const viewport = bodyViewportRef.current;
+    if (!viewport) return;
+    event.preventDefault();
+    viewport.scrollLeft += event.deltaX;
+    viewport.scrollTop += event.deltaY;
+  }, []);
 
   function renderDisplayItem(item: DisplayItem) {
     if (groupingFeature && state.isGroupItem(item)) {
@@ -458,10 +482,10 @@ export function UiGrid({
           className="grid-table ui-grid-contents-wrapper"
           data-part="grid-table"
           style={
-            virtualizationEnabled ? { height: scrollContainerHeight, overflowY: 'auto' } : undefined
+            virtualizationEnabled ? { height: scrollContainerHeight } : undefined
           }
-          onScroll={virtualizationEnabled ? onGridTableScroll : undefined}
         >
+          <div className="grid-header-strip" ref={headerStripRef} onWheel={onStripWheel}>
           <div
             className="header-grid ui-grid-header ui-grid-header-canvas"
             data-part="header"
@@ -616,8 +640,10 @@ export function UiGrid({
               );
             })}
           </div>
+          </div>
 
           {filteringFeature && state.isFilteringEnabled() && (
+            <div className="grid-filter-strip" ref={filterStripRef} onWheel={onStripWheel}>
             <div
               className="filter-grid ui-grid-header"
               data-part="filters"
@@ -657,8 +683,15 @@ export function UiGrid({
                 );
               })}
             </div>
+            </div>
           )}
 
+          <div
+            className="grid-body-viewport"
+            ref={bodyViewportRef}
+            style={virtualizationEnabled ? { overflowY: 'auto' } : undefined}
+            onScroll={onBodyViewportScroll}
+          >
           {displayItems.length > 0 ? (
             virtualizationEnabled ? (
               <div className="grid-virtual-spacer" style={{ height: `${virtualScroll.totalHeight}px` }}>
@@ -687,6 +720,7 @@ export function UiGrid({
               <p>{labels.emptyDescription}</p>
             </div>
           )}
+          </div>
         </div>
 
         {paginationFeature && state.showPaginationControls() && (

@@ -13,6 +13,10 @@ import * as tsEdit from './grid.core.edit';
 import * as tsExport from './grid.core.export';
 import * as tsExporterMenu from './grid.core.exporter-menu';
 import * as tsImporter from './grid.core.importer';
+import * as tsImporterMenu from './grid.core.importer-menu';
+import * as tsRowEditMenu from './grid.core.row-edit-menu';
+import * as tsValidate from './grid.core.validate';
+import * as tsI18n from './grid.core.i18n';
 import * as tsFiltering from './grid.core.filtering';
 import * as tsGrouping from './grid.core.grouping';
 import * as tsIdentity from './grid.core.identity';
@@ -640,6 +644,51 @@ export type {
   GridImporterHeaderMapping,
   GridImporterErrorKey,
 } from './grid.core.importer';
+
+// Importer + row-edit menu builders. Separate files from the feature
+// modules because menu shape + gating is distinct from the feature logic.
+export const buildGridImporterMenuItems = tsImporterMenu.buildGridImporterMenuItems;
+export const buildGridRowEditMenuItems = tsRowEditMenu.buildGridRowEditMenuItems;
+export type {
+  GridImporterMenuActions,
+  GridImporterMenuLabels,
+} from './grid.core.importer-menu';
+export type {
+  GridRowEditMenuActions,
+  GridRowEditMenuLabels,
+} from './grid.core.row-edit-menu';
+export type { GridMenuItem } from './grid.core.menu';
+
+// i18n service — singleton + class export. Ports `ui.grid.i18n.i18nService`.
+export const GridI18nService = tsI18n.GridI18nService;
+export const gridI18n = tsI18n.gridI18n;
+export const resolveLabelsFromI18n = tsI18n.resolveLabelsFromI18n;
+export type { GridLocaleCode, GridI18nLanguageListener } from './grid.core.i18n';
+
+// Validate — pure cell-validation helpers. Ports `ui.grid.validate`.
+export const GridValidatorRegistry = tsValidate.GridValidatorRegistry;
+// Type alias so consumers can write `GridValidatorRegistry` in a type
+// position (parameter / return / class-field annotation). The `const`
+// export above covers value-position usage (`new GridValidatorRegistry()`).
+export type GridValidatorRegistry = InstanceType<typeof tsValidate.GridValidatorRegistry>;
+export const createGridValidatorRegistry = tsValidate.createGridValidatorRegistry;
+export const isGridCellInvalid = tsValidate.isGridCellInvalid;
+export const setGridCellInvalid = tsValidate.setGridCellInvalid;
+export const setGridCellValid = tsValidate.setGridCellValid;
+export const setGridCellError = tsValidate.setGridCellError;
+export const clearGridCellError = tsValidate.clearGridCellError;
+export const getGridCellErrorNames = tsValidate.getGridCellErrorNames;
+export const getGridCellErrorMessages = tsValidate.getGridCellErrorMessages;
+export const runGridCellValidators = tsValidate.runGridCellValidators;
+export const validateAllGridRows = tsValidate.validateAllGridRows;
+export const invalidFieldFor = tsValidate.invalidFieldFor;
+export const errorsFieldFor = tsValidate.errorsFieldFor;
+export type {
+  GridValidatorFn,
+  GridValidatorFactory,
+  GridValidatorMessageFn,
+  GridValidatorRegistration,
+} from './grid.core.validate';
 
 // Row-edit pure helpers. All of these are DOM-free — the vanilla controller
 // wires them to edit events + a timer for auto-save.

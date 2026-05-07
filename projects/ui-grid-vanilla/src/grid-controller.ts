@@ -63,6 +63,9 @@ import {
   buildGridExcelSheetData,
   buildGridPdfDocDefinition,
   buildGridExporterMenuItems,
+  buildGridImporterMenuItems,
+  buildGridRowEditMenuItems,
+  type GridMenuItem,
   resolveGridExporterExcelOptions,
   resolveGridExporterOptions,
   resolveGridExporterPdfOptions,
@@ -81,6 +84,14 @@ import {
   parseGridImporterCsv,
   buildGridImporterObjectsFromCsv,
   buildGridImporterObjectsFromJson,
+  createGridValidatorRegistry,
+  runGridCellValidators,
+  validateAllGridRows,
+  isGridCellInvalid,
+  getGridCellErrorMessages,
+  GridValidatorRegistry,
+  type GridValidatorFactory,
+  type GridValidatorMessageFn,
   type GridRowEditState,
   type GridImporterOptions,
   type GridExporterExcelSheetData,
@@ -214,6 +225,7 @@ export class VanillaGridController {
   private editingCell: GridCellPosition | null = null;
   private editingValue = '';
   private exporterOverrides: GridExporterOptions = {};
+  private validatorRegistry: GridValidatorRegistry;
   private rowEditState: GridRowEditState = createGridRowEditState();
   private rowEditTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private rowEditSavePromiseOverrides = new Map<string, Promise<void>>();
@@ -244,6 +256,10 @@ export class VanillaGridController {
   constructor(options: GridOptions) {
     this.options = options;
     this.labels = resolveGridLabels(options.labels);
+    // Validator registry is built from the resolved labels so default
+    // validator messages ("Field required", etc.) come out localized
+    // without the consumer wiring anything up.
+    this.validatorRegistry = createGridValidatorRegistry(this.labels);
     this.columnOrder = options.columnDefs.map((column) => column.name);
     this.groupByColumns = options.grouping?.groupBy ? [...options.grouping.groupBy] : [];
     this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
@@ -384,21 +400,47 @@ export class VanillaGridController {
       rowEditGetDirtyRows: () => this.rowEditGetDirtyRows(),
       rowEditGetErrorRows: () => this.rowEditGetErrorRows(),
       rowEditFlushDirtyRows: () => this.rowEditFlushDirtyRows(),
+      rowEditRetryErroredRows: () => this.rowEditRetryErroredRows(),
       rowEditSetRowsDirty: (rowEntities) => this.rowEditSetRowsDirty(rowEntities),
       rowEditSetRowsClean: (rowEntities) => this.rowEditSetRowsClean(rowEntities),
+      rowEditGetMenuItems: () => this.buildRowEditMenuItems(),
       // Importer bindings — port of ui.grid.importer public API.
       importerImportAFile: () => this.importerRequestFile(),
       importerImportThisFile: (file) => this.importerImportThisFile(file),
       importerImportText: (text, type) => this.importerImportText(text, type),
+      importerGetMenuItems: () => this.buildImporterMenuItems(),
+      // Validate bindings — port of ui.grid.validate public API.
+      validateIsInvalid: (rowEntity, colDef) => isGridCellInvalid(rowEntity, colDef),
+      validateGetErrorMessages: (rowEntity, colDef) =>
+        getGridCellErrorMessages(rowEntity, colDef, this.validatorRegistry),
+      validateGetFormattedErrors: (rowEntity, colDef) =>
+        this.validateGetFormattedErrors(rowEntity, colDef),
+      validateGetTitleFormattedErrors: (rowEntity, colDef) =>
+        this.validateGetTitleFormattedErrors(rowEntity, colDef),
+      validateRunValidators: (rowEntity, colDef, newValue, oldValue) =>
+        this.validateRunValidators(rowEntity, colDef, newValue, oldValue),
+      validateSetValidator: (name, factory, messageFn) =>
+        this.validatorRegistry.setValidator(name, factory, messageFn),
+      validateGetInvalidRows: () => this.validateGetInvalidRows(),
     });
 
     // Subscribe row-edit to the edit events so a committed change flips the
     // row into dirty state + schedules a save, and cancelling restarts the
     // timer when the row was already dirty.
-    this.gridApi.edit.on.afterCellEdit((rowEntity, _col, newValue, previousValue) => {
+    this.gridApi.edit.on.afterCellEdit((rowEntity, col, newValue, previousValue) => {
       const rowId = this.resolveRowId(rowEntity);
       const gridRow = this.findRowById(rowId);
       if (!gridRow) return;
+      // Auto-run validators when a column declares them. Ports the old
+      // ui.grid.validate → edit integration where afterCellEdit kicked
+      // runValidators on the same cell. Async validators settle later;
+      // the re-emit makes sure the UI picks up the resulting invalid
+      // flag once they do.
+      if (col?.validators) {
+        void this.validateRunValidators(rowEntity, col, newValue, previousValue).then(() => {
+          this.emit();
+        });
+      }
       if (newValue === previousValue && !gridRow.isDirty) return;
       markGridRowDirty(this.rowEditState, gridRow);
       this.considerSetRowEditTimer(gridRow);
@@ -422,12 +464,49 @@ export class VanillaGridController {
       this.considerSetRowEditTimer(oldRowCol.row);
     });
 
+    // When the i18n service swaps the active language, re-resolve labels
+    // + re-register the default validators (their messages are locale-
+    // driven) + re-render so every cell/tooltip picks up the new strings.
+    this.disposeLanguageListener = this.gridApi.i18n.on.languageChanged(() => {
+      this.labels = resolveGridLabels(this.options.labels);
+      const rebuilt = createGridValidatorRegistry(this.labels);
+      for (const name of ['required', 'minLength', 'maxLength']) {
+        this.validatorRegistry.setValidator(
+          name,
+          (arg: unknown) => rebuilt.getValidator(name, arg),
+          (arg: unknown) => rebuilt.getMessage(name, arg),
+        );
+      }
+      this.refresh();
+    });
+
     this.refresh();
+  }
+
+  /** Disposer for the i18n language-change listener — cleared when the
+   * controller is torn down (matches the pattern used for other global
+   * subscriptions). */
+  private disposeLanguageListener: (() => void) | null = null;
+  dispose(): void {
+    this.disposeLanguageListener?.();
+    this.disposeLanguageListener = null;
+    this.subscribers.clear();
   }
 
   setOptions(options: GridOptions): void {
     this.options = options;
     this.labels = resolveGridLabels(options.labels);
+    // Re-register the built-in validators so their messages track the
+    // refreshed locale. Consumer-registered validators survive untouched
+    // because we write them onto the same registry instance.
+    const rebuiltDefaults = createGridValidatorRegistry(this.labels);
+    for (const name of ['required', 'minLength', 'maxLength']) {
+      this.validatorRegistry.setValidator(
+        name,
+        (arg: unknown) => rebuiltDefaults.getValidator(name, arg),
+        (arg: unknown) => rebuiltDefaults.getMessage(name, arg),
+      );
+    }
     if (this.columnOrder.length === 0) {
       this.columnOrder = options.columnDefs.map((column) => column.name);
     } else {
@@ -1940,6 +2019,57 @@ export class VanillaGridController {
     return sheetData;
   }
 
+  // ---- Validate — ports ui.grid.validate ----------------------------------
+
+  /** Runs the validators declared on `colDef.validators` against the new
+   * value and flips `$$invalid<col>` / `$$errors<col>` on the entity. On
+   * failure raises `validate.validationFailed`. Async validators are
+   * awaited so the caller can `await` for complete results. */
+  private async validateRunValidators(
+    rowEntity: GridRecord,
+    colDef: GridColumnDef,
+    newValue: unknown,
+    oldValue: unknown,
+  ): Promise<string[]> {
+    return runGridCellValidators(
+      rowEntity,
+      colDef,
+      newValue,
+      oldValue,
+      this.validatorRegistry,
+      (entity, def, newVal, oldVal) => {
+        this.gridApi.validate.raise.validationFailed(entity, def, newVal, oldVal);
+      },
+    );
+  }
+
+  private validateGetFormattedErrors(rowEntity: GridRecord, colDef: GridColumnDef): string {
+    const errors = getGridCellErrorMessages(rowEntity, colDef, this.validatorRegistry);
+    if (errors.length === 0) return '';
+    return `<p><b>${this.labels.validateError}</b></p>${errors.map((msg) => `${msg}<br/>`).join('')}`;
+  }
+
+  private validateGetTitleFormattedErrors(rowEntity: GridRecord, colDef: GridColumnDef): string {
+    const errors = getGridCellErrorMessages(rowEntity, colDef, this.validatorRegistry);
+    if (errors.length === 0) return '';
+    return [this.labels.validateError, ...errors].join('\n');
+  }
+
+  private async validateGetInvalidRows(): Promise<GridRecord[]> {
+    return validateAllGridRows(
+      this.options.data,
+      this.options.columnDefs,
+      this.validatorRegistry,
+    );
+  }
+
+  /** Test hook — exposes the validator registry so consumers can inspect or
+   * extend it outside of the gridApi surface (e.g. from a controller-level
+   * plugin). */
+  getValidatorRegistry(): GridValidatorRegistry {
+    return this.validatorRegistry;
+  }
+
   // ---- Importer — ports ui.grid.importer ---------------------------------
 
   /** Set by the element so `importAFile()` can trigger its file-picker flow.
@@ -2057,6 +2187,35 @@ export class VanillaGridController {
     );
   }
 
+  /** Menu items the importer contributes. Just the single "Import"
+   * entry when the feature is enabled; returns an empty array otherwise. */
+  private buildImporterMenuItems(): GridMenuItem[] {
+    return buildGridImporterMenuItems(
+      this.options,
+      this.labels,
+      { importAFile: () => this.importerRequestFile() },
+    );
+  }
+
+  /** Menu items row-edit contributes: "Save changes" + "Retry errored
+   * rows". Each entry is gated by both a gridOption flag and a runtime
+   * predicate (`hasDirtyRows` / `hasErrorRows`) so the menu only surfaces
+   * actions that have something to do. */
+  private buildRowEditMenuItems(): GridMenuItem[] {
+    return buildGridRowEditMenuItems(
+      this.options,
+      this.labels,
+      {
+        flushDirtyRows: () => this.rowEditFlushDirtyRows(),
+        retryErroredRows: () => this.rowEditRetryErroredRows(),
+      },
+      {
+        hasDirtyRows: () => this.rowEditState.dirtyRowIds.size > 0,
+        hasErrorRows: () => this.rowEditState.errorRowIds.size > 0,
+      },
+    );
+  }
+
   // ---- Row-edit — ports ui.grid.rowEdit -----------------------------------
 
   private rowEditSetSavePromise(rowEntity: GridRecord, savePromise: Promise<void>): void {
@@ -2081,6 +2240,17 @@ export class VanillaGridController {
       .map((id) => this.findRowById(id))
       .filter((row): row is GridRow => row !== undefined);
     const promises = dirty.map((row) => this.runRowEditSave(row));
+    return Promise.all(promises).then(() => undefined);
+  }
+
+  /** Re-fires `saveRow` for every row currently in the error state. The
+   * "Retry errored rows" menu entry funnels through here. Returns a
+   * promise that resolves once every retry promise has settled. */
+  private rowEditRetryErroredRows(): Promise<void> {
+    const errored = [...this.rowEditState.errorRowIds]
+      .map((id) => this.findRowById(id))
+      .filter((row): row is GridRow => row !== undefined);
+    const promises = errored.map((row) => this.runRowEditSave(row));
     return Promise.all(promises).then(() => undefined);
   }
 

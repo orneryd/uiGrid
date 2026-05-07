@@ -17,6 +17,7 @@
 @use "@ornery/ui-grid-core/src/lib/styles/status-pill";
 @use "@ornery/ui-grid-core/src/lib/styles/selection";
 @use "@ornery/ui-grid-core/src/lib/styles/row-edit";
+@use "@ornery/ui-grid-core/src/lib/styles/validate";
 
 // Mixin-only partials: emit class-based rules for the grid shell shadow DOM.
 @include filter-cell.rules;

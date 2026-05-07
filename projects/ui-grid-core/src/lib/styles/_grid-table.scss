@@ -63,6 +63,7 @@
 .grid-body-viewport {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: auto;
   overflow-anchor: none;
   // Disable horizontal rubber-band bounce at the first/last column.
   // Vertical bounce is allowed because it matches native list scrolling

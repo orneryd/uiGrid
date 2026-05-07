@@ -19,6 +19,7 @@
 @use "styles/status-pill";
 @use "styles/selection";
 @use "styles/row-edit";
+@use "styles/validate";
 
 // Mixin-only partials: emit class-based rules.
 @include filter-cell.rules;

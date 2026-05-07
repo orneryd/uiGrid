@@ -1,5 +1,5 @@
 import { SortDirection } from './grid.constants';
-import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
+import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridLabels, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
 import {
   GridExporterColumnType,
   GridExporterExcelSheetData,
@@ -7,7 +7,12 @@ import {
   GridExporterOptions,
   GridExporterPdfDocDefinition,
   GridExporterRowType,
+  GridLocaleCode,
+  GridMenuItem,
+  GridValidatorFactory,
+  GridValidatorMessageFn,
   PinDirection,
+  gridI18n,
 } from './grid.core';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
@@ -122,6 +127,24 @@ export interface GridApiBindings {
   importerImportThisFile?: (file: File) => Promise<void>;
   importerImportText?: (text: string, type?: 'json' | 'csv') => void;
 
+  // validate bindings — ports ui.grid.validate public API.
+  validateIsInvalid?: (rowEntity: GridRecord, colDef: GridColumnDef) => boolean;
+  validateGetErrorMessages?: (rowEntity: GridRecord, colDef: GridColumnDef) => string[];
+  validateGetFormattedErrors?: (rowEntity: GridRecord, colDef: GridColumnDef) => string;
+  validateGetTitleFormattedErrors?: (rowEntity: GridRecord, colDef: GridColumnDef) => string;
+  validateRunValidators?: (
+    rowEntity: GridRecord,
+    colDef: GridColumnDef,
+    newValue: unknown,
+    oldValue: unknown,
+  ) => Promise<string[]>;
+  validateSetValidator?: (
+    name: string,
+    validatorFactory: GridValidatorFactory,
+    messageFunction: GridValidatorMessageFn,
+  ) => void;
+  validateGetInvalidRows?: () => Promise<GridRecord[]>;
+
   // rowEdit bindings — ports ui.grid.rowEdit public API. The consumer
   // resolves save promises via `setSavePromise()` and flushes dirty rows
   // either by timer (automatic) or explicitly via `flushDirtyRows()`.
@@ -129,8 +152,14 @@ export interface GridApiBindings {
   rowEditGetDirtyRows?: () => GridRow[];
   rowEditGetErrorRows?: () => GridRow[];
   rowEditFlushDirtyRows?: () => Promise<void>;
+  rowEditRetryErroredRows?: () => Promise<void>;
   rowEditSetRowsDirty?: (rowEntities: readonly GridRecord[]) => void;
   rowEditSetRowsClean?: (rowEntities: readonly GridRecord[]) => void;
+  rowEditGetMenuItems?: () => GridMenuItem[];
+
+  // importer menu binding — returns the shared-shape menu items the
+  // importer contributes (just the single "Import" entry by default).
+  importerGetMenuItems?: () => GridMenuItem[];
 }
 
 export interface UiGridApi {
@@ -355,6 +384,24 @@ export interface UiGridApi {
     getCurrentSelection: () => GridRowColumn[];
     rowColSelectIndex: (rowCol: GridRowColumn) => number;
   };
+  i18n: {
+    on: {
+      /** Fires when the active language changes. Listeners typically
+       * call `gridApi.core.refresh()` to repaint with the new strings. */
+      languageChanged: (listener: Listener<[GridLocaleCode]>) => () => void;
+    };
+    /** Return the labels bundle for a language (merged onto the en-US
+     * defaults). Mirrors the old `i18nService.get`. */
+    get: (lang: GridLocaleCode) => GridLabels;
+    /** Register / overwrite a locale. Missing keys fall back to en-US. */
+    add: (lang: GridLocaleCode, labels: Partial<GridLabels>) => void;
+    /** Change the active language — triggers the `languageChanged` event
+     * so consumers can refresh the grid. */
+    setCurrentLang: (lang: GridLocaleCode) => void;
+    getCurrentLang: () => GridLocaleCode;
+    /** Returns every registered locale code. */
+    getSupportedLanguages: () => GridLocaleCode[];
+  };
   importer: {
     /** Trigger the consumer's file-picker flow — the vanilla element
      * mounts a hidden `<input type="file">` and dispatches a click when
@@ -367,6 +414,57 @@ export interface UiGridApi {
     /** Parse + add an already-loaded text payload. `type` forces one
      * parser over auto-detection (JSON tried first, CSV fallback). */
     importText: (text: string, type?: 'json' | 'csv') => void;
+    /** Menu items the importer contributes. Currently just the single
+     * "Import" entry (matching the old `importerMenuItemContainer`
+     * directive) but kept as an array so consumers can concat it with
+     * other feature menus. */
+    getMenuItems: () => GridMenuItem[];
+  };
+  validate: {
+    on: {
+      /** Raised when any validator rejects a cell edit. Matches the old
+       * `validationFailed` event shape. */
+      validationFailed: (
+        listener: Listener<[GridRecord, GridColumnDef, unknown, unknown]>,
+      ) => () => void;
+    };
+    raise: {
+      validationFailed: (
+        rowEntity: GridRecord,
+        colDef: GridColumnDef,
+        newValue: unknown,
+        oldValue: unknown,
+      ) => void;
+    };
+    /** Returns true when the cell (row, col) is currently invalid.
+     * Reads the `$$invalid<col>` marker on the entity. */
+    isInvalid: (rowEntity: GridRecord, colDef: GridColumnDef) => boolean;
+    /** Returns the list of localized error messages for the cell. */
+    getErrorMessages: (rowEntity: GridRecord, colDef: GridColumnDef) => string[];
+    /** HTML-formatted error block (with heading) suitable for a cell
+     * tooltip / popover. Matches the old `getFormattedErrors`. */
+    getFormattedErrors: (rowEntity: GridRecord, colDef: GridColumnDef) => string;
+    /** Plaintext error block for the `title` attribute on a cell. */
+    getTitleFormattedErrors: (rowEntity: GridRecord, colDef: GridColumnDef) => string;
+    /** Run all validators for a single cell. Resolves when sync + async
+     * validators have all settled. */
+    runValidators: (
+      rowEntity: GridRecord,
+      colDef: GridColumnDef,
+      newValue: unknown,
+      oldValue: unknown,
+    ) => Promise<string[]>;
+    /** Register a custom validator. The factory receives the argument
+     * declared in `colDef.validators[name]` and returns a function that
+     * validates `(oldValue, newValue, rowEntity, colDef)`. */
+    setValidator: (
+      name: string,
+      validatorFactory: GridValidatorFactory,
+      messageFunction: GridValidatorMessageFn,
+    ) => void;
+    /** Full-grid sweep — returns every row that currently has at least
+     * one invalid cell. Useful for "Save only valid rows" flows. */
+    getInvalidRows: () => Promise<GridRecord[]>;
   };
   rowEdit: {
     on: {
@@ -382,8 +480,14 @@ export interface UiGridApi {
     getDirtyRows: () => GridRow[];
     getErrorRows: () => GridRow[];
     flushDirtyRows: () => Promise<void>;
+    /** Re-fires `saveRow` for every row currently in the error state. */
+    retryErroredRows: () => Promise<void>;
     setRowsDirty: (rowEntities: readonly GridRecord[]) => void;
     setRowsClean: (rowEntities: readonly GridRecord[]) => void;
+    /** Menu items the row-edit feature contributes: "Save changes" +
+     * "Retry errored rows". Each entry is gated by `shown()` so items
+     * only surface when there are dirty / errored rows. */
+    getMenuItems: () => GridMenuItem[];
   };
 }
 
@@ -417,6 +521,7 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const viewPortKeyDownEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
   const viewPortKeyPressEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
   const saveRowEvent = new GridEvent<[GridRecord]>();
+  const validationFailedEvent = new GridEvent<[GridRecord, GridColumnDef, unknown, unknown]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -491,6 +596,24 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const importerImportThisFileBinding =
     bindings.importerImportThisFile ?? ((): Promise<void> => Promise.resolve());
   const importerImportTextBinding = bindings.importerImportText ?? noop;
+  const emptyMenuItems = (): GridMenuItem[] => [];
+  const importerGetMenuItemsBinding = bindings.importerGetMenuItems ?? emptyMenuItems;
+
+  // Validate bindings — no-op defaults.
+  const validateIsInvalidBinding =
+    bindings.validateIsInvalid ?? ((): boolean => false);
+  const emptyErrors = (): string[] => [];
+  const emptyErrorBlock = (): string => '';
+  const validateGetErrorMessagesBinding = bindings.validateGetErrorMessages ?? emptyErrors;
+  const validateGetFormattedErrorsBinding =
+    bindings.validateGetFormattedErrors ?? emptyErrorBlock;
+  const validateGetTitleFormattedErrorsBinding =
+    bindings.validateGetTitleFormattedErrors ?? emptyErrorBlock;
+  const validateRunValidatorsBinding =
+    bindings.validateRunValidators ?? ((): Promise<string[]> => Promise.resolve([]));
+  const validateSetValidatorBinding = bindings.validateSetValidator ?? noop;
+  const validateGetInvalidRowsBinding =
+    bindings.validateGetInvalidRows ?? ((): Promise<GridRecord[]> => Promise.resolve([]));
 
   // rowEdit bindings — default implementations are no-ops / empty-array so
   // a consumer that doesn't wire rowEdit never throws on api.rowEdit.xxx().
@@ -499,8 +622,11 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const rowEditGetErrorRowsBinding = bindings.rowEditGetErrorRows ?? emptyRows;
   const rowEditFlushDirtyRowsBinding =
     bindings.rowEditFlushDirtyRows ?? ((): Promise<void> => Promise.resolve());
+  const rowEditRetryErroredRowsBinding =
+    bindings.rowEditRetryErroredRows ?? ((): Promise<void> => Promise.resolve());
   const rowEditSetRowsDirtyBinding = bindings.rowEditSetRowsDirty ?? noop;
   const rowEditSetRowsCleanBinding = bindings.rowEditSetRowsClean ?? noop;
+  const rowEditGetMenuItemsBinding = bindings.rowEditGetMenuItems ?? emptyMenuItems;
 
   // cellNav bindings — defaults keep the API surface intact even when a
   // wrapper doesn't opt into cellnav.
@@ -719,10 +845,37 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       getCurrentSelection: getCurrentSelectionBinding,
       rowColSelectIndex: rowColSelectIndexBinding
     },
+    i18n: {
+      on: {
+        languageChanged: (listener) => gridI18n.onLanguageChanged(listener)
+      },
+      get: (lang) => gridI18n.get(lang),
+      add: (lang, labels) => gridI18n.add(lang, labels),
+      setCurrentLang: (lang) => gridI18n.setCurrentLang(lang),
+      getCurrentLang: () => gridI18n.getCurrentLang(),
+      getSupportedLanguages: () => gridI18n.getSupportedLanguages()
+    },
     importer: {
       importAFile: importerImportAFileBinding,
       importThisFile: importerImportThisFileBinding,
-      importText: importerImportTextBinding
+      importText: importerImportTextBinding,
+      getMenuItems: importerGetMenuItemsBinding
+    },
+    validate: {
+      on: {
+        validationFailed: (listener) => validationFailedEvent.subscribe(listener)
+      },
+      raise: {
+        validationFailed: (rowEntity, colDef, newValue, oldValue) =>
+          validationFailedEvent.emit(rowEntity, colDef, newValue, oldValue)
+      },
+      isInvalid: validateIsInvalidBinding,
+      getErrorMessages: validateGetErrorMessagesBinding,
+      getFormattedErrors: validateGetFormattedErrorsBinding,
+      getTitleFormattedErrors: validateGetTitleFormattedErrorsBinding,
+      runValidators: validateRunValidatorsBinding,
+      setValidator: validateSetValidatorBinding,
+      getInvalidRows: validateGetInvalidRowsBinding
     },
     rowEdit: {
       on: {
@@ -735,8 +888,10 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       getDirtyRows: rowEditGetDirtyRowsBinding,
       getErrorRows: rowEditGetErrorRowsBinding,
       flushDirtyRows: rowEditFlushDirtyRowsBinding,
+      retryErroredRows: rowEditRetryErroredRowsBinding,
       setRowsDirty: rowEditSetRowsDirtyBinding,
-      setRowsClean: rowEditSetRowsCleanBinding
+      setRowsClean: rowEditSetRowsCleanBinding,
+      getMenuItems: rowEditGetMenuItemsBinding
     }
   };
 

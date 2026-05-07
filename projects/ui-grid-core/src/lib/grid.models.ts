@@ -114,6 +114,12 @@ export interface GridColumnDef {
   pinnedLeft?: boolean;
   pinnedRight?: boolean;
   enablePinning?: boolean;
+  /** Validators — matches the old `colDef.validators` shape: each key is
+   * the validator name registered with `uiGridValidateService`, each value
+   * is the argument passed to the factory. Built-in names are `required`,
+   * `minLength`, `maxLength`; consumers register additional validators
+   * with `gridApi.validate.setValidator()`. */
+  validators?: Record<string, unknown>;
   /** Exporter — if true the exporter skips this column entirely. Ports the
    * old grid's `colDef.exporterSuppressExport`. */
   exporterSuppressExport?: boolean;
@@ -247,6 +253,19 @@ export interface GridLabels {
   importerNoObjects: string;
   /** Importer error — "Column names could not be derived" */
   importerNoHeaders: string;
+  /** Validate — error heading when rendering error messages. */
+  validateError: string;
+  /** Validate — "required" validator message. */
+  validateRequired: string;
+  /** Validate — "minLength" validator message, with `THRESHOLD` token. */
+  validateMinLength: string;
+  /** Validate — "maxLength" validator message, with `THRESHOLD` token. */
+  validateMaxLength: string;
+  /** Row-edit menu — "Save changes" action. */
+  rowEditFlushAll: string;
+  /** Row-edit menu — "Retry errored rows" action (re-fires saveRow for
+   * every row currently in the error state). */
+  rowEditRetryErrors: string;
 }
 
 /**
@@ -415,6 +434,16 @@ export interface GridOptions {
   importerDataAddCallback?: (newObjects: readonly GridRecord[]) => void;
   importerNewObject?: new () => GridRecord;
   importerObjectCallback?: (newObject: GridRecord) => GridRecord;
+  /** Importer gridMenu entry — an "Import" item that triggers the file
+   * picker. `importerMenuItemOrder` defaults to 400 so the entry lands
+   * after the exporter (base 200) + row-edit (base 300) groups. */
+  importerMenuItemOrder?: number;
+  /** Row-edit gridMenu entries. `rowEditMenuFlushDirtyRows` wires a
+   * "Save dirty rows" action; `rowEditMenuCancelDirtyRows` wires a
+   * "Discard changes" action. `rowEditMenuItemOrder` defaults to 300. */
+  rowEditMenuItemOrder?: number;
+  rowEditMenuFlushDirtyRows?: boolean;
+  rowEditMenuCancelDirtyRows?: boolean;
   /** Row-edit — ports `ui.grid.rowEdit.GridOptions`. `rowEditWaitInterval`
    * controls how long the grid waits for additional edits on the same row
    * before firing the save event. -1 disables the timer so consumers must
