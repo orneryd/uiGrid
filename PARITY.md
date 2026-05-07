@@ -41,6 +41,15 @@ the task list.
 
 ## Completed this session
 
+- **docs pages** (2026-05-07) — extended the docs app with dedicated
+  pages for every feature previously linked from the features overview
+  but missing its own route (`validate`, `exporter`, `importer`), wired
+  the pre-existing but un-linked `selection` + `row-edit` topic
+  components into the layout, and added new topics for `pagination`,
+  `pinning`, `column-moving`, `infinite-scroll`, `save-state`, and
+  `keyboard-navigation` (cellNav). Each page follows the same template:
+  overview lead, live demo, options table, API table, styling hooks
+  where relevant, and a usage code snippet.
 - **i18n** (2026-05-07) — ported `ui.grid.i18n` onto the modern label
   shape. New core module `grid.core.i18n.ts` hosts `GridI18nService`
   (`setCurrentLang` / `getCurrentLang` / `add` / `get` /
