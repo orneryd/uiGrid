@@ -32,7 +32,7 @@ describe('grid.core.selection', () => {
   describe('resolveGridSelectionOptions', () => {
     it('applies the documented defaults', () => {
       expect(resolveGridSelectionOptions(baseOptions())).toEqual({
-        enableRowSelection: true,
+        enableRowSelection: false,
         multiSelect: true,
         noUnselect: false,
         modifierKeysToMultiSelect: false,

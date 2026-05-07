@@ -1017,6 +1017,7 @@ export class WebComponentsComponent {
     this.disposeDemoInfinite?.();
     this.disposeDemoInfinite = null;
     this.demoGridApi = null;
+    this.infiniteImperativeOptions = null;
 
     if (!isPlatformBrowser(this.platformId) || this.mode() !== 'infinite') {
       return;
@@ -1030,9 +1031,7 @@ export class WebComponentsComponent {
     // The vanilla element accepts options imperatively — we use this only
     // to hook onRegisterApi for needLoadMoreData. All other config comes
     // from the attribute bindings in the template.
-    const prev = (grid as unknown as { options?: GridOptions }).options ?? null;
-    grid.options = {
-      ...(prev ?? ({} as GridOptions)),
+    this.infiniteImperativeOptions = {
       id: 'web-components-demo-infinite',
       columnDefs: [...this.infiniteScrollColumnDefs] as GridOptions['columnDefs'],
       data: this.infiniteRows,
@@ -1043,28 +1042,40 @@ export class WebComponentsComponent {
       rowIdentity: (entity) => String((entity as { id: string }).id),
       onRegisterApi: (api) => {
         const gridApi = api as UiGridApi;
+        // Controller re-registers this callback every setOptions pass — tear
+        // down any prior subscription before wiring a fresh one so we don't
+        // stack listeners.
+        this.disposeDemoInfinite?.();
         this.demoGridApi = gridApi;
         this.disposeDemoInfinite = gridApi.infiniteScroll.on.needLoadMoreData(() => {
           this.handleInfiniteLoadMore(grid);
         });
       },
     };
+    grid.options = this.infiniteImperativeOptions;
   }
 
   private handleInfiniteLoadMore(grid: WebComponentGridElement): void {
-    if (!this.demoGridApi) return;
+    if (!this.demoGridApi || !this.infiniteImperativeOptions) return;
     const api = this.demoGridApi;
+    const imperativeOptions = this.infiniteImperativeOptions;
     // Simulated async load.
     window.setTimeout(() => {
       if (this.mode() !== 'infinite') return;
       const next = createInfiniteRows(this.infiniteRows.length, this.INFINITE_PAGE_SIZE);
       this.infiniteRows = this.infiniteRows.concat(next);
-      grid.setData(this.infiniteRows);
+      // Mutate the stashed imperative options object in place so the
+      // element's `activeOptions` ref sees the new data. Then re-assign
+      // `grid.options` to trigger setOptions → refresh. Also sync the
+      // signal so any attribute-driven re-parse reflects the same data.
+      imperativeOptions.data = this.infiniteRows;
       this.infiniteScrollDataSignal.set(JSON.stringify(this.infiniteRows));
+      grid.options = imperativeOptions;
       const hasMore = this.infiniteRows.length < this.INFINITE_MAX_ROWS;
       void api.infiniteScroll.dataLoaded(false, hasMore);
     }, 200);
   }
+  private infiniteImperativeOptions: GridOptions | null = null;
 
   private syncTradingLoop(): void {
     if (this.tradingIntervalId !== null) {

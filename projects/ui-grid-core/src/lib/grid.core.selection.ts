@@ -50,7 +50,7 @@ export interface GridSelectionResolvedOptions {
 export function resolveGridSelectionOptions(options: GridOptions): GridSelectionResolvedOptions {
   const enableRowHeaderSelection = options.enableRowHeaderSelection !== false;
   return {
-    enableRowSelection: options.enableRowSelection !== false,
+    enableRowSelection: options.enableRowSelection === true,
     multiSelect: options.multiSelect !== false,
     noUnselect: options.noUnselect === true,
     modifierKeysToMultiSelect: options.modifierKeysToMultiSelect === true,
