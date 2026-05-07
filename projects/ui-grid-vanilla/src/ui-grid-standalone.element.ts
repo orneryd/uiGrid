@@ -1103,17 +1103,15 @@ export class UiGridStandaloneElement extends HTMLElement {
       () => ({ scrollTop: this.scrollPosition, scrollLeft: this.horizontalScrollPosition }),
       (scrollTop, scrollLeft) => {
         const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
-        const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
+        if (!bodyViewport) return;
         // Defer to a rAF so the body has finished laying out after refresh.
         requestAnimationFrame(() => {
-          if (bodyViewport) {
-            bodyViewport.scrollTop = scrollTop;
-          }
-          if (gridTable) {
-            gridTable.scrollLeft = scrollLeft;
-          }
+          bodyViewport.scrollTop = scrollTop;
+          bodyViewport.scrollLeft = scrollLeft;
           this.scrollPosition = scrollTop;
           this.horizontalScrollPosition = scrollLeft;
+          // Keep header/filter strips aligned after a restore.
+          this.syncHeaderHorizontalScroll(scrollLeft);
         });
       },
     );
@@ -1855,23 +1853,46 @@ export class UiGridStandaloneElement extends HTMLElement {
         });
     });
 
+    // Forward wheel gestures originating inside the header / filter strips
+    // to the body viewport. The strips are technically scroll containers
+    // (necessary for `position: sticky` on pinned cells to anchor), but we
+    // don't want the user scrolling them independently — that would desync
+    // them from the body. Every wheel delta is applied to the body viewport
+    // instead, which then mirrors its scrollLeft onto the strips via
+    // `syncHeaderHorizontalScroll`.
+    const onStripWheel = (event: WheelEvent): void => {
+      const target = event.target as HTMLElement | null;
+      const strip = target?.closest('.grid-header-strip, .grid-filter-strip');
+      if (!strip) return;
+      const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+      if (!bodyViewport) return;
+      event.preventDefault();
+      bodyViewport.scrollLeft += event.deltaX;
+      bodyViewport.scrollTop += event.deltaY;
+    };
+    root.addEventListener('wheel', onStripWheel as EventListener, { passive: false });
+
     root.addEventListener(
       'scroll',
       (event) => {
         const target = event.target as HTMLElement | null;
-        if (this.suppressScrollEvent) return;
-
-        // Horizontal scroll on .grid-table.
-        if (target?.classList.contains('grid-table')) {
-          this.horizontalScrollPosition = target.scrollLeft;
+        // The header/filter strips are scroll containers too, but their
+        // scrollLeft is driven purely by `syncHeaderHorizontalScroll` — any
+        // scroll event on them is either our own sync (ignore) or the user
+        // dragging a hidden scrollbar (also ignore; wheel handler already
+        // routes wheel deltas to the body, so this is a no-op for UX).
+        if (!target?.classList.contains('grid-body-viewport') || this.suppressScrollEvent) {
           return;
         }
 
-        // Vertical scroll on .grid-body-viewport.
-        if (!target?.classList.contains('grid-body-viewport')) return;
-
         this.lastScrollActivityAt = Date.now();
         this.scrollPosition = target.scrollTop;
+        this.horizontalScrollPosition = target.scrollLeft;
+
+        // Mirror horizontal scroll onto the header + filter strips so the
+        // column alignment stays perfect. This is the old ui-grid strategy —
+        // scroll is imperatively synced rather than relying on sticky/flex.
+        this.syncHeaderHorizontalScroll(target.scrollLeft);
 
         const snapshot = this.snapshot;
         if (!snapshot) return;
@@ -1913,6 +1934,27 @@ export class UiGridStandaloneElement extends HTMLElement {
    * handleScroll → loadData check. The controller does the actual
    * needLoadMoreData / needLoadMoreDataTop raise.
    */
+  /**
+   * Mirror horizontal scroll from the body viewport onto the header + filter
+   * strips by setting `scrollLeft` on them. Because those strips are real
+   * scroll containers (with their scrollbars hidden), `position: sticky` on
+   * pinned header / filter cells anchors to the strip's scroll position the
+   * same way body cells anchor to `.grid-body-viewport`. This is the
+   * imperative sync strategy the old ui-grid used in ui-grid-viewport.js.
+   */
+  private syncHeaderHorizontalScroll(scrollLeft: number): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const headerStrip = root.querySelector<HTMLElement>('.grid-header-strip');
+    const filterStrip = root.querySelector<HTMLElement>('.grid-filter-strip');
+    if (headerStrip && headerStrip.scrollLeft !== scrollLeft) {
+      headerStrip.scrollLeft = scrollLeft;
+    }
+    if (filterStrip && filterStrip.scrollLeft !== scrollLeft) {
+      filterStrip.scrollLeft = scrollLeft;
+    }
+  }
+
   private maybeTriggerInfiniteScroll(): void {
     const snapshot = this.snapshot;
     if (!snapshot || !this.controller) return;
@@ -1996,15 +2038,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
     const root = this.ensureShadowRoot();
     const snapshot = this.snapshot;
-    if (!this.suppressScrollEvent) {
-      const previousViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
-      const previousGridTable = root.querySelector<HTMLElement>('.grid-table');
-      if (previousViewport) {
-        this.scrollPosition = previousViewport.scrollTop;
-      }
-      if (previousGridTable) {
-        this.horizontalScrollPosition = previousGridTable.scrollLeft;
-      }
+    const previousViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
+    if (previousViewport && !this.suppressScrollEvent) {
+      this.scrollPosition = previousViewport.scrollTop;
+      this.horizontalScrollPosition = previousViewport.scrollLeft;
     }
 
     if (!snapshot) {
@@ -2033,15 +2070,16 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.lastStructureKey = plan.structureKey;
 
     const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
-    const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    if (this.scrollPosition > 0 || this.horizontalScrollPosition > 0) {
+    if (bodyViewport && (this.scrollPosition > 0 || this.horizontalScrollPosition > 0)) {
       this.suppressScrollEvent = true;
-      if (bodyViewport && this.scrollPosition > 0) {
+      if (this.scrollPosition > 0) {
         bodyViewport.scrollTop = this.scrollPosition;
       }
-      if (gridTable && this.horizontalScrollPosition > 0) {
-        gridTable.scrollLeft = this.horizontalScrollPosition;
+      if (this.horizontalScrollPosition > 0) {
+        bodyViewport.scrollLeft = this.horizontalScrollPosition;
       }
+      // Keep the header/filter strips in sync on the first paint too.
+      this.syncHeaderHorizontalScroll(this.horizontalScrollPosition);
       requestAnimationFrame(() => {
         this.suppressScrollEvent = false;
       });
@@ -2222,7 +2260,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
 
     this.gridTitle = escapeHtml(options.title ?? 'Data grid');
-    this.gridTableStyle = hasViewportScroll ? `height:${viewportHeight}px;` : '';
+    // Sticky-top CSS var so `.grid-filter-strip` sits just below the header
+    // strip. Falls back to the configured headerRowHeight on first paint
+    // (before the header has measured), otherwise uses the measured height.
+    const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
     this.bodyViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
     this.templateColumns = templateColumns;
     this.slotRegistry = slotRegistry;
@@ -2271,15 +2313,12 @@ export class UiGridStandaloneElement extends HTMLElement {
       gridFrame.setAttribute('aria-label', nextTitle);
     }
 
-    // Grid table wrapper styles (viewport height).
+    // Grid table wrapper styles (viewport height + sticky-top CSS var).
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    const nextTableStyle = hasViewportScroll ? `height:${viewportHeight}px;` : '';
-    if (gridTable && (gridTable.getAttribute('style') ?? '') !== nextTableStyle) {
-      if (nextTableStyle) {
-        gridTable.setAttribute('style', nextTableStyle);
-      } else {
-        gridTable.removeAttribute('style');
-      }
+    const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    const nextTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
+    if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
+      gridTable.setAttribute('style', nextTableStyle);
     }
 
     // Body viewport scroll style.

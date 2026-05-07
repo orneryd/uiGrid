@@ -2,10 +2,14 @@
 ${this.slotRegistry}
 <section class="grid-frame ui-grid" role="grid" aria-label="${this.gridTitle}">
   <div class="grid-table ui-grid-contents-wrapper" style="${this.gridTableStyle}">
-    <div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${this.templateColumns}">
-      ${this.headerContent}
+    <div class="grid-header-strip">
+      <div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${this.templateColumns}">
+        ${this.headerContent}
+      </div>
     </div>
-    ${this.filterRowContent}
+    <div class="grid-filter-strip">
+      ${this.filterRowContent}
+    </div>
     <div class="grid-body-viewport" style="${this.bodyViewportStyle}">
       ${this.bodyContent}
     </div>
