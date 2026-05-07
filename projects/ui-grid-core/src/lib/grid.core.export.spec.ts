@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   GRID_EXPORTER_CONSTANTS,
   buildGridCsv,
+  buildGridExporterMenuItems,
+  buildGridPdfDocDefinition,
+  calculateGridPdfColumnWidths,
   filterExporterColumns,
+  formatGridPdfField,
   resolveExporterFilename,
   resolveGridExporterOptions,
 } from './grid.core.export';
@@ -169,6 +173,121 @@ describe('GRID_EXPORTER_CONSTANTS', () => {
     expect(GRID_EXPORTER_CONSTANTS.VISIBLE).toBe('visible');
     expect(GRID_EXPORTER_CONSTANTS.SELECTED).toBe('selected');
     expect(GRID_EXPORTER_CONSTANTS.selectionRowHeaderColName).toBe('selectionRowHeaderCol');
+  });
+});
+
+describe('buildGridPdfDocDefinition', () => {
+  it('produces a pdfMake-ready table with headers + rows', () => {
+    const doc = buildGridPdfDocDefinition(
+      [{ name: 'name', displayName: 'Name' }, { name: 'status', displayName: 'Status' }],
+      [
+        new GridRow('r1', { name: 'Alpha', status: 'Active' }, 0, 44),
+        new GridRow('r2', { name: 'Beta', status: 'Pilot' }, 1, 44),
+      ],
+    );
+    expect(doc.pageOrientation).toBe('landscape');
+    expect(doc.pageSize).toBe('A4');
+    expect(doc.content[0]!.table.headerRows).toBe(1);
+    expect(doc.content[0]!.table.body.length).toBe(3); // header + 2 rows
+    expect(doc.content[0]!.table.body[0]).toEqual([
+      { text: 'Name', style: 'tableHeader' },
+      { text: 'Status', style: 'tableHeader' },
+    ]);
+    expect(doc.content[0]!.table.body[1]).toEqual(['Alpha', 'Active']);
+  });
+
+  it('runs the customFormatter on the doc definition', () => {
+    const doc = buildGridPdfDocDefinition(
+      [{ name: 'name', displayName: 'Name' }],
+      [new GridRow('r1', { name: 'Alpha' }, 0, 44)],
+      {
+        customFormatter: (d) => ({ ...d, pageOrientation: 'portrait' }),
+      },
+    );
+    expect(doc.pageOrientation).toBe('portrait');
+  });
+});
+
+describe('calculateGridPdfColumnWidths', () => {
+  it('uses * for columns with no width', () => {
+    expect(calculateGridPdfColumnWidths([{ name: 'a' }])).toEqual(['*']);
+  });
+
+  it('scales numeric widths to maxGridWidth', () => {
+    const widths = calculateGridPdfColumnWidths(
+      [{ name: 'a', width: '100' }, { name: 'b', width: '200' }],
+      300,
+    );
+    // 100 + 200 = 300 base, scaled 1:1 to 300 max.
+    expect(widths).toEqual([100, 200]);
+  });
+});
+
+describe('formatGridPdfField', () => {
+  it('handles null / undefined / booleans / numbers / strings / dates', () => {
+    expect(formatGridPdfField(null)).toBe('');
+    expect(formatGridPdfField(undefined)).toBe('');
+    expect(formatGridPdfField(42)).toBe('42');
+    expect(formatGridPdfField(true)).toBe('TRUE');
+    expect(formatGridPdfField(false)).toBe('FALSE');
+    expect(formatGridPdfField('hello "world"')).toBe('hello ""world""');
+    const date = new Date('2026-05-07T00:00:00.000Z');
+    expect(formatGridPdfField(date)).toBe('2026-05-07T00:00:00.000Z');
+  });
+
+  it('wraps the cell as a pdfMake-style text/alignment object when alignment is provided', () => {
+    expect(formatGridPdfField('Alpha', 'right')).toEqual({
+      text: 'Alpha',
+      alignment: 'right',
+    });
+  });
+});
+
+describe('buildGridExporterMenuItems', () => {
+  it('emits 3 items by default (CSV only, no selection)', () => {
+    const items = buildGridExporterMenuItems(
+      { id: 'g', data: [], columnDefs: [] },
+      {},
+      { csvExport: () => {} },
+      () => false,
+    );
+    expect(items.length).toBe(3);
+    expect(items[0]!.shown()).toBe(true);
+    expect(items[1]!.shown()).toBe(true);
+    // Selected-rows item is hidden because hasSelection() is false.
+    expect(items[2]!.shown()).toBe(false);
+  });
+
+  it('adds 3 PDF items when pdfExport is provided', () => {
+    const items = buildGridExporterMenuItems(
+      { id: 'g', data: [], columnDefs: [] },
+      {},
+      { csvExport: () => {}, pdfExport: () => {} },
+      () => true,
+    );
+    expect(items.length).toBe(6);
+    expect(items.every((i) => i.shown())).toBe(true);
+  });
+
+  it('uses the provided labels verbatim', () => {
+    const items = buildGridExporterMenuItems(
+      { id: 'g', data: [], columnDefs: [] },
+      { allAsCsv: 'Everything as csv!' },
+      { csvExport: () => {} },
+    );
+    expect(items[0]!.title).toBe('Everything as csv!');
+  });
+
+  it('honors exporterMenuCsv:false by hiding CSV rows', () => {
+    const items = buildGridExporterMenuItems(
+      { id: 'g', data: [], columnDefs: [], exporterMenuCsv: false },
+      {},
+      { csvExport: () => {}, pdfExport: () => {} },
+      () => true,
+    );
+    const shown = items.filter((i) => i.shown());
+    expect(shown.length).toBe(3);
+    expect(shown.every((i) => /pdf/i.test(i.title))).toBe(true);
   });
 });
 

@@ -215,6 +215,18 @@ export interface GridLabels {
   pinRight: string;
   /** Unpin action */
   unpin: string;
+  /** Exporter menu — "Export all data as csv" */
+  exporterAllAsCsv: string;
+  /** Exporter menu — "Export visible data as csv" */
+  exporterVisibleAsCsv: string;
+  /** Exporter menu — "Export selected data as csv" */
+  exporterSelectedAsCsv: string;
+  /** Exporter menu — "Export all data as pdf" */
+  exporterAllAsPdf: string;
+  /** Exporter menu — "Export visible data as pdf" */
+  exporterVisibleAsPdf: string;
+  /** Exporter menu — "Export selected data as pdf" */
+  exporterSelectedAsPdf: string;
 }
 
 /**
@@ -331,9 +343,26 @@ export interface GridOptions {
   exporterMenuLabel?: string;
   exporterMenuItemOrder?: number;
   exporterMenuCsv?: boolean;
+  exporterMenuPdf?: boolean;
+  exporterMenuExcel?: boolean;
   exporterMenuAllData?: boolean;
   exporterMenuVisibleData?: boolean;
   exporterMenuSelectedData?: boolean;
+  /** PDF options. See `GridExporterPdfOptions` in grid.core.export.ts for
+   * the full shape. All are pdfMake-format (pageSize/orientation strings,
+   * style objects, etc.) so the resulting doc definition plugs straight
+   * into `pdfMake.createPdf(...)`. */
+  exporterPdfFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterPdfOrientation?: string;
+  exporterPdfPageSize?: string;
+  exporterPdfMaxGridWidth?: number;
+  exporterPdfDefaultStyle?: unknown;
+  exporterPdfTableStyle?: unknown;
+  exporterPdfTableHeaderStyle?: unknown;
+  exporterPdfLayout?: unknown;
+  exporterPdfHeader?: unknown;
+  exporterPdfFooter?: unknown;
+  exporterPdfCustomFormatter?: (doc: unknown) => unknown;
   /** Cellnav — ports ui.grid.cellNav options. */
   modifierKeysToMultiSelectCells?: boolean;
   /** Key events that bypass cellNav's default handling and bubble up as

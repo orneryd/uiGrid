@@ -60,7 +60,11 @@ import {
   reconcileGridSelection as coreReconcileGridSelection,
   mapSelectedRowsToEntities as coreMapSelectedRowsToEntities,
   buildGridCsv,
+  buildGridPdfDocDefinition,
+  buildGridExporterMenuItems,
   resolveGridExporterOptions,
+  resolveGridExporterPdfOptions,
+  resolveExporterFilename,
   downloadGridCsvFile,
   sanitizeDownloadFilename,
   createGridRowEditState,
@@ -71,8 +75,10 @@ import {
   isGridRowEditTimerEnabled,
   resolveGridRowEditWaitInterval,
   type GridRowEditState,
+  type GridExporterMenuItem,
   type GridExporterOptions,
   type GridExporterColumnType,
+  type GridExporterPdfDocDefinition,
   type GridExporterRowType,
   type GridSelectionState,
   type GridInfiniteScrollState,
@@ -268,6 +274,10 @@ export class VanillaGridController {
       benchmark: (iterations) => this.benchmark(iterations),
       exportCsv: (rowType, colType) => this.exportCsv(rowType, colType),
       buildCsv: (rowType, colType) => this.buildCsv(rowType, colType),
+      pdfExport: (rowType, colType) => this.exportPdf(rowType, colType),
+      buildPdfDocDefinition: (rowType, colType) =>
+        this.buildPdfDocDefinition(rowType, colType),
+      getExporterMenuItems: () => this.buildExporterMenuItems(),
       getExporterOptions: () => ({ ...this.exporterOverrides, ...resolveGridExporterOptions(this.options) }),
       setExporterOptions: (overrides) => {
         this.exporterOverrides = { ...this.exporterOverrides, ...overrides };
@@ -1809,13 +1819,80 @@ export class VanillaGridController {
   ): void {
     const csv = this.buildCsv(rowType, colType);
     const resolved = this.resolveExporterOptions();
-    const resolvedName =
-      typeof resolved.csvFilename === 'function'
-        ? resolved.csvFilename(rowType, colType)
-        : resolved.csvFilename;
-    // Default matches the old `ui.grid.exporter` module — `download.csv`.
-    const filename = sanitizeDownloadFilename(resolvedName ?? 'download.csv');
+    const filename = sanitizeDownloadFilename(
+      resolveExporterFilename(resolved.csvFilename, 'download.csv', rowType, colType),
+    );
     downloadGridCsvFile(csv, filename);
+  }
+
+  private buildPdfDocDefinition(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): GridExporterPdfDocDefinition {
+    const exporterOptions = this.resolveExporterOptions();
+    const pdfOptions = resolveGridExporterPdfOptions(this.options);
+    const columns = colType === 'all' ? this.options.columnDefs : this.visibleColumns;
+    return buildGridPdfDocDefinition(
+      columns,
+      this.exporterRowsFor(rowType),
+      pdfOptions,
+      exporterOptions,
+      colType,
+    );
+  }
+
+  private exportPdf(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): GridExporterPdfDocDefinition {
+    const doc = this.buildPdfDocDefinition(rowType, colType);
+    // pdfMake is an optional global (consumers load it separately). When
+    // present, open the generated PDF the same way the old module did;
+    // when missing, just return the doc definition so the caller can
+    // render it themselves. This mirrors `uiGridExporterService.pdfExport`.
+    const win = typeof window !== 'undefined' ? (window as typeof window & {
+      pdfMake?: { createPdf: (doc: GridExporterPdfDocDefinition) => { open: () => void; download: (filename: string) => void } };
+    }) : undefined;
+    if (win?.pdfMake) {
+      const resolved = this.resolveExporterOptions();
+      const pdfOpts = resolveGridExporterPdfOptions(this.options);
+      const filename = resolveExporterFilename(
+        pdfOpts.filename,
+        'download.pdf',
+        rowType,
+        colType,
+      );
+      const pdf = win.pdfMake.createPdf(doc);
+      // Prefer download when the consumer supplied a filename; otherwise
+      // fall back to .open() which pops the pdf in a new browser tab.
+      if (resolved.csvFilename || pdfOpts.filename) {
+        pdf.download(filename);
+      } else {
+        pdf.open();
+      }
+    }
+    return doc;
+  }
+
+  private buildExporterMenuItems(): GridExporterMenuItem[] {
+    return buildGridExporterMenuItems(
+      this.options,
+      {
+        allAsCsv: this.labels.exporterAllAsCsv,
+        visibleAsCsv: this.labels.exporterVisibleAsCsv,
+        selectedAsCsv: this.labels.exporterSelectedAsCsv,
+        allAsPdf: this.labels.exporterAllAsPdf,
+        visibleAsPdf: this.labels.exporterVisibleAsPdf,
+        selectedAsPdf: this.labels.exporterSelectedAsPdf,
+      },
+      {
+        csvExport: (rowType, colType) => this.exportCsv(rowType, colType),
+        pdfExport: (rowType, colType) => {
+          this.exportPdf(rowType, colType);
+        },
+      },
+      () => this.selectionState.selectedRowIds.size > 0,
+    );
   }
 
   // ---- Row-edit — ports ui.grid.rowEdit -----------------------------------

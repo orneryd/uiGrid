@@ -710,7 +710,10 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   get emptyMessage(): string {
-    return this.options.emptyMessage ?? 'No data available.';
+    // Fall back to the grid's label pack so consumers can re-localize the
+    // empty heading through `options.labels.emptyHeading` rather than
+    // hardcoding an English string here.
+    return this.options.emptyMessage ?? this.snapshot?.labels.emptyHeading ?? '';
   }
   set emptyMessage(value: string) {
     this.activeOptions = { ...this.activeOptions, emptyMessage: value } as any;

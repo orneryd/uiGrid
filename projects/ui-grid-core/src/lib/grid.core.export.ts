@@ -225,6 +225,287 @@ export function buildGridCsv(
   return options.olderExcelCompatibility ? UTF8_BOM + csv : csv;
 }
 
+/** Shape matches pdfMake's table cell descriptor (string or alignment-wrapped object). */
+export type GridExporterPdfCell = string | { text: string; alignment?: string };
+
+/** Minimal subset of pdfMake's docDefinition we emit. Kept as a plain
+ * object so consumers can pass it directly to pdfMake.createPdf(...). */
+export interface GridExporterPdfDocDefinition {
+  pageOrientation: string;
+  pageSize: string;
+  content: Array<{
+    style: string;
+    table: {
+      headerRows: number;
+      widths: Array<number | string>;
+      body: Array<Array<GridExporterPdfCell>>;
+    };
+    layout?: unknown;
+  }>;
+  styles: {
+    tableStyle: unknown;
+    tableHeader: unknown;
+  };
+  defaultStyle: unknown;
+  header?: unknown;
+  footer?: unknown;
+  layout?: unknown;
+}
+
+/** PDF-specific bits of the exporter option matrix. Pure-data, consumable
+ * by consumers that want to render the doc themselves. */
+export interface GridExporterPdfOptions {
+  orientation?: string;
+  pageSize?: string;
+  maxGridWidth?: number;
+  defaultStyle?: unknown;
+  tableStyle?: unknown;
+  tableHeaderStyle?: unknown;
+  layout?: unknown;
+  header?: unknown;
+  footer?: unknown;
+  customFormatter?: (
+    docDefinition: GridExporterPdfDocDefinition,
+  ) => GridExporterPdfDocDefinition;
+  filename?: string | ((rowType: GridExporterRowType, colType: GridExporterColumnType) => string);
+}
+
+/** Format a single field as a PDF cell. Mirrors `formatFieldAsPdfString`
+ * from the old module (no quotes, booleans → TRUE/FALSE, dates JSON-serialised
+ * without wrapping quotes). */
+export function formatGridPdfField(value: unknown, alignment?: string): GridExporterPdfCell {
+  let text: string;
+  if (value === null || value === undefined) {
+    text = '';
+  } else if (typeof value === 'number') {
+    text = value.toString();
+  } else if (typeof value === 'boolean') {
+    text = value ? 'TRUE' : 'FALSE';
+  } else if (typeof value === 'string') {
+    text = value.replace(/"/g, '""');
+  } else if (value instanceof Date) {
+    text = JSON.stringify(value).replace(/^"/, '').replace(/"$/, '');
+  } else {
+    text = JSON.stringify(value).replace(/^"/, '').replace(/"$/, '');
+  }
+  return alignment ? { text, alignment } : text;
+}
+
+/** Computes PDF column widths. Ports `calculatePdfHeaderWidths` from the
+ * old module — treats '*' as 100, percent strings as a share of the
+ * numeric-width base, then scales the whole thing to `maxGridWidth`. */
+export function calculateGridPdfColumnWidths(
+  columns: readonly GridColumnDef[],
+  maxGridWidth = 720,
+): Array<number | string> {
+  const widths = columns.map((column) => parsePdfColumnWidth(column.width));
+  let baseGridWidth = 0;
+  for (const width of widths) {
+    if (typeof width === 'number') baseGridWidth += width;
+  }
+
+  let extra = 0;
+  const resolved: Array<number | string> = widths.map((value) => {
+    if (value === '*') {
+      extra += 100;
+      return '*';
+    }
+    if (typeof value === 'string' && /%/.test(value)) {
+      const percent = parseInt(value, 10);
+      if (Number.isFinite(percent)) {
+        const asNumber = (baseGridWidth * percent) / 100;
+        extra += asNumber;
+        return asNumber;
+      }
+    }
+    return value;
+  });
+
+  const gridWidth = baseGridWidth + extra;
+  if (gridWidth === 0) {
+    return resolved.map((w) => (w === '*' ? w : 1));
+  }
+  return resolved.map((value) =>
+    value === '*' ? '*' : (Number(value) * maxGridWidth) / gridWidth,
+  );
+}
+
+function parsePdfColumnWidth(width: string | undefined): number | string {
+  if (!width) return '*';
+  if (width === '*') return '*';
+  if (/%$/.test(width)) return width;
+  const num = parseInt(width, 10);
+  return Number.isFinite(num) ? num : width;
+}
+
+/** Build a pdfMake-ready doc definition. Pure — the caller is responsible
+ * for piping this through `pdfMake.createPdf(doc).open()` (or equivalent). */
+export function buildGridPdfDocDefinition(
+  columns: readonly GridColumnDef[],
+  rows: readonly GridRow[],
+  pdfOptions: GridExporterPdfOptions = {},
+  exporterOptions: GridExporterOptions = {},
+  colType: GridExporterColumnType = 'visible',
+): GridExporterPdfDocDefinition {
+  const effectiveColumns = filterExporterColumns(columns, exporterOptions, colType);
+  const maxWidth = pdfOptions.maxGridWidth ?? 720;
+  const widths = calculateGridPdfColumnWidths(effectiveColumns, maxWidth);
+
+  const headerRow: Array<GridExporterPdfCell> = effectiveColumns.map((column) => ({
+    text: resolveHeader(column, exporterOptions),
+    style: 'tableHeader',
+  }));
+
+  const body: Array<Array<GridExporterPdfCell>> = rows
+    .filter((row) => row.exporterEnableExporting !== false)
+    .map((row) =>
+      effectiveColumns.map((column) => {
+        const raw = cellValueForExport(row, column, exporterOptions);
+        return formatGridPdfField(raw, column.exporterPdfAlign);
+      }),
+    );
+
+  const doc: GridExporterPdfDocDefinition = {
+    pageOrientation: pdfOptions.orientation ?? 'landscape',
+    pageSize: pdfOptions.pageSize ?? 'A4',
+    content: [
+      {
+        style: 'tableStyle',
+        table: {
+          headerRows: 1,
+          widths,
+          body: [headerRow, ...body],
+        },
+      },
+    ],
+    styles: {
+      tableStyle: pdfOptions.tableStyle ?? { margin: [0, 5, 0, 15] },
+      tableHeader: pdfOptions.tableHeaderStyle ?? { bold: true, fontSize: 12, color: 'black' },
+    },
+    defaultStyle: pdfOptions.defaultStyle ?? { fontSize: 11 },
+  };
+
+  if (pdfOptions.layout !== undefined) doc.layout = pdfOptions.layout;
+  if (pdfOptions.header !== undefined) doc.header = pdfOptions.header;
+  if (pdfOptions.footer !== undefined) doc.footer = pdfOptions.footer;
+  if (pdfOptions.customFormatter) {
+    return pdfOptions.customFormatter(doc);
+  }
+  return doc;
+}
+
+/** Pluck the PDF-specific options out of GridOptions, same shape the old
+ * module expected. Unprefixed field names keep the core module decoupled
+ * from `GridOptions`' exporter* prefixing. */
+export function resolveGridExporterPdfOptions(
+  options: GridOptions,
+): GridExporterPdfOptions {
+  const customFormatter = options.exporterPdfCustomFormatter;
+  return {
+    orientation: options.exporterPdfOrientation,
+    pageSize: options.exporterPdfPageSize,
+    maxGridWidth: options.exporterPdfMaxGridWidth,
+    defaultStyle: options.exporterPdfDefaultStyle,
+    tableStyle: options.exporterPdfTableStyle,
+    tableHeaderStyle: options.exporterPdfTableHeaderStyle,
+    layout: options.exporterPdfLayout,
+    header: options.exporterPdfHeader,
+    footer: options.exporterPdfFooter,
+    customFormatter: customFormatter
+      ? (doc) => customFormatter(doc) as GridExporterPdfDocDefinition
+      : undefined,
+    filename: options.exporterPdfFilename,
+  };
+}
+
+/** Menu item descriptor. Shape matches the old module's `addToGridMenu`
+ * payload so consumers can wire this into whatever menu system they have. */
+export interface GridExporterMenuItem {
+  title: string;
+  order: number;
+  action: () => void;
+  /** Runtime guard — when it returns false the item should be hidden. */
+  shown: () => boolean;
+}
+
+/** i18n labels used by the menu. Defaults match the old module's
+ * English strings so consumers can opt-in to their own translations. */
+export interface GridExporterMenuLabels {
+  allAsCsv?: string;
+  visibleAsCsv?: string;
+  selectedAsCsv?: string;
+  allAsPdf?: string;
+  visibleAsPdf?: string;
+  selectedAsPdf?: string;
+}
+
+/** Build the ui-grid-exporter menu items list. Mirrors `addToMenu` —
+ * consumers read `shown()` to decide whether to render each entry.
+ * `hasSelection` defaults to always-true; pass a callback to respect
+ * the grid's current selection count. */
+export function buildGridExporterMenuItems(
+  options: GridOptions,
+  labels: GridExporterMenuLabels,
+  actions: {
+    csvExport: (rowType: GridExporterRowType, colType: GridExporterColumnType) => void;
+    pdfExport?: (rowType: GridExporterRowType, colType: GridExporterColumnType) => void;
+  },
+  hasSelection: () => boolean = () => false,
+): GridExporterMenuItem[] {
+  const baseOrder = options.exporterMenuItemOrder ?? 200;
+  const menuCsv = options.exporterMenuCsv !== false;
+  const menuPdf = options.exporterMenuPdf !== false;
+  const menuAllData = options.exporterMenuAllData !== false;
+  const menuVisible = options.exporterMenuVisibleData !== false;
+  const menuSelected = options.exporterMenuSelectedData !== false;
+
+  const items: GridExporterMenuItem[] = [
+    {
+      title: labels.allAsCsv ?? 'Export all data as csv',
+      action: () => actions.csvExport('all', 'all'),
+      shown: () => menuCsv && menuAllData,
+      order: baseOrder,
+    },
+    {
+      title: labels.visibleAsCsv ?? 'Export visible data as csv',
+      action: () => actions.csvExport('visible', 'visible'),
+      shown: () => menuCsv && menuVisible,
+      order: baseOrder + 1,
+    },
+    {
+      title: labels.selectedAsCsv ?? 'Export selected data as csv',
+      action: () => actions.csvExport('selected', 'visible'),
+      shown: () => menuCsv && menuSelected && hasSelection(),
+      order: baseOrder + 2,
+    },
+  ];
+
+  if (actions.pdfExport) {
+    items.push(
+      {
+        title: labels.allAsPdf ?? 'Export all data as pdf',
+        action: () => actions.pdfExport!('all', 'all'),
+        shown: () => menuPdf && menuAllData,
+        order: baseOrder + 3,
+      },
+      {
+        title: labels.visibleAsPdf ?? 'Export visible data as pdf',
+        action: () => actions.pdfExport!('visible', 'visible'),
+        shown: () => menuPdf && menuVisible,
+        order: baseOrder + 4,
+      },
+      {
+        title: labels.selectedAsPdf ?? 'Export selected data as pdf',
+        action: () => actions.pdfExport!('selected', 'visible'),
+        shown: () => menuPdf && menuSelected && hasSelection(),
+        order: baseOrder + 5,
+      },
+    );
+  }
+
+  return items;
+}
+
 /** Translate a `GridOptions` object into the exporter's option matrix.
  * Each option field maps 1:1 from `exporter*` to the stripped name used
  * internally, matching the shape of the old `ui.grid.exporter` module. */

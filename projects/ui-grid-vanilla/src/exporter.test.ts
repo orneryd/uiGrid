@@ -134,4 +134,42 @@ describe('vanilla grid exporter', () => {
     expect(api.exporter.buildCsv('visible', 'visible').split('\n')[0]).toBe('Name,Status');
     expect(api.exporter.buildCsv('visible', 'all').split('\n')[0]).toBe('Name,Revenue,Status');
   });
+
+  it('returns a pdfMake-ready doc definition via exporter.buildPdfDocDefinition', async () => {
+    const options = baseOptions();
+    await mountGrid(options);
+    const api = getApi(options);
+    const doc = api.exporter.buildPdfDocDefinition('visible', 'visible');
+    expect(doc.pageOrientation).toBe('landscape');
+    expect(doc.content[0]!.table.headerRows).toBe(1);
+    // Header row + 3 data rows.
+    expect(doc.content[0]!.table.body.length).toBe(4);
+  });
+
+  it('exposes menu items via exporter.getMenuItems with locale-driven titles', async () => {
+    const options = baseOptions({
+      labels: { exporterAllAsCsv: 'Export everything as csv' },
+    });
+    await mountGrid(options);
+    const api = getApi(options);
+    const items = api.exporter.getMenuItems();
+    const allAsCsv = items.find((i) => i.title === 'Export everything as csv');
+    expect(allAsCsv).toBeDefined();
+    expect(allAsCsv!.shown()).toBe(true);
+  });
+
+  it('hides the "selected" menu item when no rows are selected', async () => {
+    const options = baseOptions();
+    await mountGrid(options);
+    const api = getApi(options);
+    const items = api.exporter.getMenuItems();
+    const selectedItems = items.filter((i) => /selected/i.test(i.title));
+    // Selected rows menu entry stays hidden because no rows are selected.
+    expect(selectedItems.every((i) => i.shown() === false)).toBe(true);
+
+    api.selection.selectRow(options.data[0]! as unknown as Record<string, unknown>);
+    const itemsAfter = api.exporter.getMenuItems();
+    const selectedAfter = itemsAfter.filter((i) => /selected/i.test(i.title));
+    expect(selectedAfter.every((i) => i.shown() === true)).toBe(true);
+  });
 });

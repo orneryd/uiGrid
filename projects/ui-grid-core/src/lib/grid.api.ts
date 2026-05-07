@@ -1,6 +1,13 @@
 import { SortDirection } from './grid.constants';
 import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
-import { GridExporterColumnType, GridExporterOptions, GridExporterRowType, PinDirection } from './grid.core';
+import {
+  GridExporterColumnType,
+  GridExporterMenuItem,
+  GridExporterOptions,
+  GridExporterPdfDocDefinition,
+  GridExporterRowType,
+  PinDirection,
+} from './grid.core';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
 
@@ -36,6 +43,12 @@ export interface GridApiBindings {
   /** Returns the CSV string without triggering a download. Used by
    * consumers that want to post-process the CSV (e.g. upload it). */
   buildCsv?: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => string;
+  pdfExport?: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => GridExporterPdfDocDefinition;
+  buildPdfDocDefinition?: (
+    rowType?: GridExporterRowType,
+    colType?: GridExporterColumnType,
+  ) => GridExporterPdfDocDefinition;
+  getExporterMenuItems?: () => GridExporterMenuItem[];
   getExporterOptions?: () => GridExporterOptions;
   setExporterOptions?: (options: GridExporterOptions) => void;
   paginationGetPage?: () => number;
@@ -158,6 +171,22 @@ export interface UiGridApi {
   exporter: {
     csvExport: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
     buildCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => string;
+    /** Triggers a PDF export. Requires `window.pdfMake` (global provided
+     * by the pdfmake library). If pdfMake is not available the method
+     * returns the docDefinition so the caller can render it themselves. */
+    pdfExport: (
+      rowType?: GridExporterRowType,
+      colType?: GridExporterColumnType,
+    ) => GridExporterPdfDocDefinition;
+    /** Returns a pdfMake-ready document definition without triggering
+     * `pdfMake.createPdf(...)`. */
+    buildPdfDocDefinition: (
+      rowType?: GridExporterRowType,
+      colType?: GridExporterColumnType,
+    ) => GridExporterPdfDocDefinition;
+    /** Menu items ("Export all / visible / selected as CSV/PDF"). Matches
+     * the old `addToGridMenu` shape — callers filter by `shown()`. */
+    getMenuItems: () => GridExporterMenuItem[];
     /** Re-exposed so consumers can read + override exporter options
      * without reaching into the underlying grid options. */
     getOptions: () => GridExporterOptions;
@@ -357,6 +386,13 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const falseState = (): Record<string, boolean> => ({});
   const emptyRows = (): GridRow[] => [];
   const saveState = (): GridSavedState => ({});
+  const emptyPdfDoc: GridExporterPdfDocDefinition = {
+    pageOrientation: 'landscape',
+    pageSize: 'A4',
+    content: [],
+    styles: { tableStyle: {}, tableHeader: {} },
+    defaultStyle: {},
+  };
   const paginationGetPage = bindings.paginationGetPage ?? (() => 1);
   const paginationGetTotalPages = bindings.paginationGetTotalPages ?? (() => 1);
   const paginationGetFirstRowIndex = bindings.paginationGetFirstRowIndex ?? (() => 0);
@@ -484,6 +520,13 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       buildCsv:
         bindings.buildCsv ??
         ((): string => ''),
+      pdfExport:
+        bindings.pdfExport ??
+        ((): GridExporterPdfDocDefinition => emptyPdfDoc),
+      buildPdfDocDefinition:
+        bindings.buildPdfDocDefinition ??
+        ((): GridExporterPdfDocDefinition => emptyPdfDoc),
+      getMenuItems: bindings.getExporterMenuItems ?? ((): GridExporterMenuItem[] => []),
       getOptions: bindings.getExporterOptions ?? ((): GridExporterOptions => ({})),
       setOptions: bindings.setExporterOptions ?? noop
     },

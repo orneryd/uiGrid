@@ -598,7 +598,21 @@ export const resolveGridExporterOptions = tsExport.resolveGridExporterOptions;
 export const filterExporterColumns = tsExport.filterExporterColumns;
 export const resolveExporterFilename = tsExport.resolveExporterFilename;
 export const GRID_EXPORTER_CONSTANTS = tsExport.GRID_EXPORTER_CONSTANTS;
-export type { GridExporterOptions, GridExporterRowType, GridExporterColumnType } from './grid.core.export';
+export const buildGridPdfDocDefinition = tsExport.buildGridPdfDocDefinition;
+export const calculateGridPdfColumnWidths = tsExport.calculateGridPdfColumnWidths;
+export const formatGridPdfField = tsExport.formatGridPdfField;
+export const resolveGridExporterPdfOptions = tsExport.resolveGridExporterPdfOptions;
+export const buildGridExporterMenuItems = tsExport.buildGridExporterMenuItems;
+export type {
+  GridExporterOptions,
+  GridExporterRowType,
+  GridExporterColumnType,
+  GridExporterPdfCell,
+  GridExporterPdfDocDefinition,
+  GridExporterPdfOptions,
+  GridExporterMenuItem,
+  GridExporterMenuLabels,
+} from './grid.core.export';
 // Row-edit pure helpers. All of these are DOM-free — the vanilla controller
 // wires them to edit events + a timer for auto-save.
 export const createGridRowEditState = tsRowEdit.createGridRowEditState;
