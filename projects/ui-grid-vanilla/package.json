@@ -16,18 +16,19 @@
     }
   },
   "dependencies": {
-    "@ornery/ui-grid-core": "0.1.10"
+    "@ornery/ui-grid-core": "0.1.10",
+    "@ornery/web-components": "^4.0.3"
   },
   "devDependencies": {
-    "typescript": "~5.8.0",
+    "jsdom": "^26.0.0",
     "tsup": "^8.0.0",
+    "typescript": "~5.8.0",
     "vite": "^6.0.0",
-    "vitest": "^4.1.0",
-    "jsdom": "^26.0.0"
+    "vitest": "^4.1.0"
   },
   "scripts": {
     "start": "vite serve",
-    "build": "npm run build --prefix ../ui-grid-core && tsup src/index.ts --format esm,cjs --dts --tsconfig tsconfig.json",
+    "build": "npm run build --prefix ../ui-grid-core && tsup",
     "test": "vitest run"
   }
 }

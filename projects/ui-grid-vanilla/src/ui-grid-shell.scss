@@ -1,0 +1,16 @@
+// Grid shell — imports all core partials for the main grid layout.
+@use "../../ui-grid-core/src/lib/styles/tokens";
+@use "../../ui-grid-core/src/lib/styles/inherit";
+@use "../../ui-grid-core/src/lib/styles/shell";
+@use "../../ui-grid-core/src/lib/styles/frame";
+@use "../../ui-grid-core/src/lib/styles/grid-table";
+@use "../../ui-grid-core/src/lib/styles/header-cell";
+@use "../../ui-grid-core/src/lib/styles/filter-cell";
+@use "../../ui-grid-core/src/lib/styles/body-cell";
+@use "../../ui-grid-core/src/lib/styles/group-row";
+@use "../../ui-grid-core/src/lib/styles/virtualization";
+@use "../../ui-grid-core/src/lib/styles/alignment";
+@use "../../ui-grid-core/src/lib/styles/empty-state";
+@use "../../ui-grid-core/src/lib/styles/pagination";
+@use "../../ui-grid-core/src/lib/styles/utilities";
+@use "../../ui-grid-core/src/lib/styles/status-pill";

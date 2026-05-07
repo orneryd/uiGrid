@@ -1,0 +1,45 @@
+// Pagination styles
+// Auto-extracted from grid.core.styles.scss
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-grid-pagination-gap);
+  padding: var(--ui-grid-pagination-padding-block) var(--ui-grid-pagination-padding-inline);
+  border-top: 1px solid var(--ui-grid-border-color);
+  background: var(--ui-grid-header-background);
+}
+
+.pagination-bar p {
+  margin: 0;
+  color: var(--ui-grid-muted-color);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-grid-pagination-controls-gap);
+  flex-wrap: wrap;
+}
+
+.pagination-button {
+  padding: var(--ui-grid-pagination-button-padding-block)
+    var(--ui-grid-pagination-button-padding-inline);
+}
+
+.pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-grid-pagination-size-gap);
+}
+
+.pagination-size select {
+  border: 1px solid var(--ui-grid-border-color);
+  border-radius: var(--ui-grid-radius);
+  background: var(--ui-grid-surface);
+  padding: var(--ui-grid-pagination-select-padding-block)
+    var(--ui-grid-pagination-select-padding-inline);
+  font: inherit;
+}
+

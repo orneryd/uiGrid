@@ -1,0 +1,27 @@
+// Virtualization styles
+// Auto-extracted from grid.core.styles.scss
+
+.grid-viewport {
+  width: 100%;
+}
+
+.grid-virtual-spacer {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+
+.grid-virtual-body {
+  position: absolute;
+  left: 0;
+}
+
+.cdk-drag-preview {
+  box-shadow: var(--ui-grid-drag-preview-shadow);
+  border-radius: var(--ui-grid-drag-preview-radius);
+}
+
+.cdk-drag-placeholder {
+  opacity: var(--ui-grid-drag-placeholder-opacity);
+}
+

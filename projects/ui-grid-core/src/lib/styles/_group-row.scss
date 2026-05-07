@@ -1,0 +1,22 @@
+// Group Row styles
+// Auto-extracted from grid.core.styles.scss
+
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-grid-group-row-gap);
+  border: 0;
+  width: 100%;
+  padding: var(--ui-grid-group-row-padding-block) var(--ui-grid-group-row-padding-inline);
+  background: var(--ui-grid-group-background);
+  border-bottom: 1px solid var(--ui-grid-border-color);
+  color: var(--ui-grid-cell-color);
+  cursor: pointer;
+  text-align: left;
+}
+
+.group-row span,
+.group-row small {
+  color: var(--ui-grid-muted-color);
+}
+

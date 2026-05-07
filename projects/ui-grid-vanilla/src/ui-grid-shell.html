@@ -1,0 +1,12 @@
+<link href="./ui-grid-shell.scss" />
+${this.slotRegistry}
+<section class="grid-frame ui-grid" role="grid" aria-label="${this.gridTitle}">
+  <div class="grid-table ui-grid-contents-wrapper" style="${this.gridTableStyle}">
+    <div class="header-grid ui-grid-header ui-grid-header-canvas" style="grid-template-columns:${this.templateColumns}">
+      ${this.headerContent}
+    </div>
+    ${this.filterRowContent}
+    ${this.bodyContent}
+  </div>
+  ${this.paginationContent}
+</section>

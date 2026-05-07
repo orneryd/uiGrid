@@ -20,6 +20,7 @@ export {
   type UiGridIconOverrides,
 } from './ui-grid-standalone.element';
 
+export { UIGridTemplate } from './components/grid-template';
 export type { GridOptions, UiGridApi } from '@ornery/ui-grid-core';
 
 export interface UiGridRustWebModule {
