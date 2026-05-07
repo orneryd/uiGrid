@@ -227,6 +227,26 @@ export interface GridLabels {
   exporterVisibleAsPdf: string;
   /** Exporter menu — "Export selected data as pdf" */
   exporterSelectedAsPdf: string;
+  /** Exporter menu — "Export all data as excel" */
+  exporterAllAsExcel: string;
+  /** Exporter menu — "Export visible data as excel" */
+  exporterVisibleAsExcel: string;
+  /** Exporter menu — "Export selected data as excel" */
+  exporterSelectedAsExcel: string;
+  /** Importer menu — "Import" */
+  importerTitle: string;
+  /** Importer menu — "File" */
+  importerFileLabel: string;
+  /** Importer error — "File could not be processed as JSON" */
+  importerInvalidJson: string;
+  /** Importer error — "Import failed, file is not an array" */
+  importerJsonNotArray: string;
+  /** Importer error — "File could not be processed as CSV" */
+  importerInvalidCsv: string;
+  /** Importer error — "Objects could not be derived from the imported file" */
+  importerNoObjects: string;
+  /** Importer error — "Column names could not be derived" */
+  importerNoHeaders: string;
 }
 
 /**
@@ -336,8 +356,13 @@ export interface GridOptions {
   exporterOlderExcelCompatibility?: boolean;
   exporterIsExcelCompatible?: boolean;
   exporterAllDataFn?: () => readonly GridRow[] | Promise<readonly GridRow[]>;
-  exporterExcelFilename?: string;
-  exporterExcelSheetName?: string;
+  exporterExcelFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterExcelSheetName?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterExcelHeader?: unknown;
+  exporterColumnScaleFactor?: number;
+  exporterExcelCustomFormatters?: (context: { workbook?: unknown; docDefinition: { styles: Record<string, unknown> } }) => {
+    styles: Record<string, unknown>;
+  };
   exporterCsvLinkElement?: HTMLElement | null;
   exporterSuppressMenu?: boolean;
   exporterMenuLabel?: string;

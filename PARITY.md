@@ -22,7 +22,7 @@ framework-neutral core + vanilla / Angular / React wrappers.
 | selection | ✅ ported | Full parity with `packages/selection`: 13 options, 18 API methods, 3 events, mouse (click/shift/ctrl/drag-paint), keyboard (Space/Ctrl+A), row-header checkbox column, select-all header, `isRowSelectable` hook. 33 integration tests + 24 core tests. |
 | auto-resize | ✅ wired | ResizeObserver on the grid host. |
 | saveState | ✅ ported | `gridApi.saveState.save()` / `.restore()` covers sort, filters, grouping + collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position. Per-field opt-in flags: saveWidths, saveOrder, saveScroll, saveFocus, saveVisible, saveSort, saveFilter, saveSelection, saveGrouping, saveGroupingExpandedStates, savePinning, saveTreeView, savePagination. 9 integration tests. |
-| exporter | ✅ ported | `gridApi.exporter.{csvExport, buildCsv, pdfExport, buildPdfDocDefinition, getMenuItems, getOptions, setOptions}`. CSV matrix: `exporterCsvColumnSeparator`, `exporterCsvFilename` (string or fn), `exporterHeaderFilterUseName`, `exporterHeaderFilter`, `exporterHeaderTemplate`, `exporterShowHeader`, `exporterFieldCallback`, `exporterFieldFormatCallback`, `exporterFieldApplyFilters`, `exporterSuppressColumns`, `exporterOlderExcelCompatibility` (BOM), `exporterAllDataFn`, `exporterCsvLinkElement`. PDF matrix: `exporterPdfFilename/Orientation/PageSize/MaxGridWidth/DefaultStyle/TableStyle/TableHeaderStyle/Layout/Header/Footer/CustomFormatter`. pdfMake auto-detected via `window.pdfMake`; when missing, `pdfExport()` returns the doc definition for the caller to render. Column-level `exporterSuppressExport` + `exporterPdfAlign`, row-level `exporterEnableExporting`, auto-suppression of `selectionRowHeaderCol`/`treeBaseRowHeaderCol`. `GRID_EXPORTER_CONSTANTS` mirrors `uiGridExporterConstants`. Menu items (`getMenuItems()`) respect `exporterMenuCsv/Pdf/AllData/VisibleData/SelectedData` flags + i18n labels (`labels.exporterAllAsCsv` etc. in the locale JSON). 29 core + 8 integration tests. Excel export deferred — stub-only. |
+| exporter | ✅ ported | `gridApi.exporter.{csvExport, buildCsv, pdfExport, buildPdfDocDefinition, excelExport, buildExcelSheetData, getMenuItems, getOptions, setOptions}`. CSV matrix: `exporterCsvColumnSeparator`, `exporterCsvFilename` (string or fn), `exporterHeaderFilterUseName`, `exporterHeaderFilter`, `exporterHeaderTemplate`, `exporterShowHeader`, `exporterFieldCallback`, `exporterFieldFormatCallback`, `exporterFieldApplyFilters`, `exporterSuppressColumns`, `exporterOlderExcelCompatibility` (BOM), `exporterAllDataFn`, `exporterCsvLinkElement`. PDF matrix: `exporterPdfFilename/Orientation/PageSize/MaxGridWidth/DefaultStyle/TableStyle/TableHeaderStyle/Layout/Header/Footer/CustomFormatter`. pdfMake auto-detected via `window.pdfMake`. Excel matrix: `exporterExcelFilename/SheetName/Header/CustomFormatters/ColumnScaleFactor`; `buildGridExcelSheetData()` emits ExcelBuilder-compatible `{value, metadata}` cells with native numeric / boolean types preserved; `window.ExcelBuilder` triggers xlsx download when available. Column-level `exporterSuppressExport` + `exporterPdfAlign`, row-level `exporterEnableExporting`, auto-suppression of `selectionRowHeaderCol`/`treeBaseRowHeaderCol`. Menu split into `grid.core.exporter-menu.ts` — `buildGridExporterMenuItems()` gated by `exporterMenuCsv/Pdf/Excel/AllData/VisibleData/SelectedData` flags + i18n labels centralized in `i18n/en-US.json` (`exporterAllAsCsv`/`…AsPdf`/`…AsExcel`). `GRID_EXPORTER_CONSTANTS` mirrors `uiGridExporterConstants`. 37 core + 9 integration tests. |
 | infinite-scroll | ✅ ported | Scroll-driven `needLoadMoreData` / `needLoadMoreDataTop` events wired through the element's scroll handler; full public API (`dataLoaded`, `resetScroll`, `saveScrollPercentage`, `dataRemovedTop`, `dataRemovedBottom`, `setScrollDirections`) and all four options (`enableInfiniteScroll`, `infiniteScrollRowsFromEnd`, `infiniteScrollUp`, `infiniteScrollDown`). 5 core + 8 integration tests. |
 | i18n | ⚠️ partial | English labels live in a `GridLabels` default. Pending: language packs (es/fr/de/ja/zh/...), `setCurrentLang` API, `i18nService.add/get/getSupportedLanguages`, fallback chain. |
 | row-edit | ✅ ported | `gridApi.rowEdit.{saveRow event, setSavePromise, getDirtyRows, getErrorRows, flushDirtyRows, setRowsDirty, setRowsClean}`. Row flags `isDirty`/`isSaving`/`isError` surface as `.ui-grid-row-dirty`/`.ui-grid-row-saving`/`.ui-grid-row-error` on every cell. `rowEditWaitInterval` option (-1 disables timer, defaults to 2000 ms). Auto-marks dirty on `afterCellEdit`; resolves clean when consumer's save promise resolves, moves to error on rejection (row stays dirty so retry works). 9 core + 7 integration tests. |
@@ -38,8 +38,7 @@ the task list.
 1. **importer** (next) — file picker + CSV/JSON parse + menu item.
 2. validate — column validators + invalid-cell visuals.
 3. i18n — language packs + `setCurrentLang`.
-4. exporter (Excel) — pending pdfMake/ExcelBuilder integration is consumer-driven; Excel path is stubbed for now.
-5. row-edit menu — add retry + flush actions.
+4. row-edit menu — add retry + flush actions.
 
 ## Completed this session
 
@@ -56,6 +55,20 @@ the task list.
   default to the old module's `rowSaving=#848484`, `rowError=#FF0000`,
   `rowDirty=#610B38` but are themeable via `--ui-grid-row-*-color/bg`.
   9 core + 7 integration tests.
+- **exporter (Excel + menu split)** (2026-05-07) — final parity pass:
+  `buildGridExcelSheetData()` in core emits ExcelBuilder-compatible
+  `{value, metadata}` cells preserving native numeric / boolean types
+  (display formatters are skipped so spreadsheets can sort numerically).
+  `gridApi.exporter.excelExport()` detects `window.ExcelBuilder` and
+  downloads the generated xlsx; without the library it returns the raw
+  sheet data so consumers can persist it themselves.
+  `exporterExcel{Filename,SheetName,Header,CustomFormatters,ColumnScaleFactor}`
+  options mirror the old module. Menu logic extracted into
+  `grid.core.exporter-menu.ts` (distinct concern — framework wrappers may
+  render menus very differently). Menu labels (`exporterAllAsExcel`,
+  `exporterVisibleAsExcel`, `exporterSelectedAsExcel`) added to the
+  locale JSON so every string stays centralized. 7 new core + 1 new
+  integration test.
 - **exporter (PDF + menu)** (2026-05-07) — extended the exporter module
   to full parity: `buildGridPdfDocDefinition()` emits a pdfMake-ready
   `docDefinition` (table widths via `calculateGridPdfColumnWidths`,

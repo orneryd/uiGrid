@@ -1,5 +1,5 @@
 import { GridColumnDef, GridHeaderTemplateContext, GridOptions, GridRow } from './grid.models';
-import { titleize, toCsvValue } from './grid.utils';
+import { getCellValue, titleize, toCsvValue } from './grid.utils';
 import { buildGridCellContext, formatGridCellDisplayValue } from './grid.core.display';
 
 export function headerLabel(column: GridColumnDef): string {
@@ -79,8 +79,6 @@ export interface GridExporterOptions {
   readonly olderExcelCompatibility?: boolean;
   readonly isExcelCompatible?: boolean;
   readonly allDataFn?: () => readonly GridRow[] | Promise<readonly GridRow[]>;
-  readonly excelFilename?: string;
-  readonly excelSheetName?: string;
   readonly csvLinkElement?: HTMLElement | null;
   readonly menuItemOrder?: number;
   readonly menuCsv?: boolean;
@@ -418,93 +416,101 @@ export function resolveGridExporterPdfOptions(
   };
 }
 
-/** Menu item descriptor. Shape matches the old module's `addToGridMenu`
- * payload so consumers can wire this into whatever menu system they have. */
-export interface GridExporterMenuItem {
-  title: string;
-  order: number;
-  action: () => void;
-  /** Runtime guard — when it returns false the item should be hidden. */
-  shown: () => boolean;
+/** A single Excel cell payload — the old module produced
+ * `{value, metadata: {style}}` entries that ExcelBuilder consumes. */
+export interface GridExporterExcelCell {
+  value: string | number | boolean;
+  metadata?: { style?: unknown } | null;
 }
 
-/** i18n labels used by the menu. Defaults match the old module's
- * English strings so consumers can opt-in to their own translations. */
-export interface GridExporterMenuLabels {
-  allAsCsv?: string;
-  visibleAsCsv?: string;
-  selectedAsCsv?: string;
-  allAsPdf?: string;
-  visibleAsPdf?: string;
-  selectedAsPdf?: string;
+/** The 2D array of cells produced by `buildGridExcelSheetData`. Feeds
+ * directly into `sheet.setData(...)` when ExcelBuilder is available. */
+export type GridExporterExcelSheetData = GridExporterExcelCell[][];
+
+/** Excel-specific options. Mirrors the old module's
+ * `exporterExcel*` bundle. */
+export interface GridExporterExcelOptions {
+  filename?: string | ((rowType: GridExporterRowType, colType: GridExporterColumnType) => string);
+  sheetName?: string | ((rowType: GridExporterRowType, colType: GridExporterColumnType) => string);
+  header?: unknown;
+  columnScaleFactor?: number;
+  customFormatters?: (context: { workbook?: unknown; docDefinition: { styles: Record<string, unknown> } }) => {
+    styles: Record<string, unknown>;
+  };
 }
 
-/** Build the ui-grid-exporter menu items list. Mirrors `addToMenu` —
- * consumers read `shown()` to decide whether to render each entry.
- * `hasSelection` defaults to always-true; pass a callback to respect
- * the grid's current selection count. */
-export function buildGridExporterMenuItems(
-  options: GridOptions,
-  labels: GridExporterMenuLabels,
-  actions: {
-    csvExport: (rowType: GridExporterRowType, colType: GridExporterColumnType) => void;
-    pdfExport?: (rowType: GridExporterRowType, colType: GridExporterColumnType) => void;
-  },
-  hasSelection: () => boolean = () => false,
-): GridExporterMenuItem[] {
-  const baseOrder = options.exporterMenuItemOrder ?? 200;
-  const menuCsv = options.exporterMenuCsv !== false;
-  const menuPdf = options.exporterMenuPdf !== false;
-  const menuAllData = options.exporterMenuAllData !== false;
-  const menuVisible = options.exporterMenuVisibleData !== false;
-  const menuSelected = options.exporterMenuSelectedData !== false;
+/** Formats a single cell value the way ExcelBuilder expects. Ports
+ * `formatFieldAsExcel` (the old module returned the raw value for numbers
+ * / strings, 'TRUE' / 'FALSE' for booleans, stringified everything else). */
+export function formatGridExcelField(value: unknown): string | number | boolean {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' || typeof value === 'string') return value;
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  return JSON.stringify(value);
+}
 
-  const items: GridExporterMenuItem[] = [
-    {
-      title: labels.allAsCsv ?? 'Export all data as csv',
-      action: () => actions.csvExport('all', 'all'),
-      shown: () => menuCsv && menuAllData,
-      order: baseOrder,
-    },
-    {
-      title: labels.visibleAsCsv ?? 'Export visible data as csv',
-      action: () => actions.csvExport('visible', 'visible'),
-      shown: () => menuCsv && menuVisible,
-      order: baseOrder + 1,
-    },
-    {
-      title: labels.selectedAsCsv ?? 'Export selected data as csv',
-      action: () => actions.csvExport('selected', 'visible'),
-      shown: () => menuCsv && menuSelected && hasSelection(),
-      order: baseOrder + 2,
-    },
-  ];
+/** Build the 2D cell grid ExcelBuilder consumes. The first row is the
+ * header, followed by one row per data row. Matches the shape produced
+ * by `formatAsExcel` in the old module. */
+export function buildGridExcelSheetData(
+  columns: readonly GridColumnDef[],
+  rows: readonly GridRow[],
+  exporterOptions: GridExporterOptions = {},
+  colType: GridExporterColumnType = 'visible',
+  styles?: Record<string, { id?: unknown }>,
+): GridExporterExcelSheetData {
+  const effectiveColumns = filterExporterColumns(columns, exporterOptions, colType);
+  const showHeader = exporterOptions.showHeader !== false;
 
-  if (actions.pdfExport) {
-    items.push(
-      {
-        title: labels.allAsPdf ?? 'Export all data as pdf',
-        action: () => actions.pdfExport!('all', 'all'),
-        shown: () => menuPdf && menuAllData,
-        order: baseOrder + 3,
-      },
-      {
-        title: labels.visibleAsPdf ?? 'Export visible data as pdf',
-        action: () => actions.pdfExport!('visible', 'visible'),
-        shown: () => menuPdf && menuVisible,
-        order: baseOrder + 4,
-      },
-      {
-        title: labels.selectedAsPdf ?? 'Export selected data as pdf',
-        action: () => actions.pdfExport!('selected', 'visible'),
-        shown: () => menuPdf && menuSelected && hasSelection(),
-        order: baseOrder + 5,
-      },
-    );
+  const sheetData: GridExporterExcelSheetData = [];
+
+  if (showHeader) {
+    const headerRow = effectiveColumns.map((column) => {
+      const align = column.align ?? '';
+      const styleKey = align === 'center' ? 'headerCenter' : align === 'end' ? 'headerRight' : 'header';
+      const metadata = styles?.[styleKey]?.id !== undefined ? { style: styles[styleKey]!.id } : null;
+      return {
+        value: resolveHeader(column, exporterOptions),
+        metadata,
+      } satisfies GridExporterExcelCell;
+    });
+    sheetData.push(headerRow);
   }
 
-  return items;
+  const exportableRows = rows.filter((row) => row.exporterEnableExporting !== false);
+  for (const row of exportableRows) {
+    const cells = effectiveColumns.map((column) => {
+      // Excel cells preserve native numeric / boolean types so spreadsheets
+      // can sort + aggregate them. The CSV path stringifies because CSV is
+      // a text format; Excel has a real cell type system.
+      const raw = getCellValue(row.entity, column);
+      return {
+        value: formatGridExcelField(raw),
+      } satisfies GridExporterExcelCell;
+    });
+    sheetData.push(cells);
+  }
+
+  return sheetData;
 }
+
+/** Pluck Excel-specific options out of `GridOptions`. */
+export function resolveGridExporterExcelOptions(
+  options: GridOptions,
+): GridExporterExcelOptions {
+  return {
+    filename: options.exporterExcelFilename,
+    sheetName: options.exporterExcelSheetName,
+    header: options.exporterExcelHeader,
+    columnScaleFactor: options.exporterColumnScaleFactor,
+    customFormatters: options.exporterExcelCustomFormatters,
+  };
+}
+
+// Menu-building logic now lives in `./grid.core.exporter-menu.ts`. The
+// public `buildGridExporterMenuItems` / `GridExporterMenuItem` / labels
+// type stay re-exported from the bridge so consumers don't need a new
+// import.
 
 /** Translate a `GridOptions` object into the exporter's option matrix.
  * Each option field maps 1:1 from `exporter*` to the stripped name used
@@ -523,8 +529,6 @@ export function resolveGridExporterOptions(options: GridOptions): GridExporterOp
     olderExcelCompatibility: options.exporterOlderExcelCompatibility,
     isExcelCompatible: options.exporterIsExcelCompatible,
     allDataFn: options.exporterAllDataFn,
-    excelFilename: options.exporterExcelFilename,
-    excelSheetName: options.exporterExcelSheetName,
     csvLinkElement: options.exporterCsvLinkElement,
     menuItemOrder: options.exporterMenuItemOrder,
     menuCsv: options.exporterMenuCsv,

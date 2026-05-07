@@ -11,6 +11,7 @@ import type {
 import * as tsDisplay from './grid.core.display';
 import * as tsEdit from './grid.core.edit';
 import * as tsExport from './grid.core.export';
+import * as tsExporterMenu from './grid.core.exporter-menu';
 import * as tsFiltering from './grid.core.filtering';
 import * as tsGrouping from './grid.core.grouping';
 import * as tsIdentity from './grid.core.identity';
@@ -602,7 +603,10 @@ export const buildGridPdfDocDefinition = tsExport.buildGridPdfDocDefinition;
 export const calculateGridPdfColumnWidths = tsExport.calculateGridPdfColumnWidths;
 export const formatGridPdfField = tsExport.formatGridPdfField;
 export const resolveGridExporterPdfOptions = tsExport.resolveGridExporterPdfOptions;
-export const buildGridExporterMenuItems = tsExport.buildGridExporterMenuItems;
+export const buildGridExporterMenuItems = tsExporterMenu.buildGridExporterMenuItems;
+export const buildGridExcelSheetData = tsExport.buildGridExcelSheetData;
+export const formatGridExcelField = tsExport.formatGridExcelField;
+export const resolveGridExporterExcelOptions = tsExport.resolveGridExporterExcelOptions;
 export type {
   GridExporterOptions,
   GridExporterRowType,
@@ -610,9 +614,15 @@ export type {
   GridExporterPdfCell,
   GridExporterPdfDocDefinition,
   GridExporterPdfOptions,
+  GridExporterExcelCell,
+  GridExporterExcelSheetData,
+  GridExporterExcelOptions,
+} from './grid.core.export';
+export type {
   GridExporterMenuItem,
   GridExporterMenuLabels,
-} from './grid.core.export';
+  GridExporterMenuActions,
+} from './grid.core.exporter-menu';
 // Row-edit pure helpers. All of these are DOM-free — the vanilla controller
 // wires them to edit events + a timer for auto-save.
 export const createGridRowEditState = tsRowEdit.createGridRowEditState;

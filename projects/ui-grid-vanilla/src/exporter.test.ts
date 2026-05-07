@@ -135,6 +135,17 @@ describe('vanilla grid exporter', () => {
     expect(api.exporter.buildCsv('visible', 'all').split('\n')[0]).toBe('Name,Revenue,Status');
   });
 
+  it('returns an ExcelBuilder-ready sheet data grid via exporter.buildExcelSheetData', async () => {
+    const options = baseOptions();
+    await mountGrid(options);
+    const api = getApi(options);
+    const sheet = api.exporter.buildExcelSheetData('visible', 'visible');
+    // Header row + 3 data rows.
+    expect(sheet.length).toBe(4);
+    expect(sheet[0]!.map((c) => c.value)).toEqual(['Name', 'Revenue', 'Status']);
+    expect(sheet[1]!.map((c) => c.value)).toEqual(['Alpha', 100, 'Active']);
+  });
+
   it('returns a pdfMake-ready doc definition via exporter.buildPdfDocDefinition', async () => {
     const options = baseOptions();
     await mountGrid(options);

@@ -33,5 +33,15 @@
   "exporterSelectedAsCsv": "Export selected data as csv",
   "exporterAllAsPdf": "Export all data as pdf",
   "exporterVisibleAsPdf": "Export visible data as pdf",
-  "exporterSelectedAsPdf": "Export selected data as pdf"
+  "exporterSelectedAsPdf": "Export selected data as pdf",
+  "exporterAllAsExcel": "Export all data as excel",
+  "exporterVisibleAsExcel": "Export visible data as excel",
+  "exporterSelectedAsExcel": "Export selected data as excel",
+  "importerTitle": "Import",
+  "importerFileLabel": "File",
+  "importerInvalidJson": "File could not be processed as JSON",
+  "importerJsonNotArray": "Import failed, file is not an array",
+  "importerInvalidCsv": "File could not be processed as CSV",
+  "importerNoObjects": "Objects could not be derived from the imported file",
+  "importerNoHeaders": "Column names could not be derived"
 }

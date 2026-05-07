@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   GRID_EXPORTER_CONSTANTS,
   buildGridCsv,
-  buildGridExporterMenuItems,
+  buildGridExcelSheetData,
   buildGridPdfDocDefinition,
   calculateGridPdfColumnWidths,
   filterExporterColumns,
+  formatGridExcelField,
   formatGridPdfField,
   resolveExporterFilename,
   resolveGridExporterOptions,
@@ -243,51 +244,53 @@ describe('formatGridPdfField', () => {
   });
 });
 
-describe('buildGridExporterMenuItems', () => {
-  it('emits 3 items by default (CSV only, no selection)', () => {
-    const items = buildGridExporterMenuItems(
-      { id: 'g', data: [], columnDefs: [] },
-      {},
-      { csvExport: () => {} },
-      () => false,
+// Menu tests live in `./grid.core.exporter-menu.spec.ts`.
+
+describe('buildGridExcelSheetData', () => {
+  it('produces a header row + data rows with {value, metadata} cells', () => {
+    const sheet = buildGridExcelSheetData(
+      [{ name: 'name', displayName: 'Name' }, { name: 'revenue', displayName: 'Revenue' }],
+      [
+        new GridRow('r1', { name: 'Alpha', revenue: 100 }, 0, 44),
+        new GridRow('r2', { name: 'Beta', revenue: 200 }, 1, 44),
+      ],
     );
-    expect(items.length).toBe(3);
-    expect(items[0]!.shown()).toBe(true);
-    expect(items[1]!.shown()).toBe(true);
-    // Selected-rows item is hidden because hasSelection() is false.
-    expect(items[2]!.shown()).toBe(false);
+    expect(sheet.length).toBe(3);
+    expect(sheet[0]!.map((c) => c.value)).toEqual(['Name', 'Revenue']);
+    expect(sheet[1]!.map((c) => c.value)).toEqual(['Alpha', 100]);
   });
 
-  it('adds 3 PDF items when pdfExport is provided', () => {
-    const items = buildGridExporterMenuItems(
-      { id: 'g', data: [], columnDefs: [] },
-      {},
-      { csvExport: () => {}, pdfExport: () => {} },
-      () => true,
+  it('skips the header row when showHeader is false', () => {
+    const sheet = buildGridExcelSheetData(
+      [{ name: 'name', displayName: 'Name' }],
+      [new GridRow('r1', { name: 'Alpha' }, 0, 44)],
+      { showHeader: false },
     );
-    expect(items.length).toBe(6);
-    expect(items.every((i) => i.shown())).toBe(true);
+    expect(sheet.length).toBe(1);
+    expect(sheet[0]!.map((c) => c.value)).toEqual(['Alpha']);
   });
 
-  it('uses the provided labels verbatim', () => {
-    const items = buildGridExporterMenuItems(
-      { id: 'g', data: [], columnDefs: [] },
-      { allAsCsv: 'Everything as csv!' },
-      { csvExport: () => {} },
-    );
-    expect(items[0]!.title).toBe('Everything as csv!');
-  });
-
-  it('honors exporterMenuCsv:false by hiding CSV rows', () => {
-    const items = buildGridExporterMenuItems(
-      { id: 'g', data: [], columnDefs: [], exporterMenuCsv: false },
+  it('attaches the header style metadata from the provided styles map', () => {
+    const sheet = buildGridExcelSheetData(
+      [{ name: 'name', displayName: 'Name' }],
+      [new GridRow('r1', { name: 'Alpha' }, 0, 44)],
       {},
-      { csvExport: () => {}, pdfExport: () => {} },
-      () => true,
+      'visible',
+      { header: { id: 'H1' } },
     );
-    const shown = items.filter((i) => i.shown());
-    expect(shown.length).toBe(3);
-    expect(shown.every((i) => /pdf/i.test(i.title))).toBe(true);
+    expect(sheet[0]![0]!.metadata).toEqual({ style: 'H1' });
+  });
+});
+
+describe('formatGridExcelField', () => {
+  it('handles null / numbers / strings / booleans / objects', () => {
+    expect(formatGridExcelField(null)).toBe('');
+    expect(formatGridExcelField(undefined)).toBe('');
+    expect(formatGridExcelField(42)).toBe(42);
+    expect(formatGridExcelField('Alpha')).toBe('Alpha');
+    expect(formatGridExcelField(true)).toBe('TRUE');
+    expect(formatGridExcelField(false)).toBe('FALSE');
+    expect(formatGridExcelField({ a: 1 })).toBe('{"a":1}');
   });
 });
 

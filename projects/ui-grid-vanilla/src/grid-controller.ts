@@ -60,8 +60,10 @@ import {
   reconcileGridSelection as coreReconcileGridSelection,
   mapSelectedRowsToEntities as coreMapSelectedRowsToEntities,
   buildGridCsv,
+  buildGridExcelSheetData,
   buildGridPdfDocDefinition,
   buildGridExporterMenuItems,
+  resolveGridExporterExcelOptions,
   resolveGridExporterOptions,
   resolveGridExporterPdfOptions,
   resolveExporterFilename,
@@ -75,6 +77,7 @@ import {
   isGridRowEditTimerEnabled,
   resolveGridRowEditWaitInterval,
   type GridRowEditState,
+  type GridExporterExcelSheetData,
   type GridExporterMenuItem,
   type GridExporterOptions,
   type GridExporterColumnType,
@@ -277,6 +280,8 @@ export class VanillaGridController {
       pdfExport: (rowType, colType) => this.exportPdf(rowType, colType),
       buildPdfDocDefinition: (rowType, colType) =>
         this.buildPdfDocDefinition(rowType, colType),
+      excelExport: (rowType, colType) => this.exportExcel(rowType, colType),
+      buildExcelSheetData: (rowType, colType) => this.buildExcelSheetData(rowType, colType),
       getExporterMenuItems: () => this.buildExporterMenuItems(),
       getExporterOptions: () => ({ ...this.exporterOverrides, ...resolveGridExporterOptions(this.options) }),
       setExporterOptions: (overrides) => {
@@ -1874,21 +1879,70 @@ export class VanillaGridController {
     return doc;
   }
 
+  private buildExcelSheetData(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): GridExporterExcelSheetData {
+    const exporterOptions = this.resolveExporterOptions();
+    const columns = colType === 'all' ? this.options.columnDefs : this.visibleColumns;
+    return buildGridExcelSheetData(columns, this.exporterRowsFor(rowType), exporterOptions, colType);
+  }
+
+  private exportExcel(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): GridExporterExcelSheetData {
+    const sheetData = this.buildExcelSheetData(rowType, colType);
+    // ExcelBuilder is an optional global (consumers load it separately).
+    // When present, produce + download the xlsx the same way the old module
+    // did; when missing, just return the raw sheet data.
+    const win = typeof window !== 'undefined' ? (window as typeof window & {
+      ExcelBuilder?: {
+        Worksheet: new (config: { name: string }) => { setData: (data: unknown) => void };
+        Workbook: new () => { addWorksheet: (sheet: unknown) => void };
+        Builder: { createFile: (workbook: unknown, options: { type: 'blob' }) => Promise<Blob> };
+      };
+    }) : undefined;
+    const ExcelBuilder = win?.ExcelBuilder;
+    if (!ExcelBuilder) {
+      return sheetData;
+    }
+    const excelOptions = resolveGridExporterExcelOptions(this.options);
+    const sheetName = typeof excelOptions.sheetName === 'function'
+      ? excelOptions.sheetName(rowType, colType)
+      : (excelOptions.sheetName ?? 'Sheet1');
+    const filename = sanitizeDownloadFilename(
+      resolveExporterFilename(excelOptions.filename, 'download.xlsx', rowType, colType),
+    );
+    const sheet = new ExcelBuilder.Worksheet({ name: sheetName });
+    const workbook = new ExcelBuilder.Workbook();
+    workbook.addWorksheet(sheet);
+    sheet.setData(sheetData);
+    void ExcelBuilder.Builder.createFile(workbook, { type: 'blob' }).then((result) => {
+      if (typeof URL === 'undefined' || typeof document === 'undefined') return;
+      const url = URL.createObjectURL(result);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+    return sheetData;
+  }
+
   private buildExporterMenuItems(): GridExporterMenuItem[] {
+    // Pass the full resolved label bundle — the menu module pulls only
+    // the `exporter*` keys it needs via `Partial<GridLabels>`.
     return buildGridExporterMenuItems(
       this.options,
-      {
-        allAsCsv: this.labels.exporterAllAsCsv,
-        visibleAsCsv: this.labels.exporterVisibleAsCsv,
-        selectedAsCsv: this.labels.exporterSelectedAsCsv,
-        allAsPdf: this.labels.exporterAllAsPdf,
-        visibleAsPdf: this.labels.exporterVisibleAsPdf,
-        selectedAsPdf: this.labels.exporterSelectedAsPdf,
-      },
+      this.labels,
       {
         csvExport: (rowType, colType) => this.exportCsv(rowType, colType),
         pdfExport: (rowType, colType) => {
           this.exportPdf(rowType, colType);
+        },
+        excelExport: (rowType, colType) => {
+          this.exportExcel(rowType, colType);
         },
       },
       () => this.selectionState.selectedRowIds.size > 0,

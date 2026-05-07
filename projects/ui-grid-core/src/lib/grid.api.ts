@@ -2,6 +2,7 @@ import { SortDirection } from './grid.constants';
 import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
 import {
   GridExporterColumnType,
+  GridExporterExcelSheetData,
   GridExporterMenuItem,
   GridExporterOptions,
   GridExporterPdfDocDefinition,
@@ -48,6 +49,11 @@ export interface GridApiBindings {
     rowType?: GridExporterRowType,
     colType?: GridExporterColumnType,
   ) => GridExporterPdfDocDefinition;
+  excelExport?: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => GridExporterExcelSheetData;
+  buildExcelSheetData?: (
+    rowType?: GridExporterRowType,
+    colType?: GridExporterColumnType,
+  ) => GridExporterExcelSheetData;
   getExporterMenuItems?: () => GridExporterMenuItem[];
   getExporterOptions?: () => GridExporterOptions;
   setExporterOptions?: (options: GridExporterOptions) => void;
@@ -184,9 +190,21 @@ export interface UiGridApi {
       rowType?: GridExporterRowType,
       colType?: GridExporterColumnType,
     ) => GridExporterPdfDocDefinition;
-    /** Menu items ("Export all / visible / selected as CSV/PDF"). Matches
-     * the old `addToGridMenu` shape — callers filter by `shown()`. */
+    /** Menu items ("Export all / visible / selected as CSV/PDF/Excel").
+     * Matches the old `addToGridMenu` shape — callers filter by `shown()`. */
     getMenuItems: () => GridExporterMenuItem[];
+    /** Excel export — requires `window.ExcelBuilder` (global provided by
+     * the ExcelBuilder library). Returns the raw sheet data even when
+     * ExcelBuilder is missing so the caller can persist it their own way. */
+    excelExport: (
+      rowType?: GridExporterRowType,
+      colType?: GridExporterColumnType,
+    ) => GridExporterExcelSheetData;
+    /** Returns the 2D sheet data without attempting to generate an xlsx. */
+    buildExcelSheetData: (
+      rowType?: GridExporterRowType,
+      colType?: GridExporterColumnType,
+    ) => GridExporterExcelSheetData;
     /** Re-exposed so consumers can read + override exporter options
      * without reaching into the underlying grid options. */
     getOptions: () => GridExporterOptions;
@@ -526,6 +544,12 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       buildPdfDocDefinition:
         bindings.buildPdfDocDefinition ??
         ((): GridExporterPdfDocDefinition => emptyPdfDoc),
+      excelExport:
+        bindings.excelExport ??
+        ((): GridExporterExcelSheetData => []),
+      buildExcelSheetData:
+        bindings.buildExcelSheetData ??
+        ((): GridExporterExcelSheetData => []),
       getMenuItems: bindings.getExporterMenuItems ?? ((): GridExporterMenuItem[] => []),
       getOptions: bindings.getExporterOptions ?? ((): GridExporterOptions => ({})),
       setOptions: bindings.setExporterOptions ?? noop
