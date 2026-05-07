@@ -58,6 +58,29 @@ export interface GridCellPosition {
   columnName: string;
 }
 
+/**
+ * Key event override descriptor — ports the old grid's
+ * `keyDownOverrides[i]` shape. When a keydown matches every field that's
+ * specified, cellnav emits `viewPortKeyDown` instead of handling the key
+ * itself. Unspecified fields are wildcards (match any value).
+ */
+export interface GridKeyEventOverride {
+  keyCode?: number;
+  key?: string;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+}
+
+/** Snapshot of a (row, col) focus target. Exposed through the cellNav
+ * public API so consumers can read `.row.entity` / `.col.name` the same
+ * way they did with the old grid. */
+export interface GridRowColumn {
+  row: GridRow;
+  col: GridColumnDef;
+}
+
 export type GridCellEditableCondition = boolean | ((context: GridCellEditableContext) => boolean);
 export type GridColumnType = 'string' | 'number' | 'boolean' | 'date' | 'object';
 
@@ -233,6 +256,9 @@ export interface GridOptions {
   showTreeExpandNoChildren?: boolean;
   treeRowHeaderAlwaysVisible?: boolean;
   enableAutoResize?: boolean;
+  /** Master toggle for infinite-scroll. When false, `needLoadMoreData` /
+   * `needLoadMoreDataTop` never fire regardless of the direction flags. */
+  enableInfiniteScroll?: boolean;
   infiniteScrollRowsFromEnd?: number;
   infiniteScrollUp?: boolean;
   infiniteScrollDown?: boolean;
@@ -256,6 +282,13 @@ export interface GridOptions {
   selectionRowHeaderWidth?: number;
   enableFooterTotalSelected?: boolean;
   isRowSelectable?: (row: GridRow) => boolean;
+  /** Cellnav — ports ui.grid.cellNav options. */
+  modifierKeysToMultiSelectCells?: boolean;
+  /** Key events that bypass cellNav's default handling and bubble up as
+   * viewPortKeyDown / viewPortKeyPress instead. Mirrors the old grid's
+   * keyDownOverrides array — each entry specifies the key + modifier
+   * combination that should be overridden. */
+  keyDownOverrides?: readonly GridKeyEventOverride[];
   benchmark?: GridBenchmarkOptions;
   onRegisterApi?: (gridApi: unknown) => void;
   rowIdentity?: (row: GridRecord, index: number) => string;

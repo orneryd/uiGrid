@@ -84,6 +84,10 @@ export function buildGridPipeline(context: BuildGridPipelineContext): PipelineRe
   } else {
     let filtered: GridRow[];
     if (!FEATURE_FILTERING || context.options.enableFiltering === false) {
+      // Rows are cached across pipeline passes, so clear any stale
+      // `filter:*` reasons before using persisted `row.visible` state when
+      // filtering is disabled or unavailable.
+      resetFilterReasons(rows);
       filtered = rows.filter((row) => row.visible);
     } else {
       // Prepare filter specs once per column — the per-row loop then never

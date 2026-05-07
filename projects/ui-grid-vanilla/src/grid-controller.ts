@@ -60,6 +60,12 @@ import {
   reconcileGridSelection as coreReconcileGridSelection,
   mapSelectedRowsToEntities as coreMapSelectedRowsToEntities,
   type GridSelectionState,
+  type GridInfiniteScrollState,
+  maybeRequestInfiniteScrollData,
+  completeInfiniteScrollDataLoad,
+  resetInfiniteScrollState,
+  saveInfiniteScrollPercentage,
+  setInfiniteScrollDirectionsState,
   seekGridPaginationCommand,
   setGridPaginationPageSizeCommand,
   setPathValue,
@@ -74,6 +80,7 @@ import {
   type DisplayItem,
   type GridCellPosition,
   type GridColumnDef,
+  type GridRowColumn,
   type GridLabels,
   type GridOptions,
   type GridRecord,
@@ -159,6 +166,20 @@ export class VanillaGridController {
   private editingCell: GridCellPosition | null = null;
   private editingValue = '';
   private selectionState: GridSelectionState = createGridSelectionState();
+  /** cellNav state. Persists the last focused cell so the public API's
+   * getFocusedCell returns the right value across re-renders, and tracks
+   * the focused-cells history for getCurrentSelection. */
+  private cellNavLastRowCol: { rowId: string; columnName: string } | null = null;
+  private cellNavFocusedCells: { rowId: string; columnName: string }[] = [];
+  /** Infinite-scroll state. Direction flags seed from options; dataLoading
+   * + previousVisibleRows are runtime bookkeeping for saveScrollPercentage /
+   * dataRemovedTop / dataRemovedBottom. */
+  private infiniteScrollState: GridInfiniteScrollState = {
+    scrollUp: false,
+    scrollDown: true,
+    dataLoading: false,
+    previousVisibleRows: 0,
+  };
   private pipeline: PipelineResult;
   private labels: GridLabels;
   private visibleColumns: GridColumnDef[] = [];
@@ -174,6 +195,11 @@ export class VanillaGridController {
     this.columnOrder = options.columnDefs.map((column) => column.name);
     this.groupByColumns = options.grouping?.groupBy ? [...options.grouping.groupBy] : [];
     this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
+
+    this.infiniteScrollState = resetInfiniteScrollState(
+      options.infiniteScrollUp === true,
+      options.infiniteScrollDown !== false,
+    );
 
     this.pipeline = {
       visibleRows: [],
@@ -268,6 +294,26 @@ export class VanillaGridController {
       setModifierKeysToMultiSelect: (value) => this.setModifierKeysToMultiSelect(value),
       getSelectAllState: () => this.selectionState.selectAll,
       shiftSelectRow: (rowEntity, evt) => this.shiftSelectRow(rowEntity, evt),
+      // cellNav bindings — thin wrappers over the same focus state the
+      // element uses. The element raises `cellNav.navigate` via
+      // controller.setCellNavFocus(); these methods let consumers inspect
+      // and re-drive that state.
+      scrollToFocus: (rowEntity, colDef) => this.cellNavScrollToFocus(rowEntity, colDef),
+      getFocusedCell: () => this.cellNavGetFocusedCell(),
+      getCurrentSelection: () => this.cellNavGetCurrentSelection(),
+      rowColSelectIndex: (rowCol) => this.cellNavRowColSelectIndex(rowCol),
+      // Infinite-scroll bindings — ports ui.grid.infiniteScroll public API.
+      infiniteScrollDataLoaded: (scrollUp, scrollDown) =>
+        this.infiniteScrollDataLoaded(scrollUp, scrollDown),
+      infiniteScrollReset: (scrollUp, scrollDown) =>
+        this.infiniteScrollResetScroll(scrollUp, scrollDown),
+      infiniteScrollSaveScrollPercentage: () => this.infiniteScrollSavePercentage(),
+      infiniteScrollDataRemovedTop: (scrollUp, scrollDown) =>
+        this.infiniteScrollDataRemovedTop(scrollUp, scrollDown),
+      infiniteScrollDataRemovedBottom: (scrollUp, scrollDown) =>
+        this.infiniteScrollDataRemovedBottom(scrollUp, scrollDown),
+      infiniteScrollSetDirections: (scrollUp, scrollDown) =>
+        this.infiniteScrollSetDirections(scrollUp, scrollDown),
     });
 
     this.refresh();
@@ -306,6 +352,17 @@ export class VanillaGridController {
     );
     if (declaresPin) {
       this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
+    }
+
+    // Re-seed infinite-scroll directions when the options declare them,
+    // so consumers can flip scrollUp/scrollDown through `grid.options`
+    // without needing to go through setScrollDirections.
+    if (options.infiniteScrollUp !== undefined || options.infiniteScrollDown !== undefined) {
+      this.infiniteScrollState = setInfiniteScrollDirectionsState(
+        this.infiniteScrollState,
+        options.infiniteScrollUp ?? this.infiniteScrollState.scrollUp,
+        options.infiniteScrollDown ?? this.infiniteScrollState.scrollDown,
+      );
     }
 
     this.apiRegistered = false;
@@ -932,6 +989,204 @@ export class VanillaGridController {
   }
 
   // ---- End row selection ---------------------------------------------
+
+  // ---- cellNav -------------------------------------------------------
+  // State + accessors for the cellNav public API. Element owns the DOM
+  // focus; controller owns the logical "last focused cell" and the
+  // focused-cells history. Element calls setCellNavFocus() whenever the
+  // active cell changes.
+
+  /** Record a navigation event. Pushes to the focused-cells history,
+   * updates lastRowCol, and raises cellNav.navigate on the public API. */
+  setCellNavFocus(
+    rowId: string | null,
+    columnName: string | null,
+    opts: { appendToSelection?: boolean } = {},
+  ): void {
+    const previous = this.cellNavLastRowCol;
+    const previousRowCol = this.resolveCellNavRowCol(previous);
+    if (rowId && columnName) {
+      this.cellNavLastRowCol = { rowId, columnName };
+      if (opts.appendToSelection) {
+        this.cellNavFocusedCells = [
+          ...this.cellNavFocusedCells.filter(
+            (entry) => !(entry.rowId === rowId && entry.columnName === columnName),
+          ),
+          { rowId, columnName },
+        ];
+      } else {
+        this.cellNavFocusedCells = [{ rowId, columnName }];
+      }
+    } else {
+      this.cellNavLastRowCol = null;
+      this.cellNavFocusedCells = [];
+    }
+    const nextRowCol = this.resolveCellNavRowCol(this.cellNavLastRowCol);
+    this.gridApi.cellNav.raise.navigate(nextRowCol, previousRowCol);
+  }
+
+  /** Raise viewPortKeyDown / viewPortKeyPress on behalf of the element.
+   * Element gates this with `options.keyDownOverrides`. */
+  raiseCellNavKeyEvent(
+    type: 'keydown' | 'keypress',
+    event: KeyboardEvent,
+  ): void {
+    const rowCol = this.resolveCellNavRowCol(this.cellNavLastRowCol);
+    if (type === 'keydown') this.gridApi.cellNav.raise.viewPortKeyDown(event, rowCol);
+    else this.gridApi.cellNav.raise.viewPortKeyPress(event, rowCol);
+  }
+
+  private cellNavGetFocusedCell(): GridRowColumn | null {
+    return this.resolveCellNavRowCol(this.cellNavLastRowCol);
+  }
+
+  private cellNavGetCurrentSelection(): GridRowColumn[] {
+    const out: GridRowColumn[] = [];
+    for (const entry of this.cellNavFocusedCells) {
+      const rowCol = this.resolveCellNavRowCol(entry);
+      if (rowCol) out.push(rowCol);
+    }
+    return out;
+  }
+
+  private cellNavRowColSelectIndex(rowCol: GridRowColumn): number {
+    for (let i = 0; i < this.cellNavFocusedCells.length; i++) {
+      const entry = this.cellNavFocusedCells[i]!;
+      if (entry.rowId === rowCol.row.id && entry.columnName === rowCol.col.name) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private resolveCellNavRowCol(
+    position: { rowId: string; columnName: string } | null,
+  ): GridRowColumn | null {
+    if (!position) return null;
+    const row = this.findRowById(position.rowId);
+    const col = this.findColumnByName(position.columnName);
+    if (!row || !col) return null;
+    return { row, col };
+  }
+
+  /** cellNav.scrollToFocus — resolves rowEntity + colDef into a logical
+   * focus and delegates to the element (if attached) for actual scrolling.
+   * When the element isn't wired (e.g. bare controller in tests), the
+   * state still updates and the promise resolves immediately. */
+  private async cellNavScrollToFocus(
+    rowEntity: GridRecord | null,
+    colDef: GridColumnDef | null,
+  ): Promise<void> {
+    const rowId = rowEntity ? this.resolveRowId(rowEntity) : null;
+    const columnName = colDef?.name ?? null;
+    this.setCellNavFocus(rowId, columnName);
+    this.cellNavScrollRequest?.(rowId, columnName);
+    return Promise.resolve();
+  }
+
+  /** Element registers its scroll-and-focus handler here so the API
+   * binding above can delegate DOM work. Controller stays DOM-free. */
+  private cellNavScrollRequest: ((rowId: string | null, columnName: string | null) => void) | null = null;
+  setCellNavScrollHandler(handler: ((rowId: string | null, columnName: string | null) => void) | null): void {
+    this.cellNavScrollRequest = handler;
+  }
+
+  /** Read-only accessor for the current options. Used by the element to
+   * inspect keyDownOverrides / modifierKeysToMultiSelectCells without
+   * coupling it to a private field. */
+  getOptions(): GridOptions {
+    return this.options;
+  }
+
+  // ---- End cellNav ---------------------------------------------------
+
+  // ---- Infinite scroll ----------------------------------------------
+  // Thin wrappers over grid.core.infinite-scroll's pure helpers. The
+  // element calls `evaluateInfiniteScroll` from its scroll-frame callback;
+  // these helpers raise needLoadMoreData / needLoadMoreDataTop when the
+  // user approaches the end/top of the dataset.
+
+  /** Evaluate whether the current scroll position should request more
+   * data at the top or bottom. Called from the element's scroll frame. */
+  evaluateInfiniteScroll(startIndex: number, visibleRows: number, viewportRows: number): void {
+    if (this.options.enableInfiniteScroll === false) return;
+    const threshold = this.options.infiniteScrollRowsFromEnd ?? 20;
+    const { request, nextState } = maybeRequestInfiniteScrollData({
+      state: this.infiniteScrollState,
+      startIndex,
+      visibleRows,
+      viewportRows,
+      threshold,
+    });
+    if (request === null) return;
+    this.infiniteScrollState = nextState;
+    if (request === 'top') this.gridApi.infiniteScroll.raise.needLoadMoreDataTop();
+    else this.gridApi.infiniteScroll.raise.needLoadMoreData();
+  }
+
+  private infiniteScrollDataLoaded(scrollUp?: boolean, scrollDown?: boolean): Promise<void> {
+    this.infiniteScrollState = completeInfiniteScrollDataLoad(
+      this.infiniteScrollState,
+      scrollUp ?? this.infiniteScrollState.scrollUp,
+      scrollDown ?? this.infiniteScrollState.scrollDown,
+    );
+    this.refresh();
+    return Promise.resolve();
+  }
+
+  private infiniteScrollResetScroll(scrollUp?: boolean, scrollDown?: boolean): void {
+    this.infiniteScrollState = resetInfiniteScrollState(
+      scrollUp ?? false,
+      scrollDown ?? true,
+    );
+    this.infiniteScrollScrollToTopRequest?.();
+  }
+
+  private infiniteScrollSavePercentage(): void {
+    this.infiniteScrollState = saveInfiniteScrollPercentage(
+      this.infiniteScrollState,
+      this.pipeline.visibleRows.length,
+    );
+  }
+
+  private infiniteScrollDataRemovedTop(scrollUp?: boolean, scrollDown?: boolean): void {
+    this.infiniteScrollState = setInfiniteScrollDirectionsState(
+      this.infiniteScrollState,
+      scrollUp ?? this.infiniteScrollState.scrollUp,
+      scrollDown ?? this.infiniteScrollState.scrollDown,
+    );
+    this.refresh();
+  }
+
+  private infiniteScrollDataRemovedBottom(scrollUp?: boolean, scrollDown?: boolean): void {
+    this.infiniteScrollState = setInfiniteScrollDirectionsState(
+      this.infiniteScrollState,
+      scrollUp ?? this.infiniteScrollState.scrollUp,
+      scrollDown ?? this.infiniteScrollState.scrollDown,
+    );
+    this.refresh();
+  }
+
+  private infiniteScrollSetDirections(scrollUp: boolean, scrollDown: boolean): void {
+    this.infiniteScrollState = setInfiniteScrollDirectionsState(
+      this.infiniteScrollState,
+      scrollUp,
+      scrollDown,
+    );
+  }
+
+  /** Element registers a scroll-to-top handler here so resetScroll can
+   * bring the viewport back to 0. Keeps the controller DOM-free. */
+  private infiniteScrollScrollToTopRequest: (() => void) | null = null;
+  setInfiniteScrollResetHandler(handler: (() => void) | null): void {
+    this.infiniteScrollScrollToTopRequest = handler;
+  }
+
+  getInfiniteScrollState(): Readonly<GridInfiniteScrollState> {
+    return this.infiniteScrollState;
+  }
+
+  // ---- End infinite scroll ------------------------------------------
 
   canResizeColumns(): boolean {
     return this.options.enableColumnResizing !== false;

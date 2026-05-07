@@ -285,6 +285,7 @@ export class UiGridStandaloneElement extends HTMLElement {
       'tree-row-header-always-visible',
       'enable-auto-resize',
       'enable-virtualization',
+      'enable-infinite-scroll',
       'infinite-scroll-up',
       'infinite-scroll-down',
       // Selection — ported from ui.grid.selection options.
@@ -453,6 +454,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     const enableVirtualization = this.parseBooleanAttribute('enable-virtualization');
     if (enableVirtualization !== undefined)
       this.attributeOptions.enableVirtualization = enableVirtualization;
+
+    const enableInfiniteScroll = this.parseTriStateBooleanAttribute('enable-infinite-scroll');
+    if (enableInfiniteScroll !== undefined)
+      this.attributeOptions.enableInfiniteScroll = enableInfiniteScroll;
 
     const infiniteScrollUp = this.parseBooleanAttribute('infinite-scroll-up');
     if (infiniteScrollUp !== undefined) this.attributeOptions.infiniteScrollUp = infiniteScrollUp;
@@ -1067,6 +1072,21 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     this.controller = createVanillaGridController(options);
+    // Let the controller's cellNav.scrollToFocus delegate into our
+    // element's scroll-and-focus helpers.
+    this.controller.setCellNavScrollHandler((rowId, columnName) => {
+      if (!rowId || !columnName) return;
+      this.scrollFocusedRowIntoView(rowId);
+      this.focusCellElement(rowId, columnName);
+    });
+    // Infinite-scroll resetScroll() brings the viewport back to the top.
+    this.controller.setInfiniteScrollResetHandler(() => {
+      const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
+      if (gridTable) {
+        gridTable.scrollTop = 0;
+        this.scrollPosition = 0;
+      }
+    });
     this.unsubscribe = this.controller.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.render();
@@ -1142,6 +1162,9 @@ export class UiGridStandaloneElement extends HTMLElement {
           // the grid shell doesn't re-render on every click, so we toggle the
           // class/data-attr directly.
           this.applyFocusedCellClass(previous, next);
+          // Raise cellNav.navigate so consumers see the click as a focus
+          // change (matches the old gridApi.cellNav.on.navigate wiring).
+          this.controller.setCellNavFocus(rowId, columnName);
           // Focus unless the browser already handled it (e.g. clicking a
           // button inside the cell); check shadowRoot.activeElement.
           const activeInShadow = (this.shadowRoot?.activeElement ?? null) as HTMLElement | null;
@@ -1529,6 +1552,21 @@ export class UiGridStandaloneElement extends HTMLElement {
         return;
       }
 
+      // cellNav.keyDownOverrides: when a declared override matches this
+      // keydown, skip cellnav's default handling and raise viewPortKeyDown
+      // so the consumer can handle the key. Matches the old grid's
+      // behaviour where consumers could surgically disable built-in key
+      // handling per-key.
+      const overrides = this.controller.getOptions().keyDownOverrides ?? [];
+      if (overrides.length && target.closest('.body-cell')) {
+        for (const override of overrides) {
+          if (this.matchesKeyOverride(override, keyboardEvent)) {
+            this.controller.raiseCellNavKeyEvent('keydown', keyboardEvent);
+            return;
+          }
+        }
+      }
+
       // Ctrl/Cmd+A on a body cell — select all rows in the grid. Matches
       // the old selection module's keyboard affordance. Safely gated by
       // enableRowSelection + multiSelect.
@@ -1798,35 +1836,67 @@ export class UiGridStandaloneElement extends HTMLElement {
         this.lastScrollActivityAt = Date.now();
         this.scrollPosition = target.scrollTop;
         this.horizontalScrollPosition = target.scrollLeft;
-        if (!this.snapshot?.pipeline.virtualizationEnabled) {
+
+        const snapshot = this.snapshot;
+        if (!snapshot) return;
+
+        if (snapshot.pipeline.virtualizationEnabled) {
+          const stickyChromeHeight =
+            this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+          const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+          const overscan = 4;
+          const nextStartIndex = Math.max(
+            0,
+            Math.floor(bodyScrollTop / snapshot.rowSize) - overscan,
+          );
+          const startChanged = nextStartIndex !== this.lastVirtualStartIndex;
+
+          if (this.scrollFrame !== null) cancelAnimationFrame(this.scrollFrame);
+          this.scrollFrame = requestAnimationFrame(() => {
+            this.scrollFrame = null;
+            if (startChanged) this.renderVirtualBody();
+            this.maybeTriggerInfiniteScroll();
+          });
           return;
         }
 
-        const stickyChromeHeight =
-          this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-        const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
-        const overscan = 4;
-        const nextStartIndex = Math.max(
-          0,
-          Math.floor(bodyScrollTop / this.snapshot.rowSize) - overscan,
-        );
-        if (nextStartIndex === this.lastVirtualStartIndex) {
-          return;
-        }
-
-        if (this.scrollFrame !== null) {
-          cancelAnimationFrame(this.scrollFrame);
-        }
-
+        // Non-virtualized path: still evaluate infinite-scroll thresholds
+        // so large static datasets can page in via needLoadMoreData.
+        if (this.scrollFrame !== null) cancelAnimationFrame(this.scrollFrame);
         this.scrollFrame = requestAnimationFrame(() => {
           this.scrollFrame = null;
-          this.renderVirtualBody();
+          this.maybeTriggerInfiniteScroll();
         });
       },
       true,
     );
 
     (root as ShadowRoot & { __uiGridBound?: boolean }).__uiGridBound = true;
+  }
+
+  /**
+   * Ask the controller to evaluate whether the current scroll position
+   * should request more data at the top or bottom — ports the old grid's
+   * handleScroll → loadData check. The controller does the actual
+   * needLoadMoreData / needLoadMoreDataTop raise.
+   */
+  private maybeTriggerInfiniteScroll(): void {
+    const snapshot = this.snapshot;
+    if (!snapshot || !this.controller) return;
+    if (snapshot.options.enableInfiniteScroll === false) return;
+    const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
+    if (!gridTable) return;
+    const stickyChromeHeight =
+      this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const rowSize = snapshot.rowSize || 1;
+    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+    const startIndex = Math.floor(bodyScrollTop / rowSize);
+    const viewportRows = Math.max(
+      1,
+      Math.floor(Math.max(0, gridTable.clientHeight - stickyChromeHeight) / rowSize),
+    );
+    const visibleRows = snapshot.pipeline.visibleRows.length;
+    this.controller.evaluateInfiniteScroll(startIndex, visibleRows, viewportRows);
   }
 
   /**
@@ -2471,6 +2541,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     // This replaces the previous O(rows×cols) querySelector approach.
     const groupEls = new Map<string, HTMLElement>();
     const cellEls = new Map<string, Map<string, HTMLElement>>();
+    const expandableEls: HTMLElement[] = [];
     for (let c = 0; c < bodyContainer.children.length; c++) {
       const el = bodyContainer.children[c] as HTMLElement;
       const tag = el.tagName;
@@ -2488,6 +2559,8 @@ export class UiGridStandaloneElement extends HTMLElement {
           }
           rowMap.set(colName, el);
         }
+      } else if (tag === 'DIV' && el.classList.contains('expandable-row')) {
+        expandableEls.push(el);
       }
     }
 
@@ -2496,6 +2569,7 @@ export class UiGridStandaloneElement extends HTMLElement {
       templateMarkupMap.set(col.name, this.getTemplateMarkup(this.cellSlotName(col)));
     }
 
+    let expandableIndex = 0;
     for (let i = 0; i < itemsToRender.length; i++) {
       const item = itemsToRender[i]!;
       const displayIndex = startIndex + i;
@@ -2509,10 +2583,21 @@ export class UiGridStandaloneElement extends HTMLElement {
         continue;
       }
 
+      if (item.kind === 'expandable') {
+        // Patch expandable rows so data changes are reflected even when the
+        // fingerprint (which only tracks row identity) stays the same.
+        const el = expandableEls[expandableIndex++];
+        if (el) {
+          const row = (item as DisplayItem & { row: GridRow }).row;
+          const nextHtml = this.renderExpandableTemplate(row);
+          if (el.innerHTML !== nextHtml) {
+            el.innerHTML = nextHtml;
+          }
+        }
+        continue;
+      }
+
       if (!isRowItem(item)) {
-        // Expandable rows contain arbitrary user markup — cheapest safe path is
-        // to leave them alone unless content actually changed, which would
-        // have flipped the fingerprint. No-op here.
         continue;
       }
 
@@ -2893,6 +2978,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     // grid on every arrow press. We only mutate the two affected cells.
     this.applyFocusedCellClass(previous, this.focusedCell);
     this.scrollFocusedRowIntoView(nextRowId);
+    // Raise cellNav.navigate for consumers that wired a listener (ports the
+    // old gridApi.cellNav.on.navigate event).
+    this.controller.setCellNavFocus(nextRowId, nextColumnName);
 
     // When moving out of an edit session (Tab/Enter in editor), auto-open
     // the next cell's editor if that cell is editable. Non-edit nav (plain
@@ -3013,6 +3101,28 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (resolved.enableFocusRowOnRowHeaderClick) {
       controller.setRowFocused(rowId, true, event);
     }
+  }
+
+  /** Does a keydown event match a cellNav key-override descriptor?
+   * Undefined fields on the override are treated as wildcards. */
+  private matchesKeyOverride(
+    override: {
+      keyCode?: number;
+      key?: string;
+      shiftKey?: boolean;
+      ctrlKey?: boolean;
+      altKey?: boolean;
+      metaKey?: boolean;
+    },
+    event: KeyboardEvent,
+  ): boolean {
+    if (override.keyCode !== undefined && override.keyCode !== event.keyCode) return false;
+    if (override.key !== undefined && override.key !== event.key) return false;
+    if (override.shiftKey !== undefined && override.shiftKey !== event.shiftKey) return false;
+    if (override.ctrlKey !== undefined && override.ctrlKey !== event.ctrlKey) return false;
+    if (override.altKey !== undefined && override.altKey !== event.altKey) return false;
+    if (override.metaKey !== undefined && override.metaKey !== event.metaKey) return false;
+    return true;
   }
 
   private applyFocusedCellClass(

@@ -1,5 +1,5 @@
 import { SortDirection } from './grid.constants';
-import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridSavedState } from './grid.models';
+import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
 import { PinDirection } from './grid.core';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
@@ -86,6 +86,12 @@ export interface GridApiBindings {
   setModifierKeysToMultiSelect?: (value: boolean) => void;
   getSelectAllState?: () => boolean;
   shiftSelectRow?: (rowEntity: GridRecord, evt?: Event | null) => void;
+
+  // cellNav bindings — ports ui.grid.cellNav public API.
+  scrollToFocus?: (rowEntity: GridRecord | null, colDef: GridColumnDef | null) => Promise<void>;
+  getFocusedCell?: () => GridRowColumn | null;
+  getCurrentSelection?: () => GridRowColumn[];
+  rowColSelectIndex?: (rowCol: GridRowColumn) => number;
 }
 
 export interface UiGridApi {
@@ -258,6 +264,22 @@ export interface UiGridApi {
     getSelectAllState: () => boolean;
     shiftSelectRow: (rowEntity: GridRecord, evt?: Event | null) => void;
   };
+  cellNav: {
+    on: {
+      navigate: (listener: Listener<[GridRowColumn | null, GridRowColumn | null]>) => () => void;
+      viewPortKeyDown: (listener: Listener<[KeyboardEvent, GridRowColumn | null]>) => () => void;
+      viewPortKeyPress: (listener: Listener<[KeyboardEvent, GridRowColumn | null]>) => () => void;
+    };
+    raise: {
+      navigate: (newRowCol: GridRowColumn | null, oldRowCol: GridRowColumn | null) => void;
+      viewPortKeyDown: (event: KeyboardEvent, rowCol: GridRowColumn | null) => void;
+      viewPortKeyPress: (event: KeyboardEvent, rowCol: GridRowColumn | null) => void;
+    };
+    scrollToFocus: (rowEntity: GridRecord | null, colDef: GridColumnDef | null) => Promise<void>;
+    getFocusedCell: () => GridRowColumn | null;
+    getCurrentSelection: () => GridRowColumn[];
+    rowColSelectIndex: (rowCol: GridRowColumn) => number;
+  };
 }
 
 export function createGridApi(bindings: GridApiBindings): UiGridApi {
@@ -286,6 +308,9 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const rowSelectionChangedEvent = new GridEvent<[GridRow, Event | null | undefined]>();
   const rowSelectionChangedBatchEvent = new GridEvent<[GridRow[], Event | null | undefined]>();
   const rowFocusChangedEvent = new GridEvent<[GridRow, Event | null | undefined]>();
+  const navigateEvent = new GridEvent<[GridRowColumn | null, GridRowColumn | null]>();
+  const viewPortKeyDownEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
+  const viewPortKeyPressEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -346,6 +371,15 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const setModifierKeysToMultiSelectBinding = bindings.setModifierKeysToMultiSelect ?? noop;
   const getSelectAllStateBinding = bindings.getSelectAllState ?? (() => false);
   const shiftSelectRowBinding = bindings.shiftSelectRow ?? noop;
+
+  // cellNav bindings — defaults keep the API surface intact even when a
+  // wrapper doesn't opt into cellnav.
+  const scrollToFocusBinding =
+    bindings.scrollToFocus ?? ((): Promise<void> => Promise.resolve());
+  const getFocusedCellBinding = bindings.getFocusedCell ?? ((): GridRowColumn | null => null);
+  const getCurrentSelectionBinding =
+    bindings.getCurrentSelection ?? ((): GridRowColumn[] => []);
+  const rowColSelectIndexBinding = bindings.rowColSelectIndex ?? ((): number => -1);
 
   const api: UiGridApi = {
     core: {
@@ -517,6 +551,22 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       setModifierKeysToMultiSelect: setModifierKeysToMultiSelectBinding,
       getSelectAllState: getSelectAllStateBinding,
       shiftSelectRow: shiftSelectRowBinding
+    },
+    cellNav: {
+      on: {
+        navigate: (listener) => navigateEvent.subscribe(listener),
+        viewPortKeyDown: (listener) => viewPortKeyDownEvent.subscribe(listener),
+        viewPortKeyPress: (listener) => viewPortKeyPressEvent.subscribe(listener)
+      },
+      raise: {
+        navigate: (newRowCol, oldRowCol) => navigateEvent.emit(newRowCol, oldRowCol),
+        viewPortKeyDown: (event, rowCol) => viewPortKeyDownEvent.emit(event, rowCol),
+        viewPortKeyPress: (event, rowCol) => viewPortKeyPressEvent.emit(event, rowCol)
+      },
+      scrollToFocus: scrollToFocusBinding,
+      getFocusedCell: getFocusedCellBinding,
+      getCurrentSelection: getCurrentSelectionBinding,
+      rowColSelectIndex: rowColSelectIndexBinding
     }
   };
 
