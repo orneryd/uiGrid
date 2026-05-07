@@ -18,6 +18,7 @@ import * as tsInfiniteScroll from './grid.core.infinite-scroll';
 import * as tsPagination from './grid.core.pagination';
 import * as tsPinning from './grid.core.pinning';
 import * as tsPipeline from './grid.core.pipeline';
+import * as tsRowEdit from './grid.core.row-edit';
 import * as tsRowState from './grid.core.row-state';
 import * as tsSelection from './grid.core.selection';
 import * as tsSorting from './grid.core.sorting';
@@ -592,6 +593,24 @@ export const reconcileGridSelection = tsSelection.reconcileGridSelection;
 export const mapSelectedRowsToEntities = tsSelection.mapSelectedRowsToEntities;
 
 export const headerLabel: typeof tsExport.headerLabel = (column) => tsExport.headerLabel(column);
+export const buildGridCsv = tsExport.buildGridCsv;
+export const resolveGridExporterOptions = tsExport.resolveGridExporterOptions;
+export const filterExporterColumns = tsExport.filterExporterColumns;
+export const resolveExporterFilename = tsExport.resolveExporterFilename;
+export const GRID_EXPORTER_CONSTANTS = tsExport.GRID_EXPORTER_CONSTANTS;
+export type { GridExporterOptions, GridExporterRowType, GridExporterColumnType } from './grid.core.export';
+// Row-edit pure helpers. All of these are DOM-free — the vanilla controller
+// wires them to edit events + a timer for auto-save.
+export const createGridRowEditState = tsRowEdit.createGridRowEditState;
+export const markGridRowDirty = tsRowEdit.markGridRowDirty;
+export const markGridRowClean = tsRowEdit.markGridRowClean;
+export const markGridRowSaving = tsRowEdit.markGridRowSaving;
+export const markGridRowError = tsRowEdit.markGridRowError;
+export const isGridRowEditTimerEnabled = tsRowEdit.isGridRowEditTimerEnabled;
+export const resolveGridRowEditWaitInterval = tsRowEdit.resolveGridRowEditWaitInterval;
+export const collectGridRowEntities = tsRowEdit.collectGridRowEntities;
+export type { GridRowEditState } from './grid.core.row-edit';
+
 export const exportCsvRows: typeof tsExport.exportCsvRows = (columns, rows, formatCell) => {
   if (
     formatCell ||

@@ -114,6 +114,11 @@ export interface GridColumnDef {
   pinnedLeft?: boolean;
   pinnedRight?: boolean;
   enablePinning?: boolean;
+  /** Exporter — if true the exporter skips this column entirely. Ports the
+   * old grid's `colDef.exporterSuppressExport`. */
+  exporterSuppressExport?: boolean;
+  /** Per-column override for PDF alignment. Ports `colDef.exporterPdfAlign`. */
+  exporterPdfAlign?: 'left' | 'right' | 'center' | string;
   cellEditableCondition?: GridCellEditableCondition;
   editModelField?: string;
   width?: string;
@@ -300,6 +305,35 @@ export interface GridOptions {
   savePinning?: boolean;
   saveTreeView?: boolean;
   savePagination?: boolean;
+  /** Exporter — field-for-field parity with the old `ui.grid.exporter` options.
+   * See `GridExporterOptions` in grid.core.export.ts for full docs. */
+  exporterCsvColumnSeparator?: string;
+  exporterCsvFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterHeaderFilterUseName?: boolean;
+  exporterHeaderFilter?: (displayName: string, column: GridColumnDef) => string;
+  exporterHeaderTemplate?: string;
+  exporterShowHeader?: boolean;
+  exporterFieldCallback?: (row: GridRow, column: GridColumnDef, value: unknown) => unknown;
+  exporterFieldFormatCallback?: (
+    row: GridRow,
+    column: GridColumnDef,
+    value: unknown,
+  ) => string | undefined | null;
+  exporterFieldApplyFilters?: boolean;
+  exporterSuppressColumns?: readonly string[];
+  exporterOlderExcelCompatibility?: boolean;
+  exporterIsExcelCompatible?: boolean;
+  exporterAllDataFn?: () => readonly GridRow[] | Promise<readonly GridRow[]>;
+  exporterExcelFilename?: string;
+  exporterExcelSheetName?: string;
+  exporterCsvLinkElement?: HTMLElement | null;
+  exporterSuppressMenu?: boolean;
+  exporterMenuLabel?: string;
+  exporterMenuItemOrder?: number;
+  exporterMenuCsv?: boolean;
+  exporterMenuAllData?: boolean;
+  exporterMenuVisibleData?: boolean;
+  exporterMenuSelectedData?: boolean;
   /** Cellnav — ports ui.grid.cellNav options. */
   modifierKeysToMultiSelectCells?: boolean;
   /** Key events that bypass cellNav's default handling and bubble up as
@@ -307,6 +341,11 @@ export interface GridOptions {
    * keyDownOverrides array — each entry specifies the key + modifier
    * combination that should be overridden. */
   keyDownOverrides?: readonly GridKeyEventOverride[];
+  /** Row-edit — ports `ui.grid.rowEdit.GridOptions`. `rowEditWaitInterval`
+   * controls how long the grid waits for additional edits on the same row
+   * before firing the save event. -1 disables the timer so consumers must
+   * call `flushDirtyRows()` manually. Default: 2000 ms. */
+  rowEditWaitInterval?: number;
   benchmark?: GridBenchmarkOptions;
   onRegisterApi?: (gridApi: unknown) => void;
   rowIdentity?: (row: GridRecord, index: number) => string;
@@ -343,6 +382,16 @@ export class GridRow {
   childCount = 0;
   expanded = false;
   expandedRowHeight = 0;
+  /** Ports `GridRow.exporterEnableExporting` from the old grid — when false
+   * the exporter skips this row. */
+  exporterEnableExporting = true;
+  /** Row-edit flags. Ports `GridRow.isDirty` / `isError` / `isSaving` from
+   * the old `ui.grid.rowEdit` module. The controller flips these in response
+   * to edit events + save-promise resolution; the template uses them to add
+   * `ui-grid-row-dirty`, `ui-grid-row-saving`, `ui-grid-row-error`. */
+  isDirty = false;
+  isError = false;
+  isSaving = false;
 
   constructor(
     readonly id: string,

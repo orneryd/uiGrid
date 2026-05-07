@@ -22,10 +22,10 @@ framework-neutral core + vanilla / Angular / React wrappers.
 | selection | ✅ ported | Full parity with `packages/selection`: 13 options, 18 API methods, 3 events, mouse (click/shift/ctrl/drag-paint), keyboard (Space/Ctrl+A), row-header checkbox column, select-all header, `isRowSelectable` hook. 33 integration tests + 24 core tests. |
 | auto-resize | ✅ wired | ResizeObserver on the grid host. |
 | saveState | ✅ ported | `gridApi.saveState.save()` / `.restore()` covers sort, filters, grouping + collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position. Per-field opt-in flags: saveWidths, saveOrder, saveScroll, saveFocus, saveVisible, saveSort, saveFilter, saveSelection, saveGrouping, saveGroupingExpandedStates, savePinning, saveTreeView, savePagination. 9 integration tests. |
-| exporter | ⚠️ partial | `exportCsv()` works. Pending: CSV option matrix (exporterCsvColumnSeparator, exporterHeaderFilterUseName, exporterFieldCallback, exporterFieldFormatCallback, exporterSuppressColumns, exporterAllDataFn, exporterOlderExcelCompatibility, exporterExcelFilename, exporterExcelSheetName, exporterCsvLinkElement, exporterHeaderTemplate, exporterFieldApplyFilters), PDF export, menu items ("Export all/visible/selected as CSV/PDF"). |
+| exporter | ⚠️ partial | `gridApi.exporter.csvExport(rowType, colType)` / `buildCsv()` / `getOptions()` / `setOptions()` with full CSV option matrix: `exporterCsvColumnSeparator`, `exporterCsvFilename` (string or function), `exporterHeaderFilterUseName`, `exporterHeaderFilter`, `exporterHeaderTemplate`, `exporterShowHeader`, `exporterFieldCallback`, `exporterFieldFormatCallback`, `exporterFieldApplyFilters`, `exporterSuppressColumns`, `exporterOlderExcelCompatibility` (BOM), `exporterAllDataFn`, `exporterCsvLinkElement`, column-level `exporterSuppressExport`, row-level `exporterEnableExporting`, auto-suppression of `selectionRowHeaderCol`/`treeBaseRowHeaderCol`. `GRID_EXPORTER_CONSTANTS` mirror `uiGridExporterConstants`. 18 core + 5 integration tests. Pending: PDF export (pdfMake), Excel export, `gridMenu` integration ("Export all/visible/selected as CSV/PDF"). |
 | infinite-scroll | ✅ ported | Scroll-driven `needLoadMoreData` / `needLoadMoreDataTop` events wired through the element's scroll handler; full public API (`dataLoaded`, `resetScroll`, `saveScrollPercentage`, `dataRemovedTop`, `dataRemovedBottom`, `setScrollDirections`) and all four options (`enableInfiniteScroll`, `infiniteScrollRowsFromEnd`, `infiniteScrollUp`, `infiniteScrollDown`). 5 core + 8 integration tests. |
 | i18n | ⚠️ partial | English labels live in a `GridLabels` default. Pending: language packs (es/fr/de/ja/zh/...), `setCurrentLang` API, `i18nService.add/get/getSupportedLanguages`, fallback chain. |
-| row-edit | ❌ not ported | Per-row dirty/clean tracking, `setRowsDirty`/`setRowsClean`/`getDirtyRows`/`getErrorRows`, `onSaveRow` batching, `rowEditWaitInterval`, isDirty/isError classes, flush/cancel helpers, saving spinner. |
+| row-edit | ✅ ported | `gridApi.rowEdit.{saveRow event, setSavePromise, getDirtyRows, getErrorRows, flushDirtyRows, setRowsDirty, setRowsClean}`. Row flags `isDirty`/`isSaving`/`isError` surface as `.ui-grid-row-dirty`/`.ui-grid-row-saving`/`.ui-grid-row-error` on every cell. `rowEditWaitInterval` option (-1 disables timer, defaults to 2000 ms). Auto-marks dirty on `afterCellEdit`; resolves clean when consumer's save promise resolves, moves to error on rejection (row stays dirty so retry works). 9 core + 7 integration tests. |
 | importer | ❌ not ported | ui-grid-importer-menu, file picker, `importerProcessHeaders`, `importerDataAddCallback`, `importerNewObject`, `importerErrorCallback`, CSV/JSON import. |
 | validate | ❌ not ported | Column `validators` (required/minLength/maxLength/regex/custom), invalid-cell class + error badge, `gridApi.validate.getInvalidRows`, integration with `afterCellEdit`. |
 
@@ -35,14 +35,41 @@ Working through the remaining rows in order. Completed items below in
 reverse chronological order; pending items at the top track directly with
 the task list.
 
-1. **exporter** (next) — CSV options matrix + PDF + menu.
-2. row-edit — dirty tracking + save batching.
-3. importer — file picker + CSV/JSON parse + menu item.
-4. validate — column validators + invalid-cell visuals.
-5. i18n — language packs + `setCurrentLang`.
+1. **importer** (next) — file picker + CSV/JSON parse + menu item.
+2. validate — column validators + invalid-cell visuals.
+3. i18n — language packs + `setCurrentLang`.
+4. exporter (remaining) — PDF (pdfMake), Excel, `gridMenu` items.
+5. row-edit menu — add retry + flush actions.
 
 ## Completed this session
 
+- **row-edit** (2026-05-07) — ported `ui.grid.rowEdit` in full: new core
+  `grid.core.row-edit.ts` owns the pure state (dirty / error / saving sets
+  + save-promise map). Controller subscribes to edit events so committing a
+  cell flips the row dirty + starts a debounce timer (`rowEditWaitInterval`,
+  -1 disables). `saveRow` event fires, consumers call
+  `gridApi.rowEdit.setSavePromise(rowEntity, promise)`; success → clean,
+  rejection → error (row stays dirty so retry works). `flushDirtyRows()`
+  awaits every pending save. Row-level `isDirty` / `isSaving` / `isError`
+  flags paint `ui-grid-row-dirty` / `ui-grid-row-saving` / `ui-grid-row-error`
+  on every cell, matching the old uiGridViewport ng-class hook. Colors
+  default to the old module's `rowSaving=#848484`, `rowError=#FF0000`,
+  `rowDirty=#610B38` but are themeable via `--ui-grid-row-*-color/bg`.
+  9 core + 7 integration tests.
+- **exporter (CSV matrix)** (2026-05-07) — ported the full
+  `ui.grid.exporter` CSV surface: `gridApi.exporter.csvExport(rowType, colType)`
+  / `buildCsv()` / `getOptions()` / `setOptions()` plus legacy
+  `gridApi.core.exportCsv()`. `buildGridCsv()` in core honors the full
+  option matrix (`exporterCsvColumnSeparator`, `exporterCsvFilename`
+  string-or-function, `exporterHeaderFilterUseName`, `exporterHeaderFilter`,
+  `exporterHeaderTemplate`, `exporterShowHeader`, `exporterFieldCallback`,
+  `exporterFieldFormatCallback`, `exporterFieldApplyFilters`,
+  `exporterSuppressColumns`, `exporterOlderExcelCompatibility` BOM,
+  `exporterAllDataFn`, `exporterCsvLinkElement`). Column-level
+  `exporterSuppressExport` and row-level `exporterEnableExporting` respected.
+  Auto-suppresses `selectionRowHeaderCol` / `treeBaseRowHeaderCol` like the
+  old module. `GRID_EXPORTER_CONSTANTS` mirrors `uiGridExporterConstants`.
+  18 core + 5 integration tests. Still pending: PDF, Excel, gridMenu items.
 - **saveState** (2026-05-07) — expanded `GridSaveState` to parity with the
   old module (sort, filters, grouping+collapsed, pinning, column order,
   column widths, pagination, selection, focused cell, expandable+tree

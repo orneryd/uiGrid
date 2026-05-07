@@ -2,14 +2,11 @@ import {
   SORT_DIRECTIONS,
   buildGridHeaderContext,
   canGridMoveColumns,
-  downloadGridCsvFile,
-  exportCsvRows,
   findNextGridCell,
   formatGridHeaderDisplayValue,
   getCellValue,
   isGridNavigationKey,
   isPrintableGridKey,
-  sanitizeDownloadFilename,
   type DisplayItem,
   type GridColumnDef,
   type GridOptions,
@@ -93,6 +90,9 @@ function bodyCellClass(
   isEditing: boolean,
   isRowSelected: boolean,
   isRowFocused: boolean,
+  isRowDirty: boolean,
+  isRowSaving: boolean,
+  isRowError: boolean,
 ): string {
   let cls = 'body-cell ui-grid-cell';
   if (isOdd) cls += ' body-cell-odd';
@@ -107,6 +107,11 @@ function bodyCellClass(
   // state shows on every cell so selection stripes work across the whole row.
   if (isRowSelected) cls += ' ui-grid-row-selected';
   if (isRowFocused) cls += ' ui-grid-row-focused';
+  // Row-edit — matches the old `ui.grid.rowEdit` uiGridViewport directive's
+  // ng-class output. Repeated per-cell so the full-row stripe works.
+  if (isRowDirty) cls += ' ui-grid-row-dirty';
+  if (isRowSaving) cls += ' ui-grid-row-saving';
+  if (isRowError) cls += ' ui-grid-row-error';
   return cls;
 }
 
@@ -230,6 +235,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   // Template-facing properties for ui-grid-shell.html
   gridTitle = 'Data grid';
   gridTableStyle = '';
+  bodyViewportStyle = '';
   templateColumns = '';
   slotRegistry = '';
   headerContent = '';
@@ -1081,9 +1087,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     });
     // Infinite-scroll resetScroll() brings the viewport back to the top.
     this.controller.setInfiniteScrollResetHandler(() => {
-      const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
-      if (gridTable) {
-        gridTable.scrollTop = 0;
+      const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+      if (bodyViewport) {
+        bodyViewport.scrollTop = 0;
         this.scrollPosition = 0;
       }
     });
@@ -1093,12 +1099,16 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.controller.setSaveStateScrollHandlers(
       () => ({ scrollTop: this.scrollPosition, scrollLeft: this.horizontalScrollPosition }),
       (scrollTop, scrollLeft) => {
+        const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
         const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
-        if (!gridTable) return;
         // Defer to a rAF so the body has finished laying out after refresh.
         requestAnimationFrame(() => {
-          gridTable.scrollTop = scrollTop;
-          gridTable.scrollLeft = scrollLeft;
+          if (bodyViewport) {
+            bodyViewport.scrollTop = scrollTop;
+          }
+          if (gridTable) {
+            gridTable.scrollLeft = scrollLeft;
+          }
           this.scrollPosition = scrollTop;
           this.horizontalScrollPosition = scrollLeft;
         });
@@ -1846,25 +1856,28 @@ export class UiGridStandaloneElement extends HTMLElement {
       'scroll',
       (event) => {
         const target = event.target as HTMLElement | null;
-        if (!target?.classList.contains('grid-table') || this.suppressScrollEvent) {
+        if (this.suppressScrollEvent) return;
+
+        // Horizontal scroll on .grid-table.
+        if (target?.classList.contains('grid-table')) {
+          this.horizontalScrollPosition = target.scrollLeft;
           return;
         }
 
+        // Vertical scroll on .grid-body-viewport.
+        if (!target?.classList.contains('grid-body-viewport')) return;
+
         this.lastScrollActivityAt = Date.now();
         this.scrollPosition = target.scrollTop;
-        this.horizontalScrollPosition = target.scrollLeft;
 
         const snapshot = this.snapshot;
         if (!snapshot) return;
 
         if (snapshot.pipeline.virtualizationEnabled) {
-          const stickyChromeHeight =
-            this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-          const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
           const overscan = 4;
           const nextStartIndex = Math.max(
             0,
-            Math.floor(bodyScrollTop / snapshot.rowSize) - overscan,
+            Math.floor(this.scrollPosition / snapshot.rowSize) - overscan,
           );
           const startChanged = nextStartIndex !== this.lastVirtualStartIndex;
 
@@ -1901,16 +1914,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     const snapshot = this.snapshot;
     if (!snapshot || !this.controller) return;
     if (snapshot.options.enableInfiniteScroll === false) return;
-    const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
-    if (!gridTable) return;
-    const stickyChromeHeight =
-      this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+    if (!bodyViewport) return;
     const rowSize = snapshot.rowSize || 1;
-    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
-    const startIndex = Math.floor(bodyScrollTop / rowSize);
+    const startIndex = Math.floor(this.scrollPosition / rowSize);
     const viewportRows = Math.max(
       1,
-      Math.floor(Math.max(0, gridTable.clientHeight - stickyChromeHeight) / rowSize),
+      Math.floor(bodyViewport.clientHeight / rowSize),
     );
     const visibleRows = snapshot.pipeline.visibleRows.length;
     this.controller.evaluateInfiniteScroll(startIndex, visibleRows, viewportRows);
@@ -1943,12 +1953,12 @@ export class UiGridStandaloneElement extends HTMLElement {
       this.dataFrame = null;
     }
 
-    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-    const viewportHeight = snapshot.options.viewportHeight ?? 560;
-    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+    const bodyViewport = root?.querySelector<HTMLElement>('.grid-body-viewport');
+    const bodyViewportHeight = bodyViewport
+      ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
+      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
     const overscan = 4;
-    const startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+    const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     this.lastVirtualStartIndex = startIndex;
     const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
     const itemsToRender = snapshot.pipeline.displayItems.slice(
@@ -1983,10 +1993,15 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
     const root = this.ensureShadowRoot();
     const snapshot = this.snapshot;
-    const previousGridTable = root.querySelector<HTMLElement>('.grid-table');
-    if (previousGridTable && !this.suppressScrollEvent) {
-      this.scrollPosition = previousGridTable.scrollTop;
-      this.horizontalScrollPosition = previousGridTable.scrollLeft;
+    if (!this.suppressScrollEvent) {
+      const previousViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
+      const previousGridTable = root.querySelector<HTMLElement>('.grid-table');
+      if (previousViewport) {
+        this.scrollPosition = previousViewport.scrollTop;
+      }
+      if (previousGridTable) {
+        this.horizontalScrollPosition = previousGridTable.scrollLeft;
+      }
     }
 
     if (!snapshot) {
@@ -2014,13 +2029,14 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
     this.lastStructureKey = plan.structureKey;
 
+    const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    if (gridTable && (this.scrollPosition > 0 || this.horizontalScrollPosition > 0)) {
+    if (this.scrollPosition > 0 || this.horizontalScrollPosition > 0) {
       this.suppressScrollEvent = true;
-      if (this.scrollPosition > 0) {
-        gridTable.scrollTop = this.scrollPosition;
+      if (bodyViewport && this.scrollPosition > 0) {
+        bodyViewport.scrollTop = this.scrollPosition;
       }
-      if (this.horizontalScrollPosition > 0) {
+      if (gridTable && this.horizontalScrollPosition > 0) {
         gridTable.scrollLeft = this.horizontalScrollPosition;
       }
       requestAnimationFrame(() => {
@@ -2064,7 +2080,6 @@ export class UiGridStandaloneElement extends HTMLElement {
     showPagination: boolean;
     virtualizationEnabled: boolean;
     viewportHeight: number;
-    headerStickyTop: number;
     hasViewportScroll: boolean;
     itemsToRender: readonly DisplayItem[];
     startIndex: number;
@@ -2084,7 +2099,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     const showPagination = controller.shouldShowPaginationControls();
     const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
     const viewportHeight = options.viewportHeight ?? 560;
-    const headerStickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    // Body viewport height: use the measured DOM height when available
+    // (body viewport no longer includes header/filter chrome), otherwise
+    // fall back to the configured viewportHeight minus header/filter.
     const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
     const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
     const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
@@ -2095,9 +2112,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const totalVirtualHeight = snapshot.pipeline.displayItems.length * snapshot.rowSize;
 
     if (virtualizationEnabled) {
-      const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
       const overscan = 4;
-      startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+      startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
       this.lastVirtualStartIndex = startIndex;
       const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
       itemsToRender = snapshot.pipeline.displayItems.slice(
@@ -2139,7 +2155,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       showPagination,
       virtualizationEnabled,
       viewportHeight,
-      headerStickyTop,
       hasViewportScroll,
       itemsToRender,
       startIndex,
@@ -2166,7 +2181,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       showPagination,
       virtualizationEnabled,
       viewportHeight,
-      headerStickyTop,
       hasViewportScroll,
       itemsToRender,
       startIndex,
@@ -2205,7 +2219,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
 
     this.gridTitle = escapeHtml(options.title ?? 'Data grid');
-    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
+    this.gridTableStyle = hasViewportScroll ? `height:${viewportHeight}px;` : '';
+    this.bodyViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
     this.templateColumns = templateColumns;
     this.slotRegistry = slotRegistry;
     this.headerContent = header;
@@ -2239,7 +2254,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       showPagination,
       virtualizationEnabled,
       viewportHeight,
-      headerStickyTop,
       hasViewportScroll,
       itemsToRender,
       startIndex,
@@ -2254,11 +2268,26 @@ export class UiGridStandaloneElement extends HTMLElement {
       gridFrame.setAttribute('aria-label', nextTitle);
     }
 
-    // Grid table wrapper styles (viewport height + sticky offset).
+    // Grid table wrapper styles (viewport height).
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    const nextTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
-    if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
-      gridTable.setAttribute('style', nextTableStyle);
+    const nextTableStyle = hasViewportScroll ? `height:${viewportHeight}px;` : '';
+    if (gridTable && (gridTable.getAttribute('style') ?? '') !== nextTableStyle) {
+      if (nextTableStyle) {
+        gridTable.setAttribute('style', nextTableStyle);
+      } else {
+        gridTable.removeAttribute('style');
+      }
+    }
+
+    // Body viewport scroll style.
+    const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
+    const nextViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
+    if (bodyViewport && (bodyViewport.getAttribute('style') ?? '') !== nextViewportStyle) {
+      if (nextViewportStyle) {
+        bodyViewport.setAttribute('style', nextViewportStyle);
+      } else {
+        bodyViewport.removeAttribute('style');
+      }
     }
 
     // Header grid: track sizes + cells.
@@ -2292,7 +2321,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     // Body region: innerHTML-swap just the grid rows. The scroll container
-    // (.grid-table) is never replaced, so scroll position survives naturally.
+    // (.grid-body-viewport) is never replaced, so scroll position survives naturally.
     this.patchBodyRegion(
       root,
       snapshot,
@@ -2313,10 +2342,10 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   /**
-   * Ensures the grid-table contains the right body node for the desired kind
-   * (empty-state / virtual / static), reusing the existing node where possible.
-   * Returns the body container the caller should patch into (the .body-grid
-   * or .grid-virtual-body), or null for the empty state.
+   * Ensures the grid-body-viewport contains the right body node for the desired
+   * kind (empty-state / virtual / static), reusing the existing node where
+   * possible. Returns the body container the caller should patch into (the
+   * .body-grid or .grid-virtual-body), or null for the empty state.
    */
   private reconcileBodyRoot(
     root: ShadowRoot,
@@ -2327,12 +2356,12 @@ export class UiGridStandaloneElement extends HTMLElement {
     virtualOffset: number,
     totalVirtualHeight: number,
   ): HTMLElement | null {
-    const gridTable = root.querySelector<HTMLElement>('.grid-table');
-    if (!gridTable) return null;
+    const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
+    if (!bodyViewport) return null;
 
-    const currentEmpty = gridTable.querySelector<HTMLElement>(':scope > .empty-state');
-    const currentVirtual = gridTable.querySelector<HTMLElement>(':scope > .grid-virtual-spacer');
-    const currentStatic = gridTable.querySelector<HTMLElement>(':scope > .body-grid');
+    const currentEmpty = bodyViewport.querySelector<HTMLElement>(':scope > .empty-state');
+    const currentVirtual = bodyViewport.querySelector<HTMLElement>(':scope > .grid-virtual-spacer');
+    const currentStatic = bodyViewport.querySelector<HTMLElement>(':scope > .body-grid');
     const currentNode = currentEmpty ?? currentVirtual ?? currentStatic;
 
     if (kind === 'empty') {
@@ -2346,7 +2375,7 @@ export class UiGridStandaloneElement extends HTMLElement {
         return null;
       }
       const fresh = this.createFromMarkup(emptyDataMarkup(heading, description));
-      if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+      if (fresh) this.swapBodyChild(bodyViewport, currentNode, fresh);
       return null;
     }
 
@@ -2357,14 +2386,14 @@ export class UiGridStandaloneElement extends HTMLElement {
       const fresh = this.createFromMarkup(
         bodyVirtualMarkup(templateColumns, totalVirtualHeight, virtualOffset, ''),
       );
-      if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+      if (fresh) this.swapBodyChild(bodyViewport, currentNode, fresh);
       return fresh?.querySelector<HTMLElement>('.grid-virtual-body') ?? null;
     }
 
     // static
     if (currentStatic) return currentStatic;
     const fresh = this.createFromMarkup(bodyStaticMarkup(templateColumns, ''));
-    if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+    if (fresh) this.swapBodyChild(bodyViewport, currentNode, fresh);
     return fresh;
   }
 
@@ -2375,14 +2404,14 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   private swapBodyChild(
-    gridTable: HTMLElement,
+    container: HTMLElement,
     current: HTMLElement | null,
     next: HTMLElement,
   ): void {
     if (current) {
-      gridTable.replaceChild(next, current);
+      container.replaceChild(next, current);
     } else {
-      gridTable.appendChild(next);
+      container.appendChild(next);
     }
   }
 
@@ -2683,6 +2712,9 @@ export class UiGridStandaloneElement extends HTMLElement {
         editing,
         isRowSelected,
         isRowFocused,
+        row.isDirty,
+        row.isSaving,
+        row.isError,
       ),
     );
     setStyle(cell, stickyStyle);
@@ -3023,19 +3055,16 @@ export class UiGridStandaloneElement extends HTMLElement {
       (item) => 'row' in item && item.row && (item.row as { id: string }).id === rowId,
     );
     if (index < 0) return;
-    const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
-    if (!gridTable) return;
-    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+    if (!bodyViewport) return;
     const rowTop = index * snapshot.rowSize;
     const rowBottom = rowTop + snapshot.rowSize;
-    const viewportTop = gridTable.scrollTop;
-    const viewportHeight = gridTable.clientHeight;
-    const visibleTop = viewportTop + stickyChromeHeight;
-    const visibleBottom = viewportTop + viewportHeight;
-    if (rowTop < visibleTop) {
-      gridTable.scrollTop = Math.max(0, rowTop - stickyChromeHeight);
-    } else if (rowBottom > visibleBottom) {
-      gridTable.scrollTop = rowBottom - viewportHeight;
+    const viewportTop = bodyViewport.scrollTop;
+    const viewportHeight = bodyViewport.clientHeight;
+    if (rowTop < viewportTop) {
+      bodyViewport.scrollTop = rowTop;
+    } else if (rowBottom > viewportTop + viewportHeight) {
+      bodyViewport.scrollTop = rowBottom - viewportHeight;
     }
   }
 
@@ -3302,6 +3331,9 @@ export class UiGridStandaloneElement extends HTMLElement {
       editing,
       isRowSelected,
       isRowFocused,
+      row.isDirty,
+      row.isSaving,
+      row.isError,
     );
     // className/style/tabindex are pre-computed here so the <ui-grid-body-cell>
     // upgrade is a no-op at parse time. `data-*` stay for event delegation.
@@ -3496,12 +3528,12 @@ export class UiGridStandaloneElement extends HTMLElement {
       };
     }
 
-    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-    const viewportHeight = snapshot.options.viewportHeight ?? 560;
-    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+    const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+    const bodyViewportHeight = bodyViewport
+      ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
+      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
     const overscan = 4;
-    const startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+    const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
 
     return {
@@ -3517,14 +3549,14 @@ export class UiGridStandaloneElement extends HTMLElement {
     return `cell-${column.name}`;
   }
 
-  private downloadCsv(): void {
-    if (!this.snapshot) {
+  private downloadCsv(
+    rowType: 'all' | 'visible' | 'selected' = 'visible',
+    colType: 'all' | 'visible' = 'visible',
+  ): void {
+    if (!this.controller) {
       return;
     }
-
-    const csv = exportCsvRows(this.snapshot.visibleColumns, this.snapshot.pipeline.visibleRows);
-    const filename = sanitizeDownloadFilename(`${this.snapshot.options.id}.csv`);
-    downloadGridCsvFile(csv, filename);
+    this.controller.gridApi.exporter.csvExport(rowType, colType);
   }
 
   private renderControlIcon(key: UiGridControlIconKey): string {

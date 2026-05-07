@@ -6,10 +6,16 @@
   min-height: 0;
   width: 100%;
   min-width: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   background: var(--ui-grid-surface);
   overflow-x: var(--ui-grid-overflow-x);
-  overflow-y: var(--ui-grid-overflow-y);
+  overflow-anchor: none;
+}
+
+.grid-body-viewport {
+  flex: 1;
+  min-height: 0;
   overflow-anchor: none;
 }
 
@@ -23,16 +29,7 @@
 
 .header-grid,
 .filter-grid {
-  position: sticky;
   z-index: var(--ui-grid-header-z-index);
-}
-
-.header-grid {
-  top: 0;
-}
-
-.filter-grid {
-  top: var(--ui-grid-header-sticky-top, 0px);
 }
 
 .header-cell,

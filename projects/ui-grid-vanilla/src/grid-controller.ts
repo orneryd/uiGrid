@@ -59,6 +59,21 @@ import {
   findGridRowByKey as coreFindGridRowByKey,
   reconcileGridSelection as coreReconcileGridSelection,
   mapSelectedRowsToEntities as coreMapSelectedRowsToEntities,
+  buildGridCsv,
+  resolveGridExporterOptions,
+  downloadGridCsvFile,
+  sanitizeDownloadFilename,
+  createGridRowEditState,
+  markGridRowDirty,
+  markGridRowClean,
+  markGridRowSaving,
+  markGridRowError,
+  isGridRowEditTimerEnabled,
+  resolveGridRowEditWaitInterval,
+  type GridRowEditState,
+  type GridExporterOptions,
+  type GridExporterColumnType,
+  type GridExporterRowType,
   type GridSelectionState,
   type GridInfiniteScrollState,
   maybeRequestInfiniteScrollData,
@@ -183,6 +198,10 @@ export class VanillaGridController {
   private pageSize = 0;
   private editingCell: GridCellPosition | null = null;
   private editingValue = '';
+  private exporterOverrides: GridExporterOptions = {};
+  private rowEditState: GridRowEditState = createGridRowEditState();
+  private rowEditTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private rowEditSavePromiseOverrides = new Map<string, Promise<void>>();
   private selectionState: GridSelectionState = createGridSelectionState();
   /** cellNav state. Persists the last focused cell so the public API's
    * getFocusedCell returns the right value across re-renders, and tracks
@@ -247,8 +266,11 @@ export class VanillaGridController {
       toggleGrouping: (columnName) => this.toggleGrouping(columnName),
       clearGrouping: () => this.clearGrouping(),
       benchmark: (iterations) => this.benchmark(iterations),
-      exportCsv: () => {
-        // Export remains hosted by framework wrappers for now.
+      exportCsv: (rowType, colType) => this.exportCsv(rowType, colType),
+      buildCsv: (rowType, colType) => this.buildCsv(rowType, colType),
+      getExporterOptions: () => ({ ...this.exporterOverrides, ...resolveGridExporterOptions(this.options) }),
+      setExporterOptions: (overrides) => {
+        this.exporterOverrides = { ...this.exporterOverrides, ...overrides };
       },
       paginationGetPage: () => this.getCurrentPage(),
       paginationGetTotalPages: () => this.getTotalPages(),
@@ -335,6 +357,44 @@ export class VanillaGridController {
         this.infiniteScrollDataRemovedBottom(scrollUp, scrollDown),
       infiniteScrollSetDirections: (scrollUp, scrollDown) =>
         this.infiniteScrollSetDirections(scrollUp, scrollDown),
+      // Row-edit bindings — port of ui.grid.rowEdit public API.
+      rowEditSetSavePromise: (rowEntity, promise) =>
+        this.rowEditSetSavePromise(rowEntity, promise),
+      rowEditGetDirtyRows: () => this.rowEditGetDirtyRows(),
+      rowEditGetErrorRows: () => this.rowEditGetErrorRows(),
+      rowEditFlushDirtyRows: () => this.rowEditFlushDirtyRows(),
+      rowEditSetRowsDirty: (rowEntities) => this.rowEditSetRowsDirty(rowEntities),
+      rowEditSetRowsClean: (rowEntities) => this.rowEditSetRowsClean(rowEntities),
+    });
+
+    // Subscribe row-edit to the edit events so a committed change flips the
+    // row into dirty state + schedules a save, and cancelling restarts the
+    // timer when the row was already dirty.
+    this.gridApi.edit.on.afterCellEdit((rowEntity, _col, newValue, previousValue) => {
+      const rowId = this.resolveRowId(rowEntity);
+      const gridRow = this.findRowById(rowId);
+      if (!gridRow) return;
+      if (newValue === previousValue && !gridRow.isDirty) return;
+      markGridRowDirty(this.rowEditState, gridRow);
+      this.considerSetRowEditTimer(gridRow);
+      this.emit();
+    });
+    this.gridApi.edit.on.beginCellEdit((rowEntity) => {
+      const rowId = this.resolveRowId(rowEntity);
+      const gridRow = this.findRowById(rowId);
+      if (gridRow) this.cancelRowEditTimer(gridRow);
+    });
+    this.gridApi.edit.on.cancelCellEdit((rowEntity) => {
+      const rowId = this.resolveRowId(rowEntity);
+      const gridRow = this.findRowById(rowId);
+      if (gridRow) this.considerSetRowEditTimer(gridRow);
+    });
+    // Cellnav navigate — if the user leaves a dirty row, start its timer
+    // (matches old grid: a row only autosaves when focus moves off it or
+    // the debounce elapses).
+    this.gridApi.cellNav.on.navigate((_newRowCol, oldRowCol) => {
+      if (!oldRowCol) return;
+      this.considerSetRowEditTimer(oldRowCol.row);
     });
 
     this.refresh();
@@ -1715,6 +1775,155 @@ export class VanillaGridController {
 
     this.gridApi.core.raise.benchmarkComplete(result);
     return result;
+  }
+
+  /** Returns the rows that match the requested exporter row-type. Mirrors
+   * the old grid's row selection logic: `all` uses the full data set (or
+   * `exporterAllDataFn` when provided), `visible` uses the current pipeline
+   * output, `selected` uses the selection state. */
+  private exporterRowsFor(rowType: GridExporterRowType): readonly GridRow[] {
+    if (rowType === 'visible') return this.pipeline.visibleRows;
+    if (rowType === 'selected') return this.getSelectedGridRows();
+    // 'all' — fall back to the full grid rows, including filtered-out ones.
+    // The `exporterAllDataFn` escape hatch is left to the caller; we only
+    // bundle the in-memory data here.
+    return this.buildRowsFromData(this.options.data);
+  }
+
+  private resolveExporterOptions(): GridExporterOptions {
+    return { ...resolveGridExporterOptions(this.options), ...this.exporterOverrides };
+  }
+
+  private buildCsv(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): string {
+    const exporterOptions = this.resolveExporterOptions();
+    const columns = colType === 'all' ? this.options.columnDefs : this.visibleColumns;
+    return buildGridCsv(columns, this.exporterRowsFor(rowType), exporterOptions, colType);
+  }
+
+  private exportCsv(
+    rowType: GridExporterRowType = 'visible',
+    colType: GridExporterColumnType = 'visible',
+  ): void {
+    const csv = this.buildCsv(rowType, colType);
+    const resolved = this.resolveExporterOptions();
+    const resolvedName =
+      typeof resolved.csvFilename === 'function'
+        ? resolved.csvFilename(rowType, colType)
+        : resolved.csvFilename;
+    // Default matches the old `ui.grid.exporter` module — `download.csv`.
+    const filename = sanitizeDownloadFilename(resolvedName ?? 'download.csv');
+    downloadGridCsvFile(csv, filename);
+  }
+
+  // ---- Row-edit — ports ui.grid.rowEdit -----------------------------------
+
+  private rowEditSetSavePromise(rowEntity: GridRecord, savePromise: Promise<void>): void {
+    const rowId = this.resolveRowId(rowEntity);
+    this.rowEditSavePromiseOverrides.set(rowId, savePromise);
+  }
+
+  private rowEditGetDirtyRows(): GridRow[] {
+    return this.pipeline.visibleRows.filter((row) =>
+      this.rowEditState.dirtyRowIds.has(row.id),
+    );
+  }
+
+  private rowEditGetErrorRows(): GridRow[] {
+    return this.pipeline.visibleRows.filter((row) =>
+      this.rowEditState.errorRowIds.has(row.id),
+    );
+  }
+
+  private rowEditFlushDirtyRows(): Promise<void> {
+    const dirty = [...this.rowEditState.dirtyRowIds]
+      .map((id) => this.findRowById(id))
+      .filter((row): row is GridRow => row !== undefined);
+    const promises = dirty.map((row) => this.runRowEditSave(row));
+    return Promise.all(promises).then(() => undefined);
+  }
+
+  private rowEditSetRowsDirty(rowEntities: readonly GridRecord[]): void {
+    for (const entity of rowEntities) {
+      const rowId = this.resolveRowId(entity);
+      const row = this.findRowById(rowId);
+      if (!row) continue;
+      markGridRowDirty(this.rowEditState, row);
+      this.considerSetRowEditTimer(row);
+    }
+    this.emit();
+  }
+
+  private rowEditSetRowsClean(rowEntities: readonly GridRecord[]): void {
+    for (const entity of rowEntities) {
+      const rowId = this.resolveRowId(entity);
+      const row = this.findRowById(rowId);
+      if (!row) continue;
+      markGridRowClean(this.rowEditState, row);
+      this.cancelRowEditTimer(row);
+    }
+    this.emit();
+  }
+
+  private considerSetRowEditTimer(row: GridRow): void {
+    this.cancelRowEditTimer(row);
+    if (!row.isDirty || row.isSaving) return;
+    const waitInterval = this.options.rowEditWaitInterval;
+    if (!isGridRowEditTimerEnabled(waitInterval)) return;
+    const effective = resolveGridRowEditWaitInterval(waitInterval);
+    const timer = setTimeout(() => {
+      this.rowEditTimers.delete(row.id);
+      void this.runRowEditSave(row);
+    }, effective);
+    this.rowEditTimers.set(row.id, timer);
+  }
+
+  private cancelRowEditTimer(row: GridRow): void {
+    const timer = this.rowEditTimers.get(row.id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.rowEditTimers.delete(row.id);
+    }
+  }
+
+  private runRowEditSave(row: GridRow): Promise<void> {
+    if (row.isSaving) {
+      // Re-entrance — return the in-flight promise so `flushDirtyRows`
+      // still awaits the existing save. Matches the old module's
+      // `rowEditSavePromise` short-circuit.
+      return this.rowEditState.savePromises.get(row.id) ?? Promise.resolve();
+    }
+    markGridRowSaving(this.rowEditState, row);
+    this.rowEditSavePromiseOverrides.delete(row.id);
+    this.gridApi.rowEdit.raise.saveRow(row.entity);
+    const savePromise =
+      this.rowEditSavePromiseOverrides.get(row.id) ?? Promise.resolve();
+    this.rowEditState.savePromises.set(row.id, savePromise);
+    this.emit();
+    return savePromise
+      .then(() => {
+        markGridRowClean(this.rowEditState, row);
+        this.emit();
+      })
+      .catch(() => {
+        markGridRowError(this.rowEditState, row);
+        this.emit();
+      });
+  }
+
+  /** Test hook — reports the current row-edit dirty / error / saving state. */
+  getRowEditState(): {
+    dirtyRowIds: string[];
+    errorRowIds: string[];
+    savingRowIds: string[];
+  } {
+    return {
+      dirtyRowIds: [...this.rowEditState.dirtyRowIds],
+      errorRowIds: [...this.rowEditState.errorRowIds],
+      savingRowIds: [...this.rowEditState.savingRowIds],
+    };
   }
 }
 

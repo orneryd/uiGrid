@@ -76,13 +76,13 @@ async function mountGrid(options: GridOptions): Promise<{
 }
 
 function scrollGrid(shadow: ShadowRoot, top: number): void {
-  const table = shadow.querySelector<HTMLElement>('.grid-table');
-  if (!table) throw new Error('grid-table not rendered');
-  table.scrollTop = top;
+  const viewport = shadow.querySelector<HTMLElement>('.grid-body-viewport');
+  if (!viewport) throw new Error('grid-body-viewport not rendered');
+  viewport.scrollTop = top;
   // Patch clientHeight in jsdom so the maybeTriggerInfiniteScroll math
   // sees a viewport — jsdom otherwise returns 0 for clientHeight.
-  Object.defineProperty(table, 'clientHeight', { configurable: true, value: 200 });
-  table.dispatchEvent(new Event('scroll', { bubbles: true }));
+  Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 200 });
+  viewport.dispatchEvent(new Event('scroll', { bubbles: true }));
 }
 
 async function waitFrame(): Promise<void> {
@@ -212,10 +212,10 @@ describe('vanilla grid infinite scroll', () => {
       const { shadow } = await mountGrid(options);
       const api = getApi(options);
       scrollGrid(shadow, 50 * 20);
-      const table = shadow.querySelector<HTMLElement>('.grid-table')!;
-      expect(table.scrollTop).toBeGreaterThan(0);
+      const viewport = shadow.querySelector<HTMLElement>('.grid-body-viewport')!;
+      expect(viewport.scrollTop).toBeGreaterThan(0);
       api.infiniteScroll.resetScroll(true, true);
-      expect(table.scrollTop).toBe(0);
+      expect(viewport.scrollTop).toBe(0);
     });
   });
 });

@@ -1,6 +1,6 @@
 import { SortDirection } from './grid.constants';
 import { GridBenchmarkResult, GridCellPosition, GridColumnDef, GridRecord, GridRow, GridRowColumn, GridSavedState } from './grid.models';
-import { PinDirection } from './grid.core';
+import { GridExporterColumnType, GridExporterOptions, GridExporterRowType, PinDirection } from './grid.core';
 
 type Listener<Args extends unknown[]> = (...args: Args) => void;
 
@@ -32,7 +32,12 @@ export interface GridApiBindings {
   toggleGrouping: (columnName: string) => void;
   clearGrouping: () => void;
   benchmark: (iterations?: number) => GridBenchmarkResult;
-  exportCsv: () => void;
+  exportCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
+  /** Returns the CSV string without triggering a download. Used by
+   * consumers that want to post-process the CSV (e.g. upload it). */
+  buildCsv?: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => string;
+  getExporterOptions?: () => GridExporterOptions;
+  setExporterOptions?: (options: GridExporterOptions) => void;
   paginationGetPage?: () => number;
   paginationGetTotalPages?: () => number;
   paginationGetFirstRowIndex?: () => number;
@@ -92,6 +97,16 @@ export interface GridApiBindings {
   getFocusedCell?: () => GridRowColumn | null;
   getCurrentSelection?: () => GridRowColumn[];
   rowColSelectIndex?: (rowCol: GridRowColumn) => number;
+
+  // rowEdit bindings — ports ui.grid.rowEdit public API. The consumer
+  // resolves save promises via `setSavePromise()` and flushes dirty rows
+  // either by timer (automatic) or explicitly via `flushDirtyRows()`.
+  rowEditSetSavePromise?: (rowEntity: GridRecord, savePromise: Promise<void>) => void;
+  rowEditGetDirtyRows?: () => GridRow[];
+  rowEditGetErrorRows?: () => GridRow[];
+  rowEditFlushDirtyRows?: () => Promise<void>;
+  rowEditSetRowsDirty?: (rowEntities: readonly GridRecord[]) => void;
+  rowEditSetRowsClean?: (rowEntities: readonly GridRecord[]) => void;
 }
 
 export interface UiGridApi {
@@ -138,7 +153,15 @@ export interface UiGridApi {
     groupByColumn: (columnName: string) => void;
     clearGrouping: () => void;
     benchmark: (iterations?: number) => GridBenchmarkResult;
-    exportCsv: () => void;
+    exportCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
+  };
+  exporter: {
+    csvExport: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
+    buildCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => string;
+    /** Re-exposed so consumers can read + override exporter options
+     * without reaching into the underlying grid options. */
+    getOptions: () => GridExporterOptions;
+    setOptions: (options: GridExporterOptions) => void;
   };
   pagination: {
     on: {
@@ -280,6 +303,23 @@ export interface UiGridApi {
     getCurrentSelection: () => GridRowColumn[];
     rowColSelectIndex: (rowCol: GridRowColumn) => number;
   };
+  rowEdit: {
+    on: {
+      /** Fired when the configured wait interval elapses (or
+       * `flushDirtyRows` is called). Listeners must call `setSavePromise`
+       * synchronously before returning so the grid can await the result. */
+      saveRow: (listener: Listener<[GridRecord]>) => () => void;
+    };
+    raise: {
+      saveRow: (rowEntity: GridRecord) => void;
+    };
+    setSavePromise: (rowEntity: GridRecord, savePromise: Promise<void>) => void;
+    getDirtyRows: () => GridRow[];
+    getErrorRows: () => GridRow[];
+    flushDirtyRows: () => Promise<void>;
+    setRowsDirty: (rowEntities: readonly GridRecord[]) => void;
+    setRowsClean: (rowEntities: readonly GridRecord[]) => void;
+  };
 }
 
 export function createGridApi(bindings: GridApiBindings): UiGridApi {
@@ -311,6 +351,7 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const navigateEvent = new GridEvent<[GridRowColumn | null, GridRowColumn | null]>();
   const viewPortKeyDownEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
   const viewPortKeyPressEvent = new GridEvent<[KeyboardEvent, GridRowColumn | null]>();
+  const saveRowEvent = new GridEvent<[GridRecord]>();
 
   const noop = (): void => {};
   const falseState = (): Record<string, boolean> => ({});
@@ -372,6 +413,16 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
   const getSelectAllStateBinding = bindings.getSelectAllState ?? (() => false);
   const shiftSelectRowBinding = bindings.shiftSelectRow ?? noop;
 
+  // rowEdit bindings — default implementations are no-ops / empty-array so
+  // a consumer that doesn't wire rowEdit never throws on api.rowEdit.xxx().
+  const rowEditSetSavePromiseBinding = bindings.rowEditSetSavePromise ?? noop;
+  const rowEditGetDirtyRowsBinding = bindings.rowEditGetDirtyRows ?? emptyRows;
+  const rowEditGetErrorRowsBinding = bindings.rowEditGetErrorRows ?? emptyRows;
+  const rowEditFlushDirtyRowsBinding =
+    bindings.rowEditFlushDirtyRows ?? ((): Promise<void> => Promise.resolve());
+  const rowEditSetRowsDirtyBinding = bindings.rowEditSetRowsDirty ?? noop;
+  const rowEditSetRowsCleanBinding = bindings.rowEditSetRowsClean ?? noop;
+
   // cellNav bindings — defaults keep the API surface intact even when a
   // wrapper doesn't opt into cellnav.
   const scrollToFocusBinding =
@@ -427,6 +478,14 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       clearGrouping: bindings.clearGrouping,
       benchmark: bindings.benchmark,
       exportCsv: bindings.exportCsv
+    },
+    exporter: {
+      csvExport: bindings.exportCsv,
+      buildCsv:
+        bindings.buildCsv ??
+        ((): string => ''),
+      getOptions: bindings.getExporterOptions ?? ((): GridExporterOptions => ({})),
+      setOptions: bindings.setExporterOptions ?? noop
     },
     pagination: {
       on: {
@@ -567,6 +626,20 @@ export function createGridApi(bindings: GridApiBindings): UiGridApi {
       getFocusedCell: getFocusedCellBinding,
       getCurrentSelection: getCurrentSelectionBinding,
       rowColSelectIndex: rowColSelectIndexBinding
+    },
+    rowEdit: {
+      on: {
+        saveRow: (listener) => saveRowEvent.subscribe(listener)
+      },
+      raise: {
+        saveRow: (rowEntity) => saveRowEvent.emit(rowEntity)
+      },
+      setSavePromise: rowEditSetSavePromiseBinding,
+      getDirtyRows: rowEditGetDirtyRowsBinding,
+      getErrorRows: rowEditGetErrorRowsBinding,
+      flushDirtyRows: rowEditFlushDirtyRowsBinding,
+      setRowsDirty: rowEditSetRowsDirtyBinding,
+      setRowsClean: rowEditSetRowsCleanBinding
     }
   };
 

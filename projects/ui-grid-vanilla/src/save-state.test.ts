@@ -191,18 +191,21 @@ describe('vanilla grid saveState', () => {
     });
     const { shadow } = await mountGrid(options);
     const api = getApi(options);
-    const gridTable = shadow.querySelector<HTMLElement>('.grid-table')!;
-    gridTable.scrollTop = 400;
-    gridTable.dispatchEvent(new Event('scroll', { bubbles: true }));
+    // After the body/viewport split, vertical scroll lives on
+    // .grid-body-viewport (the inner overflow wrapper). The .grid-table
+    // only owns horizontal overflow now.
+    const bodyViewport = shadow.querySelector<HTMLElement>('.grid-body-viewport')!;
+    bodyViewport.scrollTop = 400;
+    bodyViewport.dispatchEvent(new Event('scroll', { bubbles: true }));
     await new Promise((r) => requestAnimationFrame(() => r(undefined)));
     await new Promise((r) => requestAnimationFrame(() => r(undefined)));
     const state = api.saveState.save();
     expect((state as unknown as { scrollTop: number }).scrollTop).toBe(400);
     // Scroll back to 0, then restore.
-    gridTable.scrollTop = 0;
+    bodyViewport.scrollTop = 0;
     api.saveState.restore(state);
     await new Promise((r) => requestAnimationFrame(() => r(undefined)));
-    expect(gridTable.scrollTop).toBe(400);
+    expect(bodyViewport.scrollTop).toBe(400);
   });
 
   it('saveScroll=true implicitly disables saveFocus', async () => {
