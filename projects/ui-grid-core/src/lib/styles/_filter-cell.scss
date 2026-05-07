@@ -16,6 +16,17 @@
 
 @mixin input {
   width: 100%;
+  // Native <input> carries a default `size="20"` attribute that gives it an
+  // intrinsic min-content / max-content width of ~20ch, so `min-width: auto`
+  // leaks that ~180px into the filter sub-grid's `min-width: max-content`
+  // calculation, forcing the filter tracks wider than the header/body tracks
+  // when columns use fractional widths (e.g. the default `minmax(11rem, 1fr)`).
+  // Collapsing the intrinsic min lets `1fr` resolve identically in all three
+  // sub-grids.
+  min-width: 0;
+  // `width: 100%` without border-box lets the input's horizontal padding
+  // overflow the cell — also desyncs the filter strip from header + body.
+  box-sizing: border-box;
   border: 1px solid var(--ui-grid-border-color);
   border-radius: var(--ui-grid-radius);
   background: var(--ui-grid-surface);
