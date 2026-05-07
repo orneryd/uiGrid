@@ -543,6 +543,7 @@ export class VanillaGridController {
     row: GridRow | GridRecord | string,
     columnName: string,
     triggerEvent?: Event | KeyboardEvent | null,
+    initialValue?: string,
   ): void {
     const rowId = this.resolveRowId(row);
     const gridRow = this.findRowById(rowId);
@@ -568,6 +569,7 @@ export class VanillaGridController {
       column,
       getCellValue(gridRow.entity, column),
       triggerEvent,
+      initialValue,
     );
 
     this.refresh();
@@ -579,6 +581,15 @@ export class VanillaGridController {
   }
 
   commitCellEdit(): void {
+    // Guard against re-entry: committing rebuilds the cell markup, which
+    // removes the focused <input> and fires blur — whose handler also tries
+    // to commit. Without this early-return, the nested render mutates DOM
+    // that the outer render hasn't finished unwinding yet, throwing
+    // "node to be removed is no longer a child of this node."
+    if (this.editingCell === null) {
+      return;
+    }
+
     commitGridCellEditCommand(this.gridApi, {
       getEditingCell: () => this.editingCell,
       getEditingValue: () => this.editingValue,
@@ -599,6 +610,10 @@ export class VanillaGridController {
   }
 
   cancelCellEdit(): void {
+    if (this.editingCell === null) {
+      return;
+    }
+
     cancelGridCellEditCommand(this.gridApi, {
       getEditingCell: () => this.editingCell,
       setEditingCell: (next) => {
@@ -699,6 +714,21 @@ export class VanillaGridController {
 
   isColumnPinnable(column: GridColumnDef): boolean {
     return isColumnPinnable(this.options, column);
+  }
+
+  /** True when the given column is editable in principle — does NOT evaluate
+   * a per-row `cellEditableCondition`. Use isCellEditable for that. */
+  isColumnEditable(column: GridColumnDef): boolean {
+    return column.enableCellEdit ?? this.options.enableCellEdit ?? false;
+  }
+
+  /** True when the (row, column) cell is editable, respecting both the
+   * column's `enableCellEdit` flag and any `cellEditableCondition`. */
+  isCellEditable(row: GridRow, column: GridColumnDef): boolean {
+    if (!this.isColumnEditable(column)) return false;
+    const condition = column.cellEditableCondition ?? this.options.cellEditableCondition ?? true;
+    if (typeof condition === 'boolean') return condition;
+    return condition({ row: row.entity, column, rowIndex: row.index });
   }
 
   isPinned(column: GridColumnDef): boolean {

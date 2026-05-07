@@ -124,6 +124,12 @@ function headerCellClass(
   return cls;
 }
 
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+}
+
 function asGroupItem(item: DisplayItem): GroupItem {
   return item as GroupItem;
 }
@@ -334,8 +340,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (rowHeight !== undefined) this.attributeOptions.rowHeight = rowHeight;
 
     const headerRowHeight = this.parseNumberAttribute('header-row-height');
-    if (headerRowHeight !== undefined)
-      this.attributeOptions.headerRowHeight = headerRowHeight;
+    if (headerRowHeight !== undefined) this.attributeOptions.headerRowHeight = headerRowHeight;
 
     const viewportHeight = this.parseNumberAttribute('viewport-height');
     if (viewportHeight !== undefined) this.attributeOptions.viewportHeight = viewportHeight;
@@ -362,15 +367,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (expandableRowHeight !== undefined)
       this.attributeOptions.expandableRowHeight = expandableRowHeight;
 
-    const expandableRowHeaderWidth = this.parseNumberAttribute(
-      'expandable-row-header-width',
-    );
+    const expandableRowHeaderWidth = this.parseNumberAttribute('expandable-row-header-width');
     if (expandableRowHeaderWidth !== undefined)
       this.attributeOptions.expandableRowHeaderWidth = expandableRowHeaderWidth;
 
-    const infiniteScrollRowsFromEnd = this.parseNumberAttribute(
-      'infinite-scroll-rows-from-end',
-    );
+    const infiniteScrollRowsFromEnd = this.parseNumberAttribute('infinite-scroll-rows-from-end');
     if (infiniteScrollRowsFromEnd !== undefined)
       this.attributeOptions.infiniteScrollRowsFromEnd = infiniteScrollRowsFromEnd;
 
@@ -403,12 +404,9 @@ export class UiGridStandaloneElement extends HTMLElement {
       this.attributeOptions.enableCellEditOnFocus = enableCellEditOnFocus;
 
     const enablePagination = this.parseBooleanAttribute('enable-pagination');
-    if (enablePagination !== undefined)
-      this.attributeOptions.enablePagination = enablePagination;
+    if (enablePagination !== undefined) this.attributeOptions.enablePagination = enablePagination;
 
-    const enablePaginationControls = this.parseBooleanAttribute(
-      'enable-pagination-controls',
-    );
+    const enablePaginationControls = this.parseBooleanAttribute('enable-pagination-controls');
     if (enablePaginationControls !== undefined)
       this.attributeOptions.enablePaginationControls = enablePaginationControls;
 
@@ -422,15 +420,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     const enableTreeView = this.parseBooleanAttribute('enable-tree-view');
     if (enableTreeView !== undefined) this.attributeOptions.enableTreeView = enableTreeView;
 
-    const showTreeExpandNoChildren = this.parseBooleanAttribute(
-      'show-tree-expand-no-children',
-    );
+    const showTreeExpandNoChildren = this.parseBooleanAttribute('show-tree-expand-no-children');
     if (showTreeExpandNoChildren !== undefined)
       this.attributeOptions.showTreeExpandNoChildren = showTreeExpandNoChildren;
 
-    const treeRowHeaderAlwaysVisible = this.parseBooleanAttribute(
-      'tree-row-header-always-visible',
-    );
+    const treeRowHeaderAlwaysVisible = this.parseBooleanAttribute('tree-row-header-always-visible');
     if (treeRowHeaderAlwaysVisible !== undefined)
       this.attributeOptions.treeRowHeaderAlwaysVisible = treeRowHeaderAlwaysVisible;
 
@@ -456,12 +450,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (data !== undefined) this.attributeOptions.data = data;
 
     const grouping = this.parseJsonAttribute('grouping');
-    if (grouping !== undefined && grouping !== null)
-      this.attributeOptions.grouping = grouping;
+    if (grouping !== undefined && grouping !== null) this.attributeOptions.grouping = grouping;
 
-    const paginationPageSizes = this.parseJsonAttribute<number[] | null>(
-      'pagination-page-sizes',
-    );
+    const paginationPageSizes = this.parseJsonAttribute<number[] | null>('pagination-page-sizes');
     if (paginationPageSizes !== undefined)
       this.attributeOptions.paginationPageSizes = paginationPageSizes;
 
@@ -1056,6 +1047,36 @@ export class UiGridStandaloneElement extends HTMLElement {
         return;
       }
 
+      // Clicking inside a body cell seeds keyboard navigation. Some browsers
+      // don't reliably focus a div with tabindex="0" on click, so we force it
+      // here. This is required for arrow-key nav to work — otherwise focus
+      // stays on the grid-table scroll container and arrows just scroll.
+      const clickedCell =
+        realTarget.closest?.<HTMLElement>('.body-cell[data-row][data-column]') ?? null;
+      if (clickedCell && !realTarget.closest('[data-role="editor"]')) {
+        const rowId = clickedCell.dataset['row'];
+        const columnName = clickedCell.dataset['column'];
+        if (rowId && columnName) {
+          const previous = this.focusedCell;
+          const next = { rowId, columnName };
+          this.focusedCell = next;
+          // Move the selection decoration onto the clicked cell immediately —
+          // the grid shell doesn't re-render on every click, so we toggle the
+          // class/data-attr directly.
+          this.applyFocusedCellClass(previous, next);
+          // Focus unless the browser already handled it (e.g. clicking a
+          // button inside the cell); check shadowRoot.activeElement.
+          const activeInShadow = (this.shadowRoot?.activeElement ?? null) as HTMLElement | null;
+          if (activeInShadow !== clickedCell && !activeInShadow?.closest?.('.body-cell')) {
+            try {
+              clickedCell.focus({ preventScroll: true });
+            } catch {
+              clickedCell.focus();
+            }
+          }
+        }
+      }
+
       // Walk the composed path to find [data-action] across shadow boundaries.
       let actionNode: HTMLElement | null = null;
       for (const el of event.composedPath()) {
@@ -1241,11 +1262,16 @@ export class UiGridStandaloneElement extends HTMLElement {
         lastWidth = Math.max(88, startWidth + (moveEvent.clientX - startX));
 
         // Write directly to DOM — skip full refresh while dragging.
-        const newTemplate = this.controller!.buildTemplateColumnsWithOverride(columnName, lastWidth);
+        const newTemplate = this.controller!.buildTemplateColumnsWithOverride(
+          columnName,
+          lastWidth,
+        );
         const root = this.shadowRoot ?? this;
-        (root as ShadowRoot | HTMLElement).querySelectorAll<HTMLElement>('.header-grid, .filter-grid, .body-grid').forEach((el) => {
-          el.style.gridTemplateColumns = newTemplate;
-        });
+        (root as ShadowRoot | HTMLElement)
+          .querySelectorAll<HTMLElement>('.header-grid, .filter-grid, .body-grid')
+          .forEach((el) => {
+            el.style.gridTemplateColumns = newTemplate;
+          });
       };
 
       const handleUp = (): void => {
@@ -1271,7 +1297,10 @@ export class UiGridStandaloneElement extends HTMLElement {
         if (columnName) {
           event.preventDefault();
           event.stopPropagation();
-          this.controller.setColumnWidthOverride(columnName, this.measureAutoColumnWidth(columnName));
+          this.controller.setColumnWidthOverride(
+            columnName,
+            this.measureAutoColumnWidth(columnName),
+          );
           return;
         }
       }
@@ -1298,33 +1327,90 @@ export class UiGridStandaloneElement extends HTMLElement {
       if (target instanceof HTMLInputElement && target.dataset['role'] === 'editor') {
         if (keyboardEvent.key === 'Enter') {
           event.preventDefault();
-          this.controller.commitCellEdit();
+          event.stopPropagation();
+          const fromRow = target.dataset['row'] ?? null;
+          const fromCol = target.dataset['column'] ?? null;
+          const direction = keyboardEvent.shiftKey ? 'up' : 'down';
+          this.commitAndMove(fromRow, fromCol, direction);
           return;
         }
 
         if (keyboardEvent.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
+          const fromRow = target.dataset['row'] ?? null;
+          const fromCol = target.dataset['column'] ?? null;
           this.controller.cancelCellEdit();
+          this.focusCellElement(fromRow, fromCol);
+          return;
+        }
+
+        if (keyboardEvent.key === 'Tab') {
+          event.preventDefault();
+          event.stopPropagation();
+          const fromRow = target.dataset['row'] ?? null;
+          const fromCol = target.dataset['column'] ?? null;
+          const direction = keyboardEvent.shiftKey ? 'left' : 'right';
+          this.commitAndMove(fromRow, fromCol, direction);
+          return;
         }
 
         return;
       }
 
+      // Derive the logical cell either from the event target (clicked cell) or
+      // from our tracked focusedCell state (covers the case where the browser
+      // routed the event to the scroll container instead of the cell).
+      let rowId: string | undefined;
+      let columnName: string | undefined;
       const cell = target.closest<HTMLElement>('.body-cell');
-      if (!cell) {
-        return;
+      if (cell) {
+        rowId = cell.dataset['row'];
+        columnName = cell.dataset['column'];
+      } else if (this.focusedCell) {
+        rowId = this.focusedCell.rowId;
+        columnName = this.focusedCell.columnName;
       }
-
-      const rowId = cell.dataset['row'];
-      const columnName = cell.dataset['column'];
       if (!rowId || !columnName) {
         return;
       }
 
-      if (keyboardEvent.key === 'Enter' || keyboardEvent.key === 'F2') {
-        event.preventDefault();
-        this.controller.beginCellEdit(rowId, columnName, event);
-        return;
+      switch (keyboardEvent.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          this.moveGridFocus('left', rowId, columnName);
+          return;
+        case 'ArrowRight':
+          event.preventDefault();
+          this.moveGridFocus('right', rowId, columnName);
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.moveGridFocus('up', rowId, columnName);
+          return;
+        case 'ArrowDown':
+          event.preventDefault();
+          this.moveGridFocus('down', rowId, columnName);
+          return;
+        case 'Tab':
+          event.preventDefault();
+          this.moveGridFocus(keyboardEvent.shiftKey ? 'left' : 'right', rowId, columnName);
+          return;
+        case 'Home':
+          event.preventDefault();
+          this.moveGridFocus(keyboardEvent.ctrlKey ? 'top' : 'rowStart', rowId, columnName);
+          return;
+        case 'End':
+          event.preventDefault();
+          this.moveGridFocus(keyboardEvent.ctrlKey ? 'bottom' : 'rowEnd', rowId, columnName);
+          return;
+        case 'Enter':
+        case 'F2':
+          event.preventDefault();
+          this.controller.beginCellEdit(rowId, columnName, event);
+          return;
+        default:
+          break;
       }
 
       if (
@@ -1334,8 +1420,11 @@ export class UiGridStandaloneElement extends HTMLElement {
         !keyboardEvent.altKey
       ) {
         event.preventDefault();
-        this.controller.beginCellEdit(rowId, columnName, event);
-        this.controller.updateEditingValue(keyboardEvent.key);
+        // Pass the typed character as the initial value — beginCellEdit seeds
+        // the editor with this instead of the cell's current value, so the
+        // first keystroke isn't lost to the "input is focused, skip value
+        // overwrite" guard in ui-grid-cell-editor.
+        this.controller.beginCellEdit(rowId, columnName, event, keyboardEvent.key);
       }
     });
 
@@ -1395,9 +1484,9 @@ export class UiGridStandaloneElement extends HTMLElement {
       dragEvent.dataTransfer.dropEffect = 'move';
 
       if (this.dropTargetColumnName !== columnName) {
-        root
-          .querySelectorAll('.header-cell.is-drag-target')
-          .forEach((element) => element.classList.remove('is-drag-target'));
+        root.querySelectorAll('.header-cell.is-drag-target').forEach((element) => {
+          element.classList.remove('is-drag-target');
+        });
         this.dropTargetColumnName = columnName;
         headerCell.classList.add('is-drag-target');
       }
@@ -1425,7 +1514,9 @@ export class UiGridStandaloneElement extends HTMLElement {
 
       root
         .querySelectorAll('.header-cell.is-dragging, .header-cell.is-drag-target')
-        .forEach((element) => element.classList.remove('is-dragging', 'is-drag-target'));
+        .forEach((element) => {
+          element.classList.remove('is-dragging', 'is-drag-target');
+        });
 
       if (!sourceColumn || !targetColumn || sourceColumn === targetColumn || !this.controller) {
         return;
@@ -1439,7 +1530,9 @@ export class UiGridStandaloneElement extends HTMLElement {
       this.dropTargetColumnName = null;
       root
         .querySelectorAll('.header-cell.is-dragging, .header-cell.is-drag-target')
-        .forEach((element) => element.classList.remove('is-dragging', 'is-drag-target'));
+        .forEach((element) => {
+          element.classList.remove('is-dragging', 'is-drag-target');
+        });
     });
 
     root.addEventListener(
@@ -1683,7 +1776,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     // filter keystroke that crosses the virtualization threshold doesn't
     // tear down the focused filter input.
     const columnFingerprint = snapshot.visibleColumns
-      .map((c) => `${c.name}:${controller.isPinned(c) ? 'p' : ''}${controller.isPinnedLeftLast(c) ? 'L' : ''}${controller.isPinnedRightFirst(c) ? 'R' : ''}`)
+      .map(
+        (c) =>
+          `${c.name}:${controller.isPinned(c) ? 'p' : ''}${controller.isPinnedLeftLast(c) ? 'L' : ''}${controller.isPinnedRightFirst(c) ? 'R' : ''}`,
+      )
       .join('|');
     const structureKey = [
       columnFingerprint,
@@ -1747,7 +1843,10 @@ export class UiGridStandaloneElement extends HTMLElement {
       .join('');
 
     const filterRow = filterEnabled
-      ? filterRowMarkup(templateColumns, snapshot.visibleColumns.map((column) => this.renderFilterCell(column)).join(''))
+      ? filterRowMarkup(
+          templateColumns,
+          snapshot.visibleColumns.map((column) => this.renderFilterCell(column)).join(''),
+        )
       : '';
 
     const bodyContent = itemsToRender
@@ -1759,7 +1858,10 @@ export class UiGridStandaloneElement extends HTMLElement {
         ? virtualizationEnabled
           ? bodyVirtualMarkup(templateColumns, totalVirtualHeight, virtualOffset, bodyContent)
           : bodyStaticMarkup(templateColumns, bodyContent)
-        : emptyDataMarkup(escapeHtml(options.emptyMessage ?? labels.emptyHeading), escapeHtml(labels.emptyDescription));
+        : emptyDataMarkup(
+            escapeHtml(options.emptyMessage ?? labels.emptyHeading),
+            escapeHtml(labels.emptyDescription),
+          );
 
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
 
@@ -2203,7 +2305,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const isPinned = controller.isPinned(column);
     const pinOffset = isPinned ? controller.pinnedOffset(column) : null;
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
-    const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
+    const isFocused =
+      this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
     const isPinnedLeftLast = controller.isPinnedLeftLast(column);
     const isPinnedRightFirst = controller.isPinnedRightFirst(column);
     const isOdd = displayIndex % 2 !== 0;
@@ -2212,7 +2315,18 @@ export class UiGridStandaloneElement extends HTMLElement {
     // Visual state is written directly (className / style) since the
     // <ui-grid-body-cell> custom element no longer translates data-* into
     // visual state. data-* attrs still drive event delegation and CSS hooks.
-    setClass(cell, bodyCellClass(isOdd, align, isPinned, isPinnedLeftLast, isPinnedRightFirst, isFocused, editing));
+    setClass(
+      cell,
+      bodyCellClass(
+        isOdd,
+        align,
+        isPinned,
+        isPinnedLeftLast,
+        isPinnedRightFirst,
+        isFocused,
+        editing,
+      ),
+    );
     setStyle(cell, stickyStyle);
     setAttr(cell, 'data-odd', String(isOdd));
     setAttr(cell, 'data-align', align);
@@ -2258,7 +2372,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     // or tree rows come and go. The guard below skips the DOM write when the
     // rendered string matches the current DOM — steady-state typing / paging /
     // data refresh inside the same row layout is a no-op.
-    const nextInner = this.renderCellShellContents(row, column, displayIndex, false, templateMarkupMap);
+    const nextInner = this.renderCellShellContents(
+      row,
+      column,
+      displayIndex,
+      false,
+      templateMarkupMap,
+    );
     if (cellShell.innerHTML !== nextInner) {
       cellShell.innerHTML = nextInner;
     }
@@ -2278,21 +2398,41 @@ export class UiGridStandaloneElement extends HTMLElement {
       ? (() => {
           const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
           const treeIcon = this.resolveIcon(treeIconKey);
-          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), treeIcon.viewBox ?? '0 0 24 24', treeIcon.path);
+          return treeToggleMarkup(
+            escapeHtml(rowId),
+            escapeHtml(controller.treeToggleLabel(row)),
+            treeIcon.viewBox ?? '0 0 24 24',
+            treeIcon.path,
+          );
         })()
       : '';
     const expandToggle = controller.showExpandToggle(row, column)
       ? (() => {
           const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
           const expIcon = this.resolveIcon(expIconKey);
-          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), expIcon.viewBox ?? '0 0 24 24', expIcon.path);
+          return expandToggleMarkup(
+            escapeHtml(rowId),
+            escapeHtml(controller.expandToggleLabel(row)),
+            expIcon.viewBox ?? '0 0 24 24',
+            expIcon.path,
+          );
         })()
       : '';
     const content = editing
-      ? cellEditorMarkup(escapeHtml(rowId), escapeHtml(columnName), escapeHtml(controller.editorInputType(column)), escapeHtml(this.snapshot?.editingValue ?? ''))
-      : (templateMarkupMap
-          ? this.renderCellTemplateFromMarkup(row, column, displayIndex, templateMarkupMap.get(columnName) ?? null)
-          : this.renderCellTemplate(row, column, displayIndex));
+      ? cellEditorMarkup(
+          escapeHtml(rowId),
+          escapeHtml(columnName),
+          escapeHtml(controller.editorInputType(column)),
+          escapeHtml(this.snapshot?.editingValue ?? ''),
+        )
+      : templateMarkupMap
+        ? this.renderCellTemplateFromMarkup(
+            row,
+            column,
+            displayIndex,
+            templateMarkupMap.get(columnName) ?? null,
+          )
+        : this.renderCellTemplate(row, column, displayIndex);
     return `${treeToggle}${expandToggle}<div class="cell-content">${content}</div>`;
   }
 
@@ -2300,7 +2440,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
     const prevIcon = this.resolveIcon('paginationPrev');
     const nextIcon = this.resolveIcon('paginationNext');
-    setAttr(paginationEl, 'data-range-label', `${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`);
+    setAttr(
+      paginationEl,
+      'data-range-label',
+      `${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`,
+    );
     setAttr(paginationEl, 'data-current-page', String(snapshot.currentPage));
     setAttr(paginationEl, 'data-total-pages', String(snapshot.totalPages));
     setAttr(paginationEl, 'data-page-label', snapshot.labels.paginationPage);
@@ -2315,7 +2459,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     setAttr(paginationEl, 'data-page-sizes', JSON.stringify(pageSizes));
     setAttr(paginationEl, 'data-page-size', String(snapshot.pageSize));
     setAttr(paginationEl, 'data-prev-disabled', String(snapshot.currentPage <= 1));
-    setAttr(paginationEl, 'data-next-disabled', String(snapshot.currentPage >= snapshot.totalPages));
+    setAttr(
+      paginationEl,
+      'data-next-disabled',
+      String(snapshot.currentPage >= snapshot.totalPages),
+    );
   }
 
   private renderHeaderCell(
@@ -2381,10 +2529,189 @@ export class UiGridStandaloneElement extends HTMLElement {
     return `<ui-grid-filter-cell data-column="${escapeHtml(column.name)}" data-value="${escapeHtml(value)}" data-placeholder="${escapeHtml(controller.filterPlaceholder(column))}" data-disabled="${!canFilter}" data-pinned="${controller.isPinned(column)}" data-pinned-left-last="${controller.isPinnedLeftLast(column)}" data-pinned-right-first="${controller.isPinnedRightFirst(column)}" data-sticky-style="${escapeHtml(stickyStyle)}"></ui-grid-filter-cell>`;
   }
 
+  /**
+   * Commit the in-flight edit, then move keyboard focus relative to the
+   * committed cell. Splits commit + focus across two paint frames: commit
+   * runs synchronously (editor unmounts, cell re-renders with the new value),
+   * then focus moves to the adjacent cell. Scheduling the focus in a
+   * microtask avoids racing the blur handler's re-entry guard and ensures
+   * the destination cell is fully reattached in the DOM.
+   *
+   * If the source cell was being edited, the destination cell enters edit
+   * mode too (provided the destination column is editable). This keeps
+   * Tab/Enter nav inside an edit session continuous — you keep editing as
+   * you move. Arrow nav outside an edit session does NOT auto-enter edit.
+   */
+  private commitAndMove(
+    fromRowId: string | null,
+    fromColumnName: string | null,
+    direction: 'left' | 'right' | 'up' | 'down',
+  ): void {
+    if (!this.controller || !fromRowId || !fromColumnName) return;
+    this.controller.commitCellEdit();
+    queueMicrotask(() => {
+      this.moveGridFocus(direction, fromRowId, fromColumnName, { resumeEdit: true });
+    });
+  }
+
+  /** Move focus relative to (rowId, columnName). Directions: 'left' | 'right' |
+   * 'up' | 'down' wrap across rows / wrap inside the visible window;
+   * 'rowStart' / 'rowEnd' jump to the first/last column of the same row;
+   * 'top' / 'bottom' jump to the first/last visible row. */
+  private moveGridFocus(
+    direction: 'left' | 'right' | 'up' | 'down' | 'rowStart' | 'rowEnd' | 'top' | 'bottom',
+    rowId: string | null,
+    columnName: string | null,
+    opts: { resumeEdit?: boolean } = {},
+  ): void {
+    if (!this.snapshot || !this.controller || !rowId || !columnName) return;
+    // Use the display-items order (groups + expandables interleaved) so
+    // ArrowDown advances to whatever row comes *visually* next — skipping
+    // over group headers and expandable rows. pipeline.visibleRows is just
+    // the raw row list ignoring grouping, which made nav jump past headers.
+    const rows: GridRow[] = [];
+    for (const item of this.snapshot.pipeline.displayItems) {
+      if (isRowItem(item)) rows.push(item.row);
+    }
+    const columns = this.snapshot.visibleColumns;
+    if (rows.length === 0 || columns.length === 0) return;
+
+    let nextRowId = rowId;
+    let nextColumnName = columnName;
+    let nextRow: GridRow | undefined;
+    let nextColumn: GridColumnDef | undefined;
+
+    if (direction === 'top' || direction === 'bottom') {
+      const row = rows[direction === 'top' ? 0 : rows.length - 1];
+      if (!row) return;
+      nextRow = row;
+      nextColumn = columns.find((c) => c.name === columnName);
+      nextRowId = row.id;
+    } else if (direction === 'rowStart' || direction === 'rowEnd') {
+      const col = columns[direction === 'rowStart' ? 0 : columns.length - 1];
+      if (!col) return;
+      nextColumn = col;
+      nextRow = rows.find((r) => r.id === rowId);
+      nextColumnName = col.name;
+    } else {
+      const next = findNextGridCell({
+        rows,
+        columns,
+        rowId,
+        columnName,
+        direction,
+      });
+      if (!next) return;
+      nextRow = next.row;
+      nextColumn = next.column;
+      nextRowId = next.row.id;
+      nextColumnName = next.column.name;
+    }
+
+    const previous = this.focusedCell;
+    this.focusedCell = { rowId: nextRowId, columnName: nextColumnName };
+    // Move the `cell-focused` decoration immediately so the selection
+    // indicator tracks keyboard nav even though we don't re-render the whole
+    // grid on every arrow press. We only mutate the two affected cells.
+    this.applyFocusedCellClass(previous, this.focusedCell);
+    this.scrollFocusedRowIntoView(nextRowId);
+
+    // When moving out of an edit session (Tab/Enter in editor), auto-open
+    // the next cell's editor if that cell is editable. Non-edit nav (plain
+    // arrow keys on a non-editing cell) never opens the editor.
+    if (opts.resumeEdit && nextRow && nextColumn && this.controller.isCellEditable(nextRow, nextColumn)) {
+      this.controller.beginCellEdit(nextRowId, nextColumnName);
+      return;
+    }
+
+    this.focusCellElement(nextRowId, nextColumnName);
+  }
+
+  /**
+   * Ensure the row for `rowId` is inside the virtualization window before
+   * focus moves there. When virtualization is on, a distant row isn't yet
+   * rendered into the DOM — we scroll to bring it in, let the virtual-body
+   * rebuild on the next frame, then `focusCellElement`'s retry picks it up.
+   */
+  private scrollFocusedRowIntoView(rowId: string): void {
+    const snapshot = this.snapshot;
+    if (!snapshot) return;
+    const index = snapshot.pipeline.displayItems.findIndex(
+      (item) => 'row' in item && item.row && (item.row as { id: string }).id === rowId,
+    );
+    if (index < 0) return;
+    const gridTable = this.shadowRoot?.querySelector<HTMLElement>('.grid-table');
+    if (!gridTable) return;
+    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const rowTop = index * snapshot.rowSize;
+    const rowBottom = rowTop + snapshot.rowSize;
+    const viewportTop = gridTable.scrollTop;
+    const viewportHeight = gridTable.clientHeight;
+    const visibleTop = viewportTop + stickyChromeHeight;
+    const visibleBottom = viewportTop + viewportHeight;
+    if (rowTop < visibleTop) {
+      gridTable.scrollTop = Math.max(0, rowTop - stickyChromeHeight);
+    } else if (rowBottom > visibleBottom) {
+      gridTable.scrollTop = rowBottom - viewportHeight;
+    }
+  }
+
+  private applyFocusedCellClass(
+    previous: { rowId: string; columnName: string } | null,
+    next: { rowId: string; columnName: string } | null,
+  ): void {
+    const root = this.shadowRoot;
+    if (!root) return;
+    if (previous && (previous.rowId !== next?.rowId || previous.columnName !== next?.columnName)) {
+      const prevEl = root.querySelector<HTMLElement>(
+        `.body-cell[data-row="${cssEscape(previous.rowId)}"][data-column="${cssEscape(previous.columnName)}"]`,
+      );
+      if (prevEl) {
+        prevEl.classList.remove('cell-focused');
+        prevEl.setAttribute('data-focused', 'false');
+      }
+    }
+    if (next) {
+      const nextEl = root.querySelector<HTMLElement>(
+        `.body-cell[data-row="${cssEscape(next.rowId)}"][data-column="${cssEscape(next.columnName)}"]`,
+      );
+      if (nextEl) {
+        nextEl.classList.add('cell-focused');
+        nextEl.setAttribute('data-focused', 'true');
+      }
+    }
+  }
+
+  /** DOM-focus the body cell matching the given row/column. Uses the rendered
+   * DOM directly (no framework-specific selector helper). Retries across
+   * two animation frames — long enough for a scroll-triggered virtual body
+   * rebuild to bring the target row into the DOM. */
+  private focusCellElement(rowId: string | null, columnName: string | null): void {
+    if (!rowId || !columnName) return;
+    const root = this.shadowRoot;
+    if (!root) return;
+    const selector = `.body-cell[data-row="${cssEscape(rowId)}"][data-column="${cssEscape(columnName)}"]`;
+    const attempt = (retriesLeft: number): void => {
+      const el = root.querySelector<HTMLElement>(selector);
+      if (!el) {
+        if (retriesLeft > 0) requestAnimationFrame(() => attempt(retriesLeft - 1));
+        return;
+      }
+      try {
+        el.focus({ preventScroll: false });
+      } catch {
+        el.focus();
+      }
+    };
+    attempt(2);
+  }
+
   private measureAutoColumnWidth(columnName: string): number {
     const root = this.shadowRoot;
     if (root == null) return 176;
-    const escaped = CSS.escape ? CSS.escape(columnName) : columnName.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
+    const escaped = CSS.escape
+      ? CSS.escape(columnName)
+      : columnName.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
     const selectors = [
       `.header-cell[data-column="${escaped}"]`,
       `.filter-cell[data-column="${escaped}"]`,
@@ -2440,22 +2767,38 @@ export class UiGridStandaloneElement extends HTMLElement {
       ? (() => {
           const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
           const treeIcon = this.resolveIcon(treeIconKey);
-          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), treeIcon.viewBox ?? '0 0 24 24', treeIcon.path);
+          return treeToggleMarkup(
+            escapeHtml(rowId),
+            escapeHtml(controller.treeToggleLabel(row)),
+            treeIcon.viewBox ?? '0 0 24 24',
+            treeIcon.path,
+          );
         })()
       : '';
     const expandToggle = controller.showExpandToggle(row, column)
       ? (() => {
           const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
           const expIcon = this.resolveIcon(expIconKey);
-          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), expIcon.viewBox ?? '0 0 24 24', expIcon.path);
+          return expandToggleMarkup(
+            escapeHtml(rowId),
+            escapeHtml(controller.expandToggleLabel(row)),
+            expIcon.viewBox ?? '0 0 24 24',
+            expIcon.path,
+          );
         })()
       : '';
 
     const content = editing
-      ? cellEditorMarkup(escapeHtml(rowId), escapeHtml(columnName), escapeHtml(controller.editorInputType(column)), escapeHtml(this.snapshot.editingValue))
+      ? cellEditorMarkup(
+          escapeHtml(rowId),
+          escapeHtml(columnName),
+          escapeHtml(controller.editorInputType(column)),
+          escapeHtml(this.snapshot.editingValue),
+        )
       : this.renderCellTemplate(row, column, displayIndex);
 
-    const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
+    const isFocused =
+      this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
     const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
     const isPinned = controller.isPinned(column);
     const isPinnedLeftLast = controller.isPinnedLeftLast(column);
@@ -2546,7 +2889,9 @@ export class UiGridStandaloneElement extends HTMLElement {
       })
       .replace(/\$\{(.+?)\}/g, (_match, expression) => {
         // Strip "this." or "props." prefix for consistency with @ornery/web-components
-        const cleaned = String(expression).trim().replace(/^(this|props)\./, '');
+        const cleaned = String(expression)
+          .trim()
+          .replace(/^(this|props)\./, '');
         const value = this.resolveTemplateValue(context, cleaned);
         return escapeHtml(value);
       });
@@ -2593,7 +2938,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     for (let index = 0; index < previousSnapshot.visibleColumns.length; index += 1) {
-      if (previousSnapshot.visibleColumns[index]?.name !== nextSnapshot.visibleColumns[index]?.name) {
+      if (
+        previousSnapshot.visibleColumns[index]?.name !== nextSnapshot.visibleColumns[index]?.name
+      ) {
         return { mode: 'full', changedRowIds: null };
       }
     }

@@ -29,6 +29,7 @@
   "scripts": {
     "start": "SASS_PATH=node_modules vite serve",
     "build": "npm run build --prefix ../ui-grid-core && SASS_PATH=node_modules tsup",
+    "watch": "npm run build --prefix ../ui-grid-core && SASS_PATH=node_modules tsup --watch",
     "test": "SASS_PATH=node_modules vitest run"
   }
 }

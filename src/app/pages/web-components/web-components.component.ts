@@ -160,8 +160,7 @@ function createTradingDisplayRows(rows: readonly TradingRow[]): GridRecord[] {
 export class WebComponentsComponent {
   // ─── slot template markup strings (injected programmatically because
   //     Angular's compiler eats native <template> as ng-template) ────────
-  private static readonly STATUS_PILL_TEMPLATE =
-    `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
+  private static readonly STATUS_PILL_TEMPLATE = `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
 
   private static readonly EXPANDABLE_ROW_TEMPLATE =
     `<article class="detail-card">` +
@@ -172,10 +171,19 @@ export class WebComponentsComponent {
     `</article>`;
 
   private static readonly TRADING_TEMPLATES: ReadonlyArray<[slotName: string, markup: string]> = [
-    ['cell-price',     `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>`],
-    ['cell-bid',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>`],
-    ['cell-ask',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>`],
-    ['cell-change',    `<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>`],
+    [
+      'cell-price',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>`,
+    ],
+    [
+      'cell-bid',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>`,
+    ],
+    [
+      'cell-ask',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>`,
+    ],
+    ['cell-change', `<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>`],
     ['cell-changePct', `<span style="color:{{row.changeColor}}">{{row.changePctStr}}</span>`],
   ];
 
@@ -462,7 +470,8 @@ export class WebComponentsComponent {
         };
     }
   });
-  protected readonly webComponentPrimarySnippet = computed(() => `<ui-grid-element
+  protected readonly webComponentPrimarySnippet = computed(
+    () => `<ui-grid-element
   id="primary-grid"
   grid-id="ui-grid-web-components-primary"
   title="UI Grid Modernized (Web Component)"
@@ -508,7 +517,8 @@ export class WebComponentsComponent {
       // hook benchmark, export, and saved-state buttons
     },
   };
-</script>`);
+</script>`,
+  );
   protected readonly webComponentScenarioSnippet = computed(() => {
     switch (this.mode()) {
       case 'tree':
@@ -641,7 +651,7 @@ export class WebComponentsComponent {
   setInterval(() => {
     rows = tickTradingRows(rows, rng, 6);
     grid.setData(rows);
-  }, 150);
+  }, 8);
 </script>`;
       default:
         return `<ui-grid-element
@@ -828,7 +838,9 @@ export class WebComponentsComponent {
   }
 
   private clearSlotTemplates(element: HTMLElement): void {
-    element.querySelectorAll('template[slot]').forEach((t) => t.remove());
+    element.querySelectorAll('template[slot]').forEach((t) => {
+      t.remove();
+    });
   }
 
   private injectPrimaryGridTemplates(): void {
@@ -836,11 +848,7 @@ export class WebComponentsComponent {
       return;
     }
     const el = this.primaryGridRef().nativeElement;
-    this.injectSlotTemplate(
-      el,
-      'cell-status',
-      WebComponentsComponent.STATUS_PILL_TEMPLATE,
-    );
+    this.injectSlotTemplate(el, 'cell-status', WebComponentsComponent.STATUS_PILL_TEMPLATE);
   }
 
   private injectDemoGridTemplates(): void {
@@ -876,6 +884,6 @@ export class WebComponentsComponent {
     this.tradingIntervalId = setInterval(() => {
       this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
       grid.setData(createTradingDisplayRows(this.tradingRows));
-    }, 150);
+    }, 8);
   }
 }
