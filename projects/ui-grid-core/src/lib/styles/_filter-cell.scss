@@ -1,14 +1,20 @@
-// Filter Cell styles
-// Auto-extracted from grid.core.styles.scss
+// Filter Cell — mixins only, no output.
+// Consumers decide the selectors (class-based for grid shell, :host for shadow DOM).
 
-.filter-cell {
+@mixin host {
   padding: var(--ui-grid-filter-cell-padding-block-start) var(--ui-grid-filter-cell-padding-inline)
     var(--ui-grid-filter-cell-padding-block-end);
   border-bottom: 1px solid var(--ui-grid-border-color);
   background: var(--ui-grid-header-background);
 }
 
-.filter-cell input {
+@mixin host-shadow {
+  display: block;
+  box-sizing: border-box;
+  @include host;
+}
+
+@mixin input {
   width: 100%;
   border: 1px solid var(--ui-grid-border-color);
   border-radius: var(--ui-grid-radius);
@@ -17,8 +23,28 @@
   font: inherit;
 }
 
-.filter-cell input:focus {
+@mixin input-shadow {
+  box-sizing: border-box;
+  color: inherit;
+  @include input;
+}
+
+@mixin input-focus {
   outline: var(--ui-grid-filter-input-focus-outline);
   border-color: var(--ui-grid-accent);
 }
 
+/// Emit class-based rules for use inside the grid shell shadow DOM.
+@mixin rules {
+  .filter-cell {
+    @include host;
+  }
+
+  .filter-cell input {
+    @include input;
+  }
+
+  .filter-cell input:focus {
+    @include input-focus;
+  }
+}

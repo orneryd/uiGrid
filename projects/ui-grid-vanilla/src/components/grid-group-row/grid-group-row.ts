@@ -9,10 +9,14 @@ import template from './grid-group-row.html';
  *
  * **Rendering pattern:** `template(this).connect()` — instance properties are populated
  * from data attributes, then the HTML template resolves `${this.prop}` bindings.
+ * `connect()` auto-detects the open shadowRoot and renders into it.
  *
- * **Data flow:** The parent serializes group metadata (field, label, count, depth,
- * icon paths) as data attributes. The component reads them, computes indentation
- * from depth, and renders the disclosure row.
+ * **CSS architecture:** Styles are scoped to the shadow DOM via `grid-group-row.scss`.
+ * CSS custom properties (`--ui-grid-*`) inherit from the parent grid's shadow tree.
+ *
+ * **Event delegation:** The host element carries `data-action="toggle-group"` and
+ * `data-group` attributes so the parent grid's click handler can identify it without
+ * piercing the shadow boundary.
  *
  * @example
  * ```html
@@ -45,6 +49,11 @@ export class UIGridGroupRow extends HTMLElement {
   iconViewBox = '0 0 24 24';
   /** Suffix text after the count (e.g. "items"). */
   rowsSuffix = '';
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
 
   static get observedAttributes(): string[] {
     return ['data-group', 'data-collapsed', 'data-field', 'data-label',

@@ -6,35 +6,31 @@ import template from './grid-filter-cell.html';
  * An autonomous custom element that renders a filter input for a single grid column.
  * Uses shadow DOM with a declarative `.html` template via `@ornery/web-components`.
  *
- * **Rendering pattern:** `template(this).connect()` — the component sets instance
- * properties from data attributes, then the template resolves `${this.prop}` bindings
- * against the component instance. `connect()` auto-detects the open shadowRoot and
- * renders into it.
+ * **Rendering pattern:** the template is mounted once in `connectedCallback` via
+ * `template(this).connect()`. Attribute updates patch the existing input in place
+ * (value, placeholder, disabled) so the filter input never loses focus on re-renders.
  *
- * **Data flow:** The parent `<ui-grid-element>` serializes column state into data
- * attributes when generating the filter row HTML. This component reads those attributes,
- * sets class names for pinning state, and renders the filter input.
+ * **CSS architecture:** Styles are scoped to the shadow DOM via `grid-filter-cell.scss`.
+ * CSS custom properties (`--ui-grid-*`) inherit from the parent grid's shadow tree.
  *
- * @example
- * ```html
- * <ui-grid-filter-cell
- *   data-column="name"
- *   data-value=""
- *   data-placeholder="Filter name..."
- *   data-disabled="false"
- *   data-pinned="false">
- * </ui-grid-filter-cell>
- * ```
+ * **Pinning:** The host element receives pinning classes (`is-pinned`, `is-pinned-left-last`,
+ * `is-pinned-right-first`) which are styled by the parent grid's CSS since the host element
+ * itself lives in the grid's shadow tree.
  */
 export class UIGridFilterCell extends HTMLElement {
   static readonly TAG = 'ui-grid-filter-cell';
 
-  /** Column name this filter applies to. Bound in template as data-column on the input. */
   columnName = '';
-  /** Current filter value. Bound as the input's value attribute. */
   value = '';
-  /** Placeholder text shown when filter is empty. */
   placeholder = '';
+
+  private mounted = false;
+  private inputEl: HTMLInputElement | null = null;
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
 
   static get observedAttributes(): string[] {
     return ['data-column', 'data-value', 'data-placeholder', 'data-disabled',
@@ -43,41 +39,72 @@ export class UIGridFilterCell extends HTMLElement {
   }
 
   connectedCallback(): void {
-    this.render();
+    if (!this.mounted) {
+      this.columnName = this.getAttribute('data-column') ?? '';
+      this.value = this.getAttribute('data-value') ?? '';
+      this.placeholder = this.getAttribute('data-placeholder') ?? '';
+      template(this).connect();
+      this.inputEl = this.shadowRoot!.querySelector('input');
+      this.mounted = true;
+    }
+    this.sync();
   }
 
   attributeChangedCallback(): void {
-    if (this.isConnected) {
-      this.render();
+    if (this.mounted) {
+      this.sync();
     }
   }
 
-  private render(): void {
-    this.columnName = this.getAttribute('data-column') ?? '';
-    this.value = this.getAttribute('data-value') ?? '';
-    this.placeholder = this.getAttribute('data-placeholder') ?? '';
+  private sync(): void {
+    const columnName = this.getAttribute('data-column') ?? '';
+    const value = this.getAttribute('data-value') ?? '';
+    const placeholder = this.getAttribute('data-placeholder') ?? '';
     const disabled = this.getAttribute('data-disabled') === 'true';
     const isPinned = this.getAttribute('data-pinned') === 'true';
     const isPinnedLeftLast = this.getAttribute('data-pinned-left-last') === 'true';
     const isPinnedRightFirst = this.getAttribute('data-pinned-right-first') === 'true';
     const stickyStyle = this.getAttribute('data-sticky-style') ?? '';
 
-    this.className = [
+    this.columnName = columnName;
+    this.value = value;
+    this.placeholder = placeholder;
+
+    const nextClass = [
       'filter-cell',
       isPinned ? 'is-pinned' : '',
       isPinnedLeftLast ? 'is-pinned-left-last' : '',
       isPinnedRightFirst ? 'is-pinned-right-first' : '',
     ].filter(Boolean).join(' ');
-
-    if (stickyStyle) {
-      this.setAttribute('style', stickyStyle);
+    if (this.className !== nextClass) {
+      this.className = nextClass;
     }
 
-    template(this).connect();
+    if (stickyStyle) {
+      if (this.getAttribute('style') !== stickyStyle) {
+        this.setAttribute('style', stickyStyle);
+      }
+    } else if (this.hasAttribute('style')) {
+      this.removeAttribute('style');
+    }
 
-    const input = this.querySelector('input');
-    if (input && disabled) {
-      input.disabled = true;
+    const input = this.inputEl;
+    if (input) {
+      if (input.dataset['column'] !== columnName) {
+        input.dataset['column'] = columnName;
+      }
+      if (input.placeholder !== placeholder) {
+        input.placeholder = placeholder;
+      }
+      // Only overwrite value when the input is not focused and the parent carries
+      // a different value — skipping this during typing preserves caret position.
+      const inputFocused = this.shadowRoot?.activeElement === input;
+      if (!inputFocused && input.value !== value) {
+        input.value = value;
+      }
+      if (input.disabled !== disabled) {
+        input.disabled = disabled;
+      }
     }
   }
 

@@ -46,7 +46,7 @@ export function expandToggleMarkup(rowId: string, toggleLabel: string, iconViewB
 }
 
 export function cellEditorMarkup(rowId: string, columnName: string, inputType: string, editingValue: string): string {
-  return `<input class="cell-editor" data-role="editor" data-row="${rowId}" data-column="${columnName}" type="${inputType}" value="${editingValue}">`;
+  return `<ui-grid-cell-editor data-row="${rowId}" data-column="${columnName}" data-type="${inputType}" data-value="${editingValue}"></ui-grid-cell-editor>`;
 }
 
 export function cellValueMarkup(displayValue: string): string {

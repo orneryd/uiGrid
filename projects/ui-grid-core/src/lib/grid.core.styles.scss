@@ -17,3 +17,8 @@
 @use "styles/pagination";
 @use "styles/utilities";
 @use "styles/status-pill";
+
+// Mixin-only partials: emit class-based rules.
+@include filter-cell.rules;
+@include group-row.rules;
+@include pagination.rules;

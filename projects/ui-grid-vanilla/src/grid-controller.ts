@@ -3,6 +3,7 @@ import {
   beginGridCellEditCommand,
   buildGridRows,
   buildGridCellContext,
+  buildInitialPinnedState,
   cancelGridCellEditCommand,
   canGridExpandRows,
   canGridMoveColumns,
@@ -152,6 +153,8 @@ export class VanillaGridController {
     this.options = options;
     this.labels = resolveGridLabels(options.labels);
     this.columnOrder = options.columnDefs.map((column) => column.name);
+    this.groupByColumns = options.grouping?.groupBy ? [...options.grouping.groupBy] : [];
+    this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
 
     this.pipeline = {
       visibleRows: [],
@@ -243,6 +246,26 @@ export class VanillaGridController {
           this.columnOrder.push(column.name);
         }
       }
+    }
+
+    // Apply declarative grouping from options when provided. Matches the
+    // Angular element's behaviour — the consumer can set
+    // `grouping: { groupBy: [...] }` and it takes effect immediately.
+    // When the option is absent, leave the current groupByColumns untouched
+    // so interactive toggles persist across non-grouping option updates.
+    if (options.grouping?.groupBy !== undefined) {
+      this.groupByColumns = [...options.grouping.groupBy];
+    }
+
+    // Re-seed pinned state from columnDefs whenever a columnDef declares
+    // `pinnedLeft` / `pinnedRight`. This mirrors the Angular element, which
+    // re-derives pinned state on every options update, so switching demo
+    // scenarios (different column sets) picks up their declarative pins.
+    const declaresPin = options.columnDefs.some(
+      (col) => col.pinnedLeft === true || col.pinnedRight === true,
+    );
+    if (declaresPin) {
+      this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
     }
 
     this.apiRegistered = false;

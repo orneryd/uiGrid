@@ -1,7 +1,6 @@
 // Utilities styles
-// Auto-extracted from grid.core.styles.scss
 
-.sr-only {
+@mixin sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -11,5 +10,9 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.sr-only {
+  @include sr-only;
 }
 

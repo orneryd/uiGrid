@@ -27,8 +27,8 @@
     "vitest": "^4.1.0"
   },
   "scripts": {
-    "start": "vite serve",
-    "build": "npm run build --prefix ../ui-grid-core && tsup",
-    "test": "vitest run"
+    "start": "SASS_PATH=node_modules vite serve",
+    "build": "npm run build --prefix ../ui-grid-core && SASS_PATH=node_modules tsup",
+    "test": "SASS_PATH=node_modules vitest run"
   }
 }

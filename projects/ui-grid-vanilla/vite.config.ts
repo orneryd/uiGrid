@@ -10,6 +10,13 @@ export default defineConfig({
       '@ornery/ui-grid-core': path.resolve(__dirname, '../ui-grid-core/src/index.ts'),
     },
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        loadPaths: [path.resolve(__dirname, 'node_modules')],
+      },
+    },
+  },
   optimizeDeps: {
     exclude: ['@ornery/ui-grid-core'],
   },

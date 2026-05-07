@@ -171,7 +171,11 @@
                 [attr.enable-pinning]="demoConfig().enablePinning ? '' : null"
                 [attr.enable-expandable]="demoConfig().enableExpandable ? '' : null"
                 [attr.enable-tree-view]="demoConfig().enableTreeView ? '' : null"
-                [attr.show-tree-expand-no-children]="demoConfig().showTreeExpandNoChildren ? '' : null">
+                [attr.show-tree-expand-no-children]="demoConfig().showTreeExpandNoChildren ? '' : null"
+                [attr.enable-pagination]="demoConfig().enablePagination ? '' : null"
+                [attr.enable-pagination-controls]="demoConfig().enablePaginationControls ? '' : null"
+                [attr.pagination-page-size]="demoConfig().paginationPageSize ?? null"
+                [attr.pagination-page-sizes]="demoConfig().paginationPageSizesJson ?? null">
             </ui-grid-element>
         }
     </section>

@@ -46,6 +46,7 @@ import { UIGridPagination } from './components/grid-pagination';
 import { UIGridBodyCell } from './components/grid-body-cell';
 import { UIGridHeaderCell } from './components/grid-header-cell';
 import { UIGridTemplate } from './components/grid-template';
+import { UIGridCellEditor } from './components/grid-cell-editor';
 
 function escapeHtml(value: unknown): string {
   const text = String(value ?? '');
@@ -55,6 +56,12 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/([\\".#:[\](){}+~> ])/g, '\\$1');
 }
 
 function asGroupItem(item: DisplayItem): GroupItem {
@@ -160,6 +167,10 @@ export class UiGridStandaloneElement extends HTMLElement {
   private pendingPatchedRowIds: Set<string> | null = null;
   private pendingDataRefreshMode: 'patch' | 'virtual' | 'full' | null = null;
   private lastScrollActivityAt = 0;
+  private lastStructureKey: string | null = null;
+  private lastItemsFingerprint: string | null = null;
+  private lastVirtualOffset = 0;
+  private lastTotalVirtualHeight = 0;
 
   static get observedAttributes(): string[] {
     return [
@@ -968,12 +979,20 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     root.addEventListener('click', (event) => {
-      const target = event.target as HTMLElement | null;
-      if (!target || !this.controller || !this.snapshot) {
+      // Use composedPath to reach into sub-component shadow DOMs (pagination buttons, etc.).
+      const realTarget = (event.composedPath()[0] ?? event.target) as HTMLElement | null;
+      if (!realTarget || !this.controller || !this.snapshot) {
         return;
       }
 
-      const actionNode = target.closest<HTMLElement>('[data-action]');
+      // Walk the composed path to find [data-action] across shadow boundaries.
+      let actionNode: HTMLElement | null = null;
+      for (const el of event.composedPath()) {
+        if (el instanceof HTMLElement && el.dataset['action']) {
+          actionNode = el;
+          break;
+        }
+      }
       if (!actionNode) {
         return;
       }
@@ -983,7 +1002,7 @@ export class UiGridStandaloneElement extends HTMLElement {
         return;
       }
 
-      if (this.openPinMenuColumn && !target.closest('.pin-control')) {
+      if (this.openPinMenuColumn && !realTarget.closest('.pin-control')) {
         this.openPinMenuColumn = null;
         this.render();
         return;
@@ -1102,7 +1121,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     });
 
     root.addEventListener('input', (event) => {
-      const target = event.target as HTMLElement | null;
+      // Use composedPath to reach into sub-component shadow DOMs.
+      const target = (event.composedPath()[0] ?? event.target) as HTMLElement | null;
       if (!target || !this.controller) {
         return;
       }
@@ -1119,17 +1139,12 @@ export class UiGridStandaloneElement extends HTMLElement {
       }
     });
 
-    root.addEventListener('change', (event) => {
-      const target = event.target as HTMLElement | null;
-      if (!target || !this.controller) {
-        return;
+    // Listen for the composed custom event from the pagination component's shadow DOM.
+    root.addEventListener('grid-page-size', ((event: CustomEvent<{ pageSize: number }>) => {
+      if (this.controller) {
+        this.controller.setPageSize(event.detail.pageSize);
       }
-
-      if (target instanceof HTMLSelectElement && target.dataset['role'] === 'page-size') {
-        const value = Number.parseInt(target.value, 10);
-        this.controller.setPageSize(value);
-      }
-    });
+    }) as EventListener);
 
     root.addEventListener('mousedown', (event) => {
       const target = event.target as HTMLElement | null;
@@ -1443,6 +1458,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     virtualBody.innerHTML = itemsToRender
       .map((item, index) => this.renderDisplayItem(item, startIndex + index))
       .join('');
+    // The body fingerprint now reflects the freshly-rendered slice so the
+    // next full render() can take the fast per-cell patch path.
+    this.lastItemsFingerprint = this.fingerprintItems(itemsToRender);
+    this.lastVirtualOffset = virtualOffset;
   }
 
   private render(): void {
@@ -1468,80 +1487,29 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     if (!snapshot) {
+      this.lastStructureKey = null;
+      this.lastItemsFingerprint = null;
       emptyTemplate({ message: 'No grid options provided.' }).connect(root);
       return;
     }
 
-    const controller = this.controller!;
-    const options = snapshot.options;
-    const labels = snapshot.labels;
-    const templateColumns = snapshot.gridTemplateColumns;
-    const sortEnabled = controller.isSortingEnabled();
-    const filterEnabled = controller.isFilteringEnabled();
-    const groupingEnabled = controller.isGroupingEnabled();
-    const pinningEnabled = controller.isPinningEnabled();
-    const paginationEnabled = controller.isPaginationEnabled();
-    const showPagination = controller.shouldShowPaginationControls();
-    const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
-    const viewportHeight = options.viewportHeight ?? 560;
-    const headerStickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    let startIndex = 0;
-    let itemsToRender = snapshot.pipeline.displayItems;
-    let virtualOffset = 0;
-    const totalVirtualHeight = snapshot.pipeline.displayItems.length * snapshot.rowSize;
+    const plan = this.buildRenderPlan(snapshot);
 
-    if (virtualizationEnabled) {
-      const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
-      const overscan = 4;
-      startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
-      this.lastVirtualStartIndex = startIndex;
-      const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
-      itemsToRender = snapshot.pipeline.displayItems.slice(
-        startIndex,
-        Math.min(snapshot.pipeline.displayItems.length, startIndex + visibleCount),
-      );
-      virtualOffset = startIndex * snapshot.rowSize;
+    // The shadow-DOM structure is only safe to patch when the set of sub-regions,
+    // the visible column identity/order, and the pin/virt/filter/pagination
+    // toggles are unchanged. Otherwise the existing nodes don't line up with the
+    // new snapshot — fall back to a full re-mount.
+    const canPatch =
+      this.lastStructureKey !== null &&
+      this.lastStructureKey === plan.structureKey &&
+      root.querySelector('.grid-frame') !== null;
+
+    if (canPatch) {
+      this.renderPatch(plan, root);
     } else {
-      this.lastVirtualStartIndex = -1;
+      this.renderFull(plan, root);
     }
-
-    const slotRegistry = this.renderSlotRegistry(snapshot.visibleColumns);
-    const header = snapshot.visibleColumns
-      .map((column) =>
-        this.renderHeaderCell(column, sortEnabled, groupingEnabled, pinningEnabled, options),
-      )
-      .join('');
-
-    const filterRow = filterEnabled
-      ? filterRowMarkup(templateColumns, snapshot.visibleColumns.map((column) => this.renderFilterCell(column)).join(''))
-      : '';
-
-    const bodyContent = itemsToRender
-      .map((item, index) => this.renderDisplayItem(item, startIndex + index))
-      .join('');
-
-    const body =
-      snapshot.pipeline.displayItems.length > 0
-        ? virtualizationEnabled
-          ? bodyVirtualMarkup(templateColumns, totalVirtualHeight, virtualOffset, bodyContent)
-          : bodyStaticMarkup(templateColumns, bodyContent)
-        : emptyDataMarkup(escapeHtml(options.emptyMessage ?? labels.emptyHeading), escapeHtml(labels.emptyDescription));
-
-    const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
-    const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
-
-    this.gridTitle = escapeHtml(options.title ?? 'Data grid');
-    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
-    this.templateColumns = templateColumns;
-    this.slotRegistry = slotRegistry;
-    this.headerContent = header;
-    this.filterRowContent = filterRow;
-    this.bodyContent = body;
-    this.paginationContent = pagination;
-
-    gridShellTemplate(this).connect();
+    this.lastStructureKey = plan.structureKey;
 
     const gridTable = root.querySelector<HTMLElement>('.grid-table');
     if (gridTable && (this.scrollPosition > 0 || this.horizontalScrollPosition > 0)) {
@@ -1577,6 +1545,716 @@ export class UiGridStandaloneElement extends HTMLElement {
         }
         this.render();
       });
+    }
+  }
+
+  private buildRenderPlan(snapshot: GridControllerSnapshot): {
+    snapshot: GridControllerSnapshot;
+    options: GridOptions;
+    labels: GridControllerSnapshot['labels'];
+    templateColumns: string;
+    sortEnabled: boolean;
+    filterEnabled: boolean;
+    groupingEnabled: boolean;
+    pinningEnabled: boolean;
+    paginationEnabled: boolean;
+    showPagination: boolean;
+    virtualizationEnabled: boolean;
+    viewportHeight: number;
+    headerStickyTop: number;
+    hasViewportScroll: boolean;
+    itemsToRender: readonly DisplayItem[];
+    startIndex: number;
+    virtualOffset: number;
+    totalVirtualHeight: number;
+    structureKey: string;
+  } {
+    const controller = this.controller!;
+    const options = snapshot.options;
+    const labels = snapshot.labels;
+    const templateColumns = snapshot.gridTemplateColumns;
+    const sortEnabled = controller.isSortingEnabled();
+    const filterEnabled = controller.isFilteringEnabled();
+    const groupingEnabled = controller.isGroupingEnabled();
+    const pinningEnabled = controller.isPinningEnabled();
+    const paginationEnabled = controller.isPaginationEnabled();
+    const showPagination = controller.shouldShowPaginationControls();
+    const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
+    const viewportHeight = options.viewportHeight ?? 560;
+    const headerStickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
+    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
+    const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
+
+    let startIndex = 0;
+    let itemsToRender: readonly DisplayItem[] = snapshot.pipeline.displayItems;
+    let virtualOffset = 0;
+    const totalVirtualHeight = snapshot.pipeline.displayItems.length * snapshot.rowSize;
+
+    if (virtualizationEnabled) {
+      const bodyScrollTop = Math.max(0, this.scrollPosition - stickyChromeHeight);
+      const overscan = 4;
+      startIndex = Math.max(0, Math.floor(bodyScrollTop / snapshot.rowSize) - overscan);
+      this.lastVirtualStartIndex = startIndex;
+      const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;
+      itemsToRender = snapshot.pipeline.displayItems.slice(
+        startIndex,
+        Math.min(snapshot.pipeline.displayItems.length, startIndex + visibleCount),
+      );
+      virtualOffset = startIndex * snapshot.rowSize;
+    } else {
+      this.lastVirtualStartIndex = -1;
+    }
+
+    // Structure key: only the outer-shell layout. Things that swap the body
+    // container (virtualization flip, empty state, viewport scroll) or the
+    // pagination element appearance are handled *inside* the patch path so a
+    // filter keystroke that crosses the virtualization threshold doesn't
+    // tear down the focused filter input.
+    const columnFingerprint = snapshot.visibleColumns
+      .map((c) => `${c.name}:${controller.isPinned(c) ? 'p' : ''}${controller.isPinnedLeftLast(c) ? 'L' : ''}${controller.isPinnedRightFirst(c) ? 'R' : ''}`)
+      .join('|');
+    const structureKey = [
+      columnFingerprint,
+      filterEnabled ? '1' : '0',
+      paginationEnabled ? '1' : '0',
+    ].join('#');
+
+    return {
+      snapshot,
+      options,
+      labels,
+      templateColumns,
+      sortEnabled,
+      filterEnabled,
+      groupingEnabled,
+      pinningEnabled,
+      paginationEnabled,
+      showPagination,
+      virtualizationEnabled,
+      viewportHeight,
+      headerStickyTop,
+      hasViewportScroll,
+      itemsToRender,
+      startIndex,
+      virtualOffset,
+      totalVirtualHeight,
+      structureKey,
+    };
+  }
+
+  private renderFull(
+    plan: ReturnType<UiGridStandaloneElement['buildRenderPlan']>,
+    _root: ShadowRoot,
+  ): void {
+    const {
+      snapshot,
+      options,
+      labels,
+      templateColumns,
+      sortEnabled,
+      filterEnabled,
+      groupingEnabled,
+      pinningEnabled,
+      paginationEnabled,
+      showPagination,
+      virtualizationEnabled,
+      viewportHeight,
+      headerStickyTop,
+      hasViewportScroll,
+      itemsToRender,
+      startIndex,
+      virtualOffset,
+      totalVirtualHeight,
+    } = plan;
+
+    const slotRegistry = this.renderSlotRegistry(snapshot.visibleColumns);
+    const header = snapshot.visibleColumns
+      .map((column) =>
+        this.renderHeaderCell(column, sortEnabled, groupingEnabled, pinningEnabled, options),
+      )
+      .join('');
+
+    const filterRow = filterEnabled
+      ? filterRowMarkup(templateColumns, snapshot.visibleColumns.map((column) => this.renderFilterCell(column)).join(''))
+      : '';
+
+    const bodyContent = itemsToRender
+      .map((item, index) => this.renderDisplayItem(item, startIndex + index))
+      .join('');
+
+    const body =
+      snapshot.pipeline.displayItems.length > 0
+        ? virtualizationEnabled
+          ? bodyVirtualMarkup(templateColumns, totalVirtualHeight, virtualOffset, bodyContent)
+          : bodyStaticMarkup(templateColumns, bodyContent)
+        : emptyDataMarkup(escapeHtml(options.emptyMessage ?? labels.emptyHeading), escapeHtml(labels.emptyDescription));
+
+    const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
+
+    this.gridTitle = escapeHtml(options.title ?? 'Data grid');
+    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
+    this.templateColumns = templateColumns;
+    this.slotRegistry = slotRegistry;
+    this.headerContent = header;
+    this.filterRowContent = filterRow;
+    this.bodyContent = body;
+    this.paginationContent = pagination;
+
+    gridShellTemplate(this).connect();
+
+    // After a full mount, the new DOM exactly matches the current item set —
+    // seed the fingerprint so the next render can take the fast patch path.
+    this.lastItemsFingerprint = this.fingerprintItems(plan.itemsToRender);
+    this.lastVirtualOffset = plan.virtualOffset;
+    this.lastTotalVirtualHeight = plan.totalVirtualHeight;
+  }
+
+  private renderPatch(
+    plan: ReturnType<UiGridStandaloneElement['buildRenderPlan']>,
+    root: ShadowRoot,
+  ): void {
+    const {
+      snapshot,
+      options,
+      labels,
+      templateColumns,
+      sortEnabled,
+      filterEnabled,
+      groupingEnabled,
+      pinningEnabled,
+      paginationEnabled,
+      showPagination,
+      virtualizationEnabled,
+      viewportHeight,
+      headerStickyTop,
+      hasViewportScroll,
+      itemsToRender,
+      startIndex,
+      virtualOffset,
+      totalVirtualHeight,
+    } = plan;
+
+    // Grid frame aria-label.
+    const gridFrame = root.querySelector<HTMLElement>('.grid-frame');
+    const nextTitle = escapeHtml(options.title ?? 'Data grid');
+    if (gridFrame && gridFrame.getAttribute('aria-label') !== nextTitle) {
+      gridFrame.setAttribute('aria-label', nextTitle);
+    }
+
+    // Grid table wrapper styles (viewport height + sticky offset).
+    const gridTable = root.querySelector<HTMLElement>('.grid-table');
+    const nextTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;overflow-y:auto;` : ''}--ui-grid-header-sticky-top:${headerStickyTop}px;`;
+    if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
+      gridTable.setAttribute('style', nextTableStyle);
+    }
+
+    // Header grid: track sizes + cells.
+    const headerGrid = root.querySelector<HTMLElement>('.header-grid');
+    if (headerGrid) {
+      const nextHeaderStyle = `grid-template-columns:${templateColumns}`;
+      if (headerGrid.getAttribute('style') !== nextHeaderStyle) {
+        headerGrid.setAttribute('style', nextHeaderStyle);
+      }
+      const headerHtml = snapshot.visibleColumns
+        .map((column) =>
+          this.renderHeaderCell(column, sortEnabled, groupingEnabled, pinningEnabled, options),
+        )
+        .join('');
+      if (headerGrid.innerHTML !== headerHtml) {
+        headerGrid.innerHTML = headerHtml;
+      }
+    }
+
+    // Filter row: update attributes on existing <ui-grid-filter-cell> elements
+    // (keyed by data-column). This is the path that preserves input focus.
+    if (filterEnabled) {
+      const filterGrid = root.querySelector<HTMLElement>('.filter-grid');
+      if (filterGrid) {
+        const nextFilterStyle = `grid-template-columns:${templateColumns}`;
+        if (filterGrid.getAttribute('style') !== nextFilterStyle) {
+          filterGrid.setAttribute('style', nextFilterStyle);
+        }
+        this.patchFilterCells(filterGrid, snapshot);
+      }
+    }
+
+    // Body region: innerHTML-swap just the grid rows. The scroll container
+    // (.grid-table) is never replaced, so scroll position survives naturally.
+    this.patchBodyRegion(
+      root,
+      snapshot,
+      options,
+      labels,
+      templateColumns,
+      virtualizationEnabled,
+      itemsToRender,
+      startIndex,
+      virtualOffset,
+      totalVirtualHeight,
+    );
+
+    // Pagination: show/hide + patch attributes. The element lives under
+    // .grid-frame as a direct child (sibling of .grid-table), so toggling
+    // its presence doesn't touch the filter input.
+    this.reconcilePagination(root, snapshot, paginationEnabled && showPagination);
+  }
+
+  /**
+   * Ensures the grid-table contains the right body node for the desired kind
+   * (empty-state / virtual / static), reusing the existing node where possible.
+   * Returns the body container the caller should patch into (the .body-grid
+   * or .grid-virtual-body), or null for the empty state.
+   */
+  private reconcileBodyRoot(
+    root: ShadowRoot,
+    kind: 'empty' | 'virtual' | 'static',
+    options: GridOptions,
+    labels: GridControllerSnapshot['labels'],
+    templateColumns: string,
+    virtualOffset: number,
+    totalVirtualHeight: number,
+  ): HTMLElement | null {
+    const gridTable = root.querySelector<HTMLElement>('.grid-table');
+    if (!gridTable) return null;
+
+    const currentEmpty = gridTable.querySelector<HTMLElement>(':scope > .empty-state');
+    const currentVirtual = gridTable.querySelector<HTMLElement>(':scope > .grid-virtual-spacer');
+    const currentStatic = gridTable.querySelector<HTMLElement>(':scope > .body-grid');
+    const currentNode = currentEmpty ?? currentVirtual ?? currentStatic;
+
+    if (kind === 'empty') {
+      const heading = escapeHtml(options.emptyMessage ?? labels.emptyHeading);
+      const description = escapeHtml(labels.emptyDescription);
+      if (currentEmpty) {
+        const strong = currentEmpty.querySelector('strong');
+        const p = currentEmpty.querySelector('p');
+        if (strong && strong.innerHTML !== heading) strong.innerHTML = heading;
+        if (p && p.innerHTML !== description) p.innerHTML = description;
+        return null;
+      }
+      const fresh = this.createFromMarkup(emptyDataMarkup(heading, description));
+      if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+      return null;
+    }
+
+    if (kind === 'virtual') {
+      if (currentVirtual) {
+        return currentVirtual.querySelector<HTMLElement>('.grid-virtual-body');
+      }
+      const fresh = this.createFromMarkup(
+        bodyVirtualMarkup(templateColumns, totalVirtualHeight, virtualOffset, ''),
+      );
+      if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+      return fresh?.querySelector<HTMLElement>('.grid-virtual-body') ?? null;
+    }
+
+    // static
+    if (currentStatic) return currentStatic;
+    const fresh = this.createFromMarkup(bodyStaticMarkup(templateColumns, ''));
+    if (fresh) this.swapBodyChild(gridTable, currentNode, fresh);
+    return fresh;
+  }
+
+  private createFromMarkup(html: string): HTMLElement | null {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    return wrapper.firstElementChild as HTMLElement | null;
+  }
+
+  private swapBodyChild(
+    gridTable: HTMLElement,
+    current: HTMLElement | null,
+    next: HTMLElement,
+  ): void {
+    if (current) {
+      gridTable.replaceChild(next, current);
+    } else {
+      gridTable.appendChild(next);
+    }
+  }
+
+  private reconcilePagination(
+    root: ShadowRoot,
+    snapshot: GridControllerSnapshot,
+    shouldShow: boolean,
+  ): void {
+    const frame = root.querySelector<HTMLElement>('.grid-frame');
+    if (!frame) return;
+    const existing = frame.querySelector<HTMLElement>(':scope > ui-grid-pagination');
+
+    if (!shouldShow) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    if (existing) {
+      this.patchPagination(existing, snapshot);
+      return;
+    }
+
+    // Mount a fresh pagination element at the end of the grid-frame.
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = this.renderPagination(snapshot);
+    const fresh = wrapper.firstElementChild as HTMLElement | null;
+    if (fresh) {
+      frame.appendChild(fresh);
+    }
+  }
+
+  private patchFilterCells(filterGrid: HTMLElement, snapshot: GridControllerSnapshot): void {
+    const controller = this.controller!;
+    const existing = new Map<string, HTMLElement>();
+    for (const el of filterGrid.querySelectorAll<HTMLElement>('ui-grid-filter-cell[data-column]')) {
+      const column = el.dataset['column'];
+      if (column) existing.set(column, el);
+    }
+
+    for (const column of snapshot.visibleColumns) {
+      const el = existing.get(column.name);
+      if (!el) continue;
+      const value = snapshot.activeFilters[column.name] ?? '';
+      const canFilter = controller.isColumnFilterable(column);
+      const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
+      const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+      const attrs: Record<string, string> = {
+        'data-value': value,
+        'data-placeholder': controller.filterPlaceholder(column),
+        'data-disabled': String(!canFilter),
+        'data-pinned': String(controller.isPinned(column)),
+        'data-pinned-left-last': String(controller.isPinnedLeftLast(column)),
+        'data-pinned-right-first': String(controller.isPinnedRightFirst(column)),
+        'data-sticky-style': stickyStyle,
+      };
+      for (const [name, next] of Object.entries(attrs)) {
+        if (el.getAttribute(name) !== next) {
+          el.setAttribute(name, next);
+        }
+      }
+    }
+  }
+
+  private patchBodyRegion(
+    root: ShadowRoot,
+    snapshot: GridControllerSnapshot,
+    options: GridOptions,
+    labels: GridControllerSnapshot['labels'],
+    templateColumns: string,
+    virtualizationEnabled: boolean,
+    itemsToRender: readonly DisplayItem[],
+    startIndex: number,
+    virtualOffset: number,
+    totalVirtualHeight: number,
+  ): void {
+    // Desired body kind: empty / virtual / static. The DOM may currently host
+    // a different kind (e.g. switching from static → virtual when a data load
+    // crosses the virtualization threshold, or from any → empty when a filter
+    // returns zero rows). Reconcile the body-region node *without* touching
+    // .header-grid or .filter-grid — that's what preserves focus inside the
+    // filter input across row-set changes.
+    const hasRows = snapshot.pipeline.displayItems.length > 0;
+    const desiredKind: 'empty' | 'virtual' | 'static' = !hasRows
+      ? 'empty'
+      : virtualizationEnabled
+        ? 'virtual'
+        : 'static';
+
+    const bodyContainer = this.reconcileBodyRoot(
+      root,
+      desiredKind,
+      options,
+      labels,
+      templateColumns,
+      virtualOffset,
+      totalVirtualHeight,
+    );
+
+    if (!hasRows) {
+      this.lastItemsFingerprint = '';
+      return;
+    }
+
+    const itemsFingerprint = this.fingerprintItems(itemsToRender);
+
+    if (virtualizationEnabled) {
+      const spacer = root.querySelector<HTMLElement>('.grid-virtual-spacer');
+      if (spacer && totalVirtualHeight !== this.lastTotalVirtualHeight) {
+        spacer.setAttribute('style', `height:${totalVirtualHeight}px`);
+        this.lastTotalVirtualHeight = totalVirtualHeight;
+      }
+      if (bodyContainer) {
+        const nextBodyStyle = `grid-template-columns:${templateColumns};top:${virtualOffset}px`;
+        if (bodyContainer.getAttribute('style') !== nextBodyStyle) {
+          bodyContainer.setAttribute('style', nextBodyStyle);
+          this.lastVirtualOffset = virtualOffset;
+        }
+      }
+    } else if (bodyContainer) {
+      const nextStyle = `grid-template-columns:${templateColumns}`;
+      if (bodyContainer.getAttribute('style') !== nextStyle) {
+        bodyContainer.setAttribute('style', nextStyle);
+      }
+    }
+
+    if (!bodyContainer) {
+      this.lastItemsFingerprint = itemsFingerprint;
+      return;
+    }
+
+    // Fast path: item layout identical to last render — patch each existing
+    // cell / group row in place. This preserves focus inside any mounted
+    // <ui-grid-cell-editor>, and avoids parsing a fresh HTML string for every
+    // keystroke / unrelated snapshot (extreme perf path).
+    if (this.lastItemsFingerprint === itemsFingerprint) {
+      this.patchExistingRows(bodyContainer, snapshot, itemsToRender, startIndex);
+      return;
+    }
+
+    // Slow path: row set changed (paging, sort, group toggle, tree expand,
+    // virtualization window scrolled). Swap innerHTML so all fragments rebuild.
+    const bodyContent = itemsToRender
+      .map((item, index) => this.renderDisplayItem(item, startIndex + index))
+      .join('');
+    if (bodyContainer.innerHTML !== bodyContent) {
+      bodyContainer.innerHTML = bodyContent;
+    }
+    this.lastItemsFingerprint = itemsFingerprint;
+  }
+
+  private fingerprintItems(items: readonly DisplayItem[]): string {
+    // Lean identifier — kind + id per index. If any row/group is
+    // added/removed/reordered, the fingerprint shifts and we fall back to
+    // the innerHTML path.
+    const parts: string[] = [];
+    for (const item of items) {
+      if (item.kind === 'group') {
+        parts.push(`g:${(item as GroupItem).id}`);
+      } else if (item.kind === 'expandable') {
+        parts.push(`e:${(item as DisplayItem & { row: GridRow }).row.id}`);
+      } else if (isRowItem(item)) {
+        parts.push(`r:${item.row.id}`);
+      } else {
+        parts.push('?');
+      }
+    }
+    return parts.join('|');
+  }
+
+  private patchExistingRows(
+    bodyContainer: HTMLElement,
+    snapshot: GridControllerSnapshot,
+    itemsToRender: readonly DisplayItem[],
+    startIndex: number,
+  ): void {
+    const controller = this.controller!;
+    const columns = snapshot.visibleColumns;
+
+    // Walk items in order; the DOM children are in the same order by
+    // fingerprint invariant. For rows we address cells by data-row +
+    // data-column (more robust than index since the cell layout order is
+    // already determined by the column list).
+    const groupEls = new Map<string, HTMLElement>();
+    for (const el of bodyContainer.querySelectorAll<HTMLElement>('ui-grid-group-row[data-group]')) {
+      const id = el.dataset['group'];
+      if (id) groupEls.set(id, el);
+    }
+
+    const templateMarkupMap = new Map<string, string | null>();
+    for (const col of columns) {
+      templateMarkupMap.set(col.name, this.getTemplateMarkup(this.cellSlotName(col)));
+    }
+
+    for (let i = 0; i < itemsToRender.length; i++) {
+      const item = itemsToRender[i]!;
+      const displayIndex = startIndex + i;
+
+      if (item.kind === 'group') {
+        const group = asGroupItem(item);
+        const el = groupEls.get(group.id);
+        if (el) {
+          this.patchGroupRow(el, group);
+        }
+        continue;
+      }
+
+      if (!isRowItem(item)) {
+        // Expandable rows contain arbitrary user markup — cheapest safe path is
+        // to leave them alone unless content actually changed, which would
+        // have flipped the fingerprint. No-op here.
+        continue;
+      }
+
+      const row = item.row;
+      for (const column of columns) {
+        const cell = bodyContainer.querySelector<HTMLElement>(
+          `ui-grid-body-cell[data-row="${cssEscape(row.id)}"][data-column="${cssEscape(column.name)}"]`,
+        );
+        if (!cell) continue;
+        this.patchBodyCell(cell, row, column, displayIndex, templateMarkupMap);
+      }
+    }
+  }
+
+  private patchGroupRow(el: HTMLElement, group: GroupItem): void {
+    const snapshot = this.snapshot!;
+    const controller = this.controller!;
+    const iconKey = group.collapsed ? 'groupCollapsed' : 'groupExpanded';
+    const icon = this.iconOverrides[iconKey] ?? DEFAULT_ICONS[iconKey];
+    const attrs: Record<string, string> = {
+      'data-collapsed': group.collapsed ? 'true' : 'false',
+      'data-field': group.field,
+      'data-label': group.label,
+      'data-count': String(group.count),
+      'data-depth': String(group.depth),
+      'data-disclosure-label': controller.groupDisclosureLabel(group),
+      'data-icon-path': icon.path,
+      'data-icon-view-box': icon.viewBox ?? '0 0 24 24',
+      'data-rows-suffix': snapshot.labels.groupRowsSuffix,
+    };
+    for (const [name, next] of Object.entries(attrs)) {
+      if (el.getAttribute(name) !== next) {
+        el.setAttribute(name, next);
+      }
+    }
+  }
+
+  private patchBodyCell(
+    cell: HTMLElement,
+    row: GridRow,
+    column: GridColumnDef,
+    displayIndex: number,
+    templateMarkupMap: Map<string, string | null>,
+  ): void {
+    const controller = this.controller!;
+    const rowId = row.id;
+    const columnName = column.name;
+    const editing = controller.isEditingCell(rowId, columnName);
+    const pinOffset = controller.isPinned(column) ? controller.pinnedOffset(column) : null;
+    const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
+    const isFocused = this.focusedCell?.rowId === rowId && this.focusedCell.columnName === columnName;
+
+    const attrs: Record<string, string> = {
+      'data-odd': String(displayIndex % 2 !== 0),
+      'data-align': column.align ?? '',
+      'data-pinned': String(controller.isPinned(column)),
+      'data-pinned-left-last': String(controller.isPinnedLeftLast(column)),
+      'data-pinned-right-first': String(controller.isPinnedRightFirst(column)),
+      'data-focused': String(isFocused),
+      'data-editing': String(editing),
+      'data-sticky-style': stickyStyle,
+    };
+    for (const [name, next] of Object.entries(attrs)) {
+      if (cell.getAttribute(name) !== next) {
+        cell.setAttribute(name, next);
+      }
+    }
+
+    const cellShell = cell.querySelector<HTMLElement>(':scope > .cell-shell');
+    if (!cellShell) return;
+
+    const indentStyle = `padding-inline-start:${controller.cellIndent(row, column)}`;
+    if (cellShell.getAttribute('style') !== indentStyle) {
+      cellShell.setAttribute('style', indentStyle);
+    }
+
+    if (editing) {
+      // Preserve the mounted <ui-grid-cell-editor> if present — just patch its
+      // data-value. This is the path that preserves input focus + caret
+      // across every keystroke's snapshot rebroadcast.
+      const editor = cellShell.querySelector<HTMLElement>('ui-grid-cell-editor');
+      const cellContent = cellShell.querySelector<HTMLElement>(':scope > .cell-content');
+      if (editor && cellContent) {
+        const editorAttrs: Record<string, string> = {
+          'data-row': rowId,
+          'data-column': columnName,
+          'data-type': controller.editorInputType(column),
+          'data-value': this.snapshot?.editingValue ?? '',
+        };
+        for (const [name, next] of Object.entries(editorAttrs)) {
+          if (editor.getAttribute(name) !== next) {
+            editor.setAttribute(name, next);
+          }
+        }
+        return;
+      }
+      // Transitioned from non-editing → editing: mount editor once by
+      // rebuilding the cell-shell contents (toggles + cell-content + editor).
+      const editingShellHtml = this.renderCellShellContents(row, column, displayIndex, true);
+      if (cellShell.innerHTML !== editingShellHtml) {
+        cellShell.innerHTML = editingShellHtml;
+      }
+      return;
+    }
+
+    // Not editing: rebuild the cell-shell's inner contents. This covers toggle
+    // buttons (tree/expandable) which can appear/disappear as expandable slots
+    // or tree rows come and go. The guard below skips the DOM write when the
+    // rendered string matches the current DOM — steady-state typing / paging /
+    // data refresh inside the same row layout is a no-op.
+    const nextInner = this.renderCellShellContents(row, column, displayIndex, false, templateMarkupMap);
+    if (cellShell.innerHTML !== nextInner) {
+      cellShell.innerHTML = nextInner;
+    }
+  }
+
+  private renderCellShellContents(
+    row: GridRow,
+    column: GridColumnDef,
+    displayIndex: number,
+    editing: boolean,
+    templateMarkupMap?: Map<string, string | null>,
+  ): string {
+    const controller = this.controller!;
+    const rowId = row.id;
+    const columnName = column.name;
+    const treeToggle = controller.showTreeToggle(row, column)
+      ? (() => {
+          const treeIconKey = controller.isTreeRowExpanded(row) ? 'treeExpanded' : 'treeCollapsed';
+          const treeIcon = this.iconOverrides[treeIconKey] ?? DEFAULT_ICONS[treeIconKey];
+          return treeToggleMarkup(escapeHtml(rowId), escapeHtml(controller.treeToggleLabel(row)), escapeHtml(treeIcon.viewBox ?? '0 0 24 24'), escapeHtml(treeIcon.path));
+        })()
+      : '';
+    const expandToggle = controller.showExpandToggle(row, column)
+      ? (() => {
+          const expIconKey = row.expanded ? 'expandExpanded' : 'expandCollapsed';
+          const expIcon = this.iconOverrides[expIconKey] ?? DEFAULT_ICONS[expIconKey];
+          return expandToggleMarkup(escapeHtml(rowId), escapeHtml(controller.expandToggleLabel(row)), escapeHtml(expIcon.viewBox ?? '0 0 24 24'), escapeHtml(expIcon.path));
+        })()
+      : '';
+    const content = editing
+      ? cellEditorMarkup(escapeHtml(rowId), escapeHtml(columnName), escapeHtml(controller.editorInputType(column)), escapeHtml(this.snapshot?.editingValue ?? ''))
+      : (templateMarkupMap
+          ? this.renderCellTemplateFromMarkup(row, column, displayIndex, templateMarkupMap.get(columnName) ?? null)
+          : this.renderCellTemplate(row, column, displayIndex));
+    return `${treeToggle}${expandToggle}<div class="cell-content">${content}</div>`;
+  }
+
+  private patchPagination(paginationEl: HTMLElement, snapshot: GridControllerSnapshot): void {
+    const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
+    const prevIcon = this.iconOverrides['paginationPrev'] ?? DEFAULT_ICONS['paginationPrev'];
+    const nextIcon = this.iconOverrides['paginationNext'] ?? DEFAULT_ICONS['paginationNext'];
+    const attrs: Record<string, string> = {
+      'data-range-label': `${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`,
+      'data-current-page': String(snapshot.currentPage),
+      'data-total-pages': String(snapshot.totalPages),
+      'data-page-label': snapshot.labels.paginationPage,
+      'data-of-label': snapshot.labels.paginationOf,
+      'data-prev-label': snapshot.labels.paginationPrevious,
+      'data-next-label': snapshot.labels.paginationNext,
+      'data-rows-label': snapshot.labels.paginationRows,
+      'data-prev-icon-path': prevIcon.path,
+      'data-prev-icon-view-box': prevIcon.viewBox ?? '0 0 24 24',
+      'data-next-icon-path': nextIcon.path,
+      'data-next-icon-view-box': nextIcon.viewBox ?? '0 0 24 24',
+      'data-page-sizes': JSON.stringify(pageSizes),
+      'data-page-size': String(snapshot.pageSize),
+      'data-prev-disabled': String(snapshot.currentPage <= 1),
+      'data-next-disabled': String(snapshot.currentPage >= snapshot.totalPages),
+    };
+    for (const [name, next] of Object.entries(attrs)) {
+      if (paginationEl.getAttribute(name) !== next) {
+        paginationEl.setAttribute(name, next);
+      }
     }
   }
 
@@ -1709,7 +2387,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pageSizes = snapshot.options.paginationPageSizes ?? [10, 25, 50, 100];
     const prevIcon = this.iconOverrides['paginationPrev'] ?? DEFAULT_ICONS['paginationPrev'];
     const nextIcon = this.iconOverrides['paginationNext'] ?? DEFAULT_ICONS['paginationNext'];
-    return `<grid-pagination data-range-label="${escapeHtml(`${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`)}" data-current-page="${snapshot.currentPage}" data-total-pages="${snapshot.totalPages}" data-page-label="${escapeHtml(snapshot.labels.paginationPage)}" data-of-label="${escapeHtml(snapshot.labels.paginationOf)}" data-prev-label="${escapeHtml(snapshot.labels.paginationPrevious)}" data-next-label="${escapeHtml(snapshot.labels.paginationNext)}" data-rows-label="${escapeHtml(snapshot.labels.paginationRows)}" data-prev-icon-path="${escapeHtml(prevIcon.path)}" data-prev-icon-view-box="${escapeHtml(prevIcon.viewBox ?? '0 0 24 24')}" data-next-icon-path="${escapeHtml(nextIcon.path)}" data-next-icon-view-box="${escapeHtml(nextIcon.viewBox ?? '0 0 24 24')}" data-page-sizes="${escapeHtml(JSON.stringify(pageSizes))}" data-page-size="${snapshot.pageSize}" data-prev-disabled="${snapshot.currentPage <= 1}" data-next-disabled="${snapshot.currentPage >= snapshot.totalPages}"></grid-pagination>`;
+    return `<ui-grid-pagination data-range-label="${escapeHtml(`${snapshot.firstRowIndex + 1}-${snapshot.lastRowIndex + 1} of ${snapshot.pipeline.totalItems}`)}" data-current-page="${snapshot.currentPage}" data-total-pages="${snapshot.totalPages}" data-page-label="${escapeHtml(snapshot.labels.paginationPage)}" data-of-label="${escapeHtml(snapshot.labels.paginationOf)}" data-prev-label="${escapeHtml(snapshot.labels.paginationPrevious)}" data-next-label="${escapeHtml(snapshot.labels.paginationNext)}" data-rows-label="${escapeHtml(snapshot.labels.paginationRows)}" data-prev-icon-path="${escapeHtml(prevIcon.path)}" data-prev-icon-view-box="${escapeHtml(prevIcon.viewBox ?? '0 0 24 24')}" data-next-icon-path="${escapeHtml(nextIcon.path)}" data-next-icon-view-box="${escapeHtml(nextIcon.viewBox ?? '0 0 24 24')}" data-page-sizes="${escapeHtml(JSON.stringify(pageSizes))}" data-page-size="${snapshot.pageSize}" data-prev-disabled="${snapshot.currentPage <= 1}" data-next-disabled="${snapshot.currentPage >= snapshot.totalPages}"></ui-grid-pagination>`;
   }
 
   private renderSlotRegistry(columns: readonly GridColumnDef[]): string {
@@ -1931,6 +2609,7 @@ export async function defineStandaloneUiGridElement(tagName = 'ui-grid-element')
   UIGridBodyCell.define();
   UIGridHeaderCell.define();
   UIGridTemplate.define();
+  UIGridCellEditor.define();
   if (!customElements.get(tagName)) {
     customElements.define(tagName, UiGridStandaloneElement);
   }

@@ -1,11 +1,12 @@
+<link href="./grid-pagination.scss" />
 <p>${this.rangeLabel}</p>
 <div class="pagination-controls">
-  <button type="button" class="action action-secondary pagination-button" data-action="page-prev" aria-label="${this.prevLabel}">
+  <button type="button" class="pagination-button" data-action="page-prev" aria-label="${this.prevLabel}">
     <svg class="pagination-icon" viewBox="${this.prevIconViewBox}" aria-hidden="true" focusable="false"><path d="${this.prevIconPath}"></path></svg>
     <span class="sr-only">${this.prevLabel}</span>
   </button>
   <span>${this.pageLabel} ${this.currentPage} ${this.ofLabel} ${this.totalPages}</span>
-  <button type="button" class="action action-secondary pagination-button" data-action="page-next" aria-label="${this.nextLabel}">
+  <button type="button" class="pagination-button" data-action="page-next" aria-label="${this.nextLabel}">
     <svg class="pagination-icon" viewBox="${this.nextIconViewBox}" aria-hidden="true" focusable="false"><path d="${this.nextIconPath}"></path></svg>
     <span class="sr-only">${this.nextLabel}</span>
   </button>

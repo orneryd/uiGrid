@@ -31,7 +31,7 @@ import {
   tradingColumnDefs,
 } from '../shared/trading-data';
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
+type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'pagination' | 'trading';
 
 type WebComponentGridElement = VanillaUiGridElement & {
   getState(): unknown;
@@ -64,6 +64,10 @@ type DeclarativeGridConfig = {
   readonly enableExpandable: boolean;
   readonly enableTreeView: boolean;
   readonly showTreeExpandNoChildren: boolean;
+  readonly enablePagination?: boolean;
+  readonly enablePaginationControls?: boolean;
+  readonly paginationPageSize?: number;
+  readonly paginationPageSizesJson?: string;
 };
 
 function createHarnessRows(count = 18): GridRecord[] {
@@ -385,6 +389,32 @@ export class WebComponentsComponent {
           enableTreeView: false,
           showTreeExpandNoChildren: false,
         };
+      case 'pagination':
+        return {
+          id: 'web-components-demo-pagination',
+          title: 'Web Components Demo: Pagination',
+          emptyMessage: 'No rows match the current filters.',
+          dataJson: JSON.stringify(createHarnessRows(200)),
+          columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
+          rowHeight: 46,
+          viewportHeight: 360,
+          virtualizationThreshold: 200,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableColumnResizing: true,
+          enableVirtualization: false,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+          enablePagination: true,
+          enablePaginationControls: true,
+          paginationPageSize: 25,
+          paginationPageSizesJson: JSON.stringify([10, 25, 50, 100]),
+        };
       case 'trading':
         return {
           id: 'web-components-demo-trading',
@@ -557,6 +587,31 @@ export class WebComponentsComponent {
   grid.setAttribute('column-defs', JSON.stringify(columnDefs));
   grid.setAttribute('data', JSON.stringify(rows));
 </script>`;
+      case 'pagination':
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-pagination"
+  title="Web Components Demo: Pagination"
+  row-height="46"
+  viewport-height="360"
+  enable-sorting
+  enable-filtering
+  enable-column-resizing
+  enable-pagination
+  enable-pagination-controls
+  pagination-page-size="25"
+  pagination-page-sizes="[10,25,50,100]">
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+</script>`;
       case 'trading':
         return `<ui-grid-element
   id="trading-grid"
@@ -628,6 +683,7 @@ export class WebComponentsComponent {
     { label: 'Tree', value: 'tree' as const },
     { label: 'Templated', value: 'templated' as const },
     { label: 'Pinning', value: 'pinning' as const },
+    { label: 'Pagination', value: 'pagination' as const },
     { label: 'Trading', value: 'trading' as const },
   ];
 
