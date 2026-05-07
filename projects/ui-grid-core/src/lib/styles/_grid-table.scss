@@ -43,6 +43,9 @@
   // hijacking horizontal touch gestures inside the strip; the wheel
   // handler in element.ts handles mouse-wheel redirection.
   touch-action: pan-y;
+  // Kill the horizontal rubber-band bounce at the ends — the strip's
+  // scrollLeft is driven by JS and overshoot just causes visible jitter.
+  overscroll-behavior-x: none;
 
   &::-webkit-scrollbar {
     display: none;
@@ -61,6 +64,10 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-anchor: none;
+  // Disable horizontal rubber-band bounce at the first/last column.
+  // Vertical bounce is allowed because it matches native list scrolling
+  // expectations.
+  overscroll-behavior-x: none;
 }
 
 .header-grid,
