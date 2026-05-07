@@ -75,8 +75,15 @@
 .filter-grid,
 .body-grid {
   display: grid;
-  width: max-content;
-  min-width: 100%;
+  // All three sub-grids must resolve to the same width so header, filter,
+  // and body column tracks stay aligned. `width: max-content` would resolve
+  // per element and desync — header cells, filter inputs, and body cells have
+  // different intrinsic widths. Instead, fill the scroll container (`width:
+  // 100%`) so fractional tracks distribute the same space in every strip,
+  // and let `min-width: max-content` force horizontal overflow when the
+  // combined column minima exceed the container.
+  width: 100%;
+  min-width: max-content;
 }
 
 .header-cell,
