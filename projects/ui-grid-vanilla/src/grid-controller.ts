@@ -205,6 +205,16 @@ function buildGridTemplateColumns(columns: readonly GridColumnDef[]): string {
   return columns.map((column) => gridColumnWidth(column)).join(' ');
 }
 
+function pinnedStatesEqual(a: PinnedColumnState, b: PinnedColumnState): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
 export class VanillaGridController {
   private options: GridOptions;
   private activeFilters: Record<string, string> = {};
@@ -213,6 +223,10 @@ export class VanillaGridController {
     direction: SORT_DIRECTIONS.none,
   };
   private groupByColumns: string[] = [];
+  private lastOptionsGroupBy: string[] | undefined = undefined;
+  private lastOptionsPinnedState: PinnedColumnState | undefined = undefined;
+  private lastOptionsInfiniteScrollUp: boolean | undefined = undefined;
+  private lastOptionsInfiniteScrollDown: boolean | undefined = undefined;
   private collapsedGroups: Record<string, boolean> = {};
   private hiddenRowReasons: Record<string, string[]> = {};
   private expandedRows: Record<string, boolean> = {};
@@ -262,7 +276,12 @@ export class VanillaGridController {
     this.validatorRegistry = createGridValidatorRegistry(this.labels);
     this.columnOrder = options.columnDefs.map((column) => column.name);
     this.groupByColumns = options.grouping?.groupBy ? [...options.grouping.groupBy] : [];
+    this.lastOptionsGroupBy = options.grouping?.groupBy ? [...options.grouping.groupBy] : undefined;
     this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
+    const declaresPin = options.columnDefs.some((col) => col.pinnedLeft === true || col.pinnedRight === true);
+    this.lastOptionsPinnedState = declaresPin ? { ...this.pinnedColumns } : undefined;
+    this.lastOptionsInfiniteScrollUp = options.infiniteScrollUp;
+    this.lastOptionsInfiniteScrollDown = options.infiniteScrollDown;
 
     this.infiniteScrollState = resetInfiniteScrollState(
       options.infiniteScrollUp === true,
@@ -519,35 +538,53 @@ export class VanillaGridController {
       }
     }
 
-    // Apply declarative grouping from options when provided. Matches the
-    // Angular element's behaviour — the consumer can set
-    // `grouping: { groupBy: [...] }` and it takes effect immediately.
-    // When the option is absent, leave the current groupByColumns untouched
-    // so interactive toggles persist across non-grouping option updates.
+    // Apply declarative grouping only when the consumer's value structurally
+    // changed from what was last provided via options. This lets interactive
+    // toggles persist across re-renders that pass the same grouping config.
     if (options.grouping?.groupBy !== undefined) {
-      this.groupByColumns = [...options.grouping.groupBy];
+      const incoming = options.grouping.groupBy;
+      const prev = this.lastOptionsGroupBy;
+      const changed = !prev || prev.length !== incoming.length || prev.some((col, i) => col !== incoming[i]);
+      if (changed) {
+        this.groupByColumns = [...incoming];
+        this.lastOptionsGroupBy = [...incoming];
+      }
+    } else if (this.lastOptionsGroupBy !== undefined) {
+      this.lastOptionsGroupBy = undefined;
     }
 
-    // Re-seed pinned state from columnDefs whenever a columnDef declares
-    // `pinnedLeft` / `pinnedRight`. This mirrors the Angular element, which
-    // re-derives pinned state on every options update, so switching demo
-    // scenarios (different column sets) picks up their declarative pins.
+    // Re-seed pinned state from columnDefs only when the declarative pin
+    // configuration structurally changed from the last options pass. This
+    // prevents interactive un-pin actions from being clobbered by re-renders
+    // that pass the same columnDefs.
     const declaresPin = options.columnDefs.some(
       (col) => col.pinnedLeft === true || col.pinnedRight === true,
     );
     if (declaresPin) {
-      this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
+      const incoming = buildInitialPinnedState(options.columnDefs);
+      const prev = this.lastOptionsPinnedState;
+      if (!prev || !pinnedStatesEqual(prev, incoming)) {
+        this.pinnedColumns = incoming;
+        this.lastOptionsPinnedState = { ...incoming };
+      }
+    } else if (this.lastOptionsPinnedState !== undefined) {
+      this.lastOptionsPinnedState = undefined;
     }
 
-    // Re-seed infinite-scroll directions when the options declare them,
-    // so consumers can flip scrollUp/scrollDown through `grid.options`
-    // without needing to go through setScrollDirections.
+    // Re-seed infinite-scroll directions only when the values structurally
+    // changed from the last options pass.
     if (options.infiniteScrollUp !== undefined || options.infiniteScrollDown !== undefined) {
-      this.infiniteScrollState = setInfiniteScrollDirectionsState(
-        this.infiniteScrollState,
-        options.infiniteScrollUp ?? this.infiniteScrollState.scrollUp,
-        options.infiniteScrollDown ?? this.infiniteScrollState.scrollDown,
-      );
+      const upChanged = options.infiniteScrollUp !== undefined && options.infiniteScrollUp !== this.lastOptionsInfiniteScrollUp;
+      const downChanged = options.infiniteScrollDown !== undefined && options.infiniteScrollDown !== this.lastOptionsInfiniteScrollDown;
+      if (upChanged || downChanged) {
+        this.infiniteScrollState = setInfiniteScrollDirectionsState(
+          this.infiniteScrollState,
+          options.infiniteScrollUp ?? this.infiniteScrollState.scrollUp,
+          options.infiniteScrollDown ?? this.infiniteScrollState.scrollDown,
+        );
+        this.lastOptionsInfiniteScrollUp = options.infiniteScrollUp;
+        this.lastOptionsInfiniteScrollDown = options.infiniteScrollDown;
+      }
     }
 
     this.apiRegistered = false;
