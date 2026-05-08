@@ -329,25 +329,51 @@ export function matchesKeyOverride(
 }
 
 /**
- * Measure the widest `scrollWidth` across a column's header / filter /
- * body cells so the auto-resize double-click on the header divider can
- * size the column to its actual rendered content. Returns a px value
- * (plus a small padding fudge).
+ * Measure the natural content width of a column by cloning visible cells
+ * into a hidden max-content container. This avoids measuring the CSS Grid
+ * track width (which just reflects the current column size) and instead
+ * returns the width the content actually needs.
  */
 export function measureAutoColumnWidth(el: UiGridStandaloneElement, columnName: string): number {
   const root = el.shadowRoot;
   if (root == null) return 176;
   const escaped = cssEscape(columnName);
-  const selectors = [
-    `.header-cell[data-column="${escaped}"]`,
-    `.filter-cell[data-column="${escaped}"]`,
-    `.body-cell[data-column="${escaped}"] .cell-shell`,
-  ];
+
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:max-content;visibility:hidden;';
+  root.appendChild(probe);
+
   let maxWidth = 0;
-  for (const selector of selectors) {
-    for (const target of root.querySelectorAll<HTMLElement>(selector)) {
-      maxWidth = Math.max(maxWidth, target.scrollWidth);
-    }
+
+  // Header cell: clone and measure at natural width.
+  for (const header of root.querySelectorAll<HTMLElement>(`.header-cell[data-column="${escaped}"]`)) {
+    const clone = header.cloneNode(true) as HTMLElement;
+    clone.style.cssText = 'display:grid;grid-template-columns:auto auto;gap:inherit;padding:inherit;width:max-content;';
+    probe.appendChild(clone);
+    maxWidth = Math.max(maxWidth, clone.scrollWidth);
+    probe.removeChild(clone);
   }
-  return maxWidth + 12;
+
+  // Filter cell: both custom element and class-based fallback.
+  for (const filter of root.querySelectorAll<HTMLElement>(`ui-grid-filter-cell[data-column="${escaped}"], .filter-cell[data-column="${escaped}"]`)) {
+    const clone = filter.cloneNode(true) as HTMLElement;
+    clone.style.cssText = 'display:block;width:max-content;';
+    probe.appendChild(clone);
+    maxWidth = Math.max(maxWidth, clone.scrollWidth);
+    probe.removeChild(clone);
+  }
+
+  // Body cells: clone .cell-shell content and measure.
+  for (const cell of root.querySelectorAll<HTMLElement>(`.body-cell[data-column="${escaped}"]`)) {
+    const shell = cell.querySelector<HTMLElement>('.cell-shell');
+    if (!shell) continue;
+    const clone = shell.cloneNode(true) as HTMLElement;
+    clone.style.cssText = 'display:flex;width:max-content;';
+    probe.appendChild(clone);
+    maxWidth = Math.max(maxWidth, clone.scrollWidth);
+    probe.removeChild(clone);
+  }
+
+  root.removeChild(probe);
+  return Math.max(88, maxWidth + 12);
 }

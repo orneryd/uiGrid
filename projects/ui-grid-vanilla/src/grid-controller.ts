@@ -201,8 +201,84 @@ function orderVisibleColumns(
     .sort((left, right) => order.indexOf(left.name) - order.indexOf(right.name));
 }
 
-function buildGridTemplateColumns(columns: readonly GridColumnDef[]): string {
-  return columns.map((column) => gridColumnWidth(column)).join(' ');
+const DEFAULT_COL_MIN_WIDTH = 176;
+
+/**
+ * Resolve column widths to fixed px values, mirroring the old ui-grid's
+ * `updateColumnWidths` / `drawnWidth` approach. Every cell (header, filter,
+ * body) gets the exact same px track size — alignment guaranteed regardless
+ * of container width or scrollbar presence.
+ *
+ * Algorithm (ported from GridRenderContainer.prototype.updateColumnWidths):
+ * 1. Fixed-px columns: use their declared width directly.
+ * 2. Percentage columns: resolve against availableWidth.
+ * 3. Flex columns (*, 1fr, minmax): divide remaining space equally.
+ * 4. Leftover/excess pixels distributed 1px at a time for pixel-perfect fit.
+ */
+function buildGridTemplateColumns(columns: readonly GridColumnDef[], viewportWidth?: number): string {
+  if (!viewportWidth || viewportWidth <= 0) {
+    return columns.map((column) => gridColumnWidth(column)).join(' ');
+  }
+
+  const availableWidth = viewportWidth;
+  const resolved: number[] = new Array(columns.length);
+  const flexIndices: number[] = [];
+  let usedWidth = 0;
+
+  for (let i = 0; i < columns.length; i++) {
+    const raw = columns[i].width;
+    const minWidth = columns[i].minWidth;
+    const maxWidth = columns[i].maxWidth ?? Infinity;
+
+    if (raw && raw.endsWith('px')) {
+      let px = parseInt(raw, 10);
+      if (minWidth != null) px = Math.max(minWidth, px);
+      px = Math.min(maxWidth, px);
+      resolved[i] = px;
+      usedWidth += px;
+    } else if (raw && raw.endsWith('%')) {
+      const pct = parseInt(raw.replace(/%/g, ''), 10);
+      let w = Math.round((pct / 100) * availableWidth);
+      if (minWidth != null) w = Math.max(minWidth, w);
+      w = Math.min(maxWidth, w);
+      resolved[i] = w;
+      usedWidth += w;
+    } else {
+      flexIndices.push(i);
+      resolved[i] = 0;
+    }
+  }
+
+  if (flexIndices.length > 0) {
+    const remaining = Math.max(0, availableWidth - usedWidth);
+    const perFlex = Math.floor(remaining / flexIndices.length);
+
+    for (const idx of flexIndices) {
+      const minWidth = columns[idx].minWidth ?? DEFAULT_COL_MIN_WIDTH;
+      const maxWidth = columns[idx].maxWidth ?? Infinity;
+      const w = Math.max(minWidth, Math.min(maxWidth, perFlex));
+      resolved[idx] = w;
+      usedWidth += w;
+    }
+
+    // Distribute leftover pixels one at a time (old grid's processColumnUpwards)
+    let leftover = availableWidth - usedWidth;
+    let changed = true;
+    while (leftover > 0 && changed) {
+      changed = false;
+      for (const idx of flexIndices) {
+        if (leftover <= 0) break;
+        const maxWidth = columns[idx].maxWidth ?? Infinity;
+        if (resolved[idx] < maxWidth) {
+          resolved[idx]++;
+          leftover--;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return resolved.map((w) => `${w}px`).join(' ');
 }
 
 function pinnedStatesEqual(a: PinnedColumnState, b: PinnedColumnState): boolean {
@@ -234,6 +310,7 @@ export class VanillaGridController {
   private pinnedColumns: PinnedColumnState = {};
   private columnOrder: string[] = [];
   private columnWidthOverrides: Record<string, string> = {};
+  private viewportWidth = 0;
   private currentPage = 1;
   private pageSize = 0;
   private editingCell: GridCellPosition | null = null;
@@ -630,7 +707,7 @@ export class VanillaGridController {
       labels: this.labels,
       rowSize: this.getRowSize(),
       visibleColumns: this.visibleColumns,
-      gridTemplateColumns: buildGridTemplateColumns(this.visibleColumns),
+      gridTemplateColumns: buildGridTemplateColumns(this.visibleColumns, this.viewportWidth),
       pipeline: this.pipeline,
       activeFilters: this.activeFilters,
       sortState: this.sortState,
@@ -1414,6 +1491,14 @@ export class VanillaGridController {
     return this.options.enableColumnResizing !== false;
   }
 
+  setViewportWidth(width: number): void {
+    this.viewportWidth = Math.round(width);
+  }
+
+  getViewportWidth(): number {
+    return this.viewportWidth;
+  }
+
   setColumnWidthOverride(columnName: string, widthPx: number): void {
     const nextWidth = `${Math.max(88, Math.round(widthPx))}px`;
     this.columnWidthOverrides = { ...this.columnWidthOverrides, [columnName]: nextWidth };
@@ -1428,6 +1513,7 @@ export class VanillaGridController {
       this.visibleColumns.map((c) =>
         c.name === columnName ? { ...c, width: widthStr } : c,
       ),
+      this.viewportWidth,
     );
   }
 
@@ -1728,11 +1814,15 @@ export class VanillaGridController {
         name: 'selectionRowHeaderCol',
         displayName: '',
         width: `${resolvedSelection.selectionRowHeaderWidth}px`,
+        minWidth: resolvedSelection.selectionRowHeaderWidth,
+        maxWidth: resolvedSelection.selectionRowHeaderWidth,
         enableSorting: false,
         enableFiltering: false,
         enableGrouping: false,
         enableCellEdit: false,
         enablePinning: false,
+        enableColumnResizing: false,
+        enableColumnMoving: false,
         align: 'center',
       };
       // Dedupe if already present (setOptions could be re-entering).

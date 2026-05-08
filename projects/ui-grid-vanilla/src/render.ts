@@ -105,7 +105,7 @@ export function renderHeaderCell(
   const pinLabel = isPinned
     ? (el.snapshot?.labels.unpin ?? 'Unpin')
     : (el.snapshot?.labels.pinColumn ?? 'Pin');
-  const canResize = controller.canResizeColumns();
+  const canResize = controller.canResizeColumns() && column.enableColumnResizing !== false;
   const headerValue = escapeHtml(formatGridHeaderDisplayValue(buildGridHeaderContext(column)));
   const resizerHtml = canResize
     ? resizerMarkup(escapeHtml(column.name), escapeHtml(headerValue))
@@ -116,7 +116,7 @@ export function renderHeaderCell(
   const isPinMenuOpen = el.openPinMenuColumn === column.name;
   const isDragTarget = el.dropTargetColumnName === column.name;
   const isDragging = el.draggedColumnName === column.name;
-  const isDraggable = canGridMoveColumns(options);
+  const isDraggable = canGridMoveColumns(options) && column.enableColumnMoving !== false;
   const className = headerCellClass(
     sortDirection !== SORT_DIRECTIONS.none,
     isPinned,

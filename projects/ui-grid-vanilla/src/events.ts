@@ -664,6 +664,12 @@ export function bindEvents(el: UiGridStandaloneElement): void {
       return;
     }
 
+    const colDef = el.snapshot.visibleColumns.find((c) => c.name === columnName);
+    if (colDef?.enableColumnMoving === false) {
+      event.preventDefault();
+      return;
+    }
+
     el.draggedColumnName = columnName;
     el.dropTargetColumnName = null;
     dragEvent.dataTransfer.effectAllowed = 'move';
@@ -680,6 +686,9 @@ export function bindEvents(el: UiGridStandaloneElement): void {
 
     const columnName = headerCell.dataset['column'];
     if (!columnName || columnName === el.draggedColumnName) return;
+
+    const colDef = el.snapshot?.visibleColumns.find((c) => c.name === columnName);
+    if (colDef?.enableColumnMoving === false) return;
 
     event.preventDefault();
     dragEvent.dataTransfer.dropEffect = 'move';

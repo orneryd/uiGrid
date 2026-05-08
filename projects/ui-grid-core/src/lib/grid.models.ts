@@ -128,6 +128,10 @@ export interface GridColumnDef {
   cellEditableCondition?: GridCellEditableCondition;
   editModelField?: string;
   width?: string;
+  minWidth?: number;
+  maxWidth?: number;
+  enableColumnResizing?: boolean;
+  enableColumnMoving?: boolean;
   align?: 'start' | 'center' | 'end';
   sort?: GridSortDescriptor;
   filter?: GridFilterDescriptor;

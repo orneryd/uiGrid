@@ -160,13 +160,14 @@ describe('enableAutoResize (ResizeObserver)', () => {
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('does not trigger render when enableAutoResize is false', () => {
+  it('still re-renders on resize even with enableAutoResize false (column widths need recalculation)', () => {
     document.body.appendChild(element);
     element.options = {
       id: 'test-grid',
       data: [{ name: 'Alice' }],
       columnDefs: [{ name: 'name' }],
       enableAutoResize: false,
+      enableMinHeightCheck: false,
     };
 
     const renderSpy = vi.spyOn(element as any, 'render');
@@ -177,8 +178,8 @@ describe('enableAutoResize (ResizeObserver)', () => {
 
     flushRaf();
 
-    // The observer callback bails when enableAutoResize is false
-    expect(renderSpy).not.toHaveBeenCalled();
+    // Resize always triggers render for column width recalculation
+    expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 
   it('cancels pending rAF on teardown', () => {

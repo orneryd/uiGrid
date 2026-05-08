@@ -709,11 +709,17 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */
   ensureController(options: VanillaGridOptions): void {
     if (this.controller) {
+      if (this.clientWidth > 0) {
+        this.controller.setViewportWidth(this.clientWidth);
+      }
       this.controller.setOptions(options);
       return;
     }
 
     this.controller = createVanillaGridController(options);
+    if (this.clientWidth > 0) {
+      this.controller.setViewportWidth(this.clientWidth);
+    }
     // Let the controller's cellNav.scrollToFocus delegate into our
     // element's scroll-and-focus helpers.
     this.controller.setCellNavScrollHandler((rowId, columnName) => {
@@ -1013,11 +1019,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (typeof ResizeObserver === 'undefined') return;
 
     this.autoResizeObserver = new ResizeObserver((entries) => {
-      const options = this.snapshot?.options;
-      if (options?.enableAutoResize === false) return;
-
       const entry = entries[0];
       if (!entry) return;
+
+      const newWidth = entry.contentRect.width;
+      if (this.controller && newWidth > 0) {
+        this.controller.setViewportWidth(newWidth);
+      }
 
       if (this.autoResizeDebounceHandle !== null) {
         cancelAnimationFrame(this.autoResizeDebounceHandle);
