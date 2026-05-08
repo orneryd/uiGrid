@@ -4,7 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && npm run build --prefix projects/ui-grid-vanilla && (trap 'kill 0' INT TERM; npm run watch --prefix projects/ui-grid-vanilla & ng serve)",
-    "build": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng build",
+    "build": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && npm run build --prefix projects/ui-grid-vanilla && ng build",
     "build:rust:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target bundler --out-dir ../../dist/ui-grid-wasm --release",
     "build:rust:web": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target web --out-dir ../../dist/ui-grid-wasm-web --release",
     "build:pages": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && npm run build --prefix projects/ui-grid-vanilla && ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
