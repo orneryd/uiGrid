@@ -36,7 +36,7 @@
   },
   "scripts": {
     "start": "vite serve demo --config demo/vite.config.ts",
-    "build": "npm run build --prefix ../ui-grid-core && tsup src/index.ts --format esm,cjs --tsconfig tsconfig.build.json --external react --external react-dom --external @ornery/ui-grid-core --external @ornery/ui-grid-vanilla && tsc -p tsconfig.dts.json && node -e \"require('fs').copyFileSync('src/ui-grid.css','dist/ui-grid.css')\"",
+    "build": "npm run build --prefix ../ui-grid-core && npm run build --prefix ../ui-grid-vanilla && tsup src/index.ts --format esm,cjs --tsconfig tsconfig.build.json --external react --external react-dom --external @ornery/ui-grid-core --external @ornery/ui-grid-vanilla && tsc -p tsconfig.dts.json && node -e \"require('fs').copyFileSync('src/ui-grid.css','dist/ui-grid.css')\"",
     "test": "vitest run",
     "test:watch": "vitest"
   }
