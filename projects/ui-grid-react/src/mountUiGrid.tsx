@@ -26,3 +26,29 @@ export function styledCell(
     text,
   );
 }
+
+/** Create a date <input> React node — usable from non-TSX contexts. */
+export function datePickerCell(
+  value: string,
+  onChange?: (newValue: string) => void,
+  extraStyle?: React.CSSProperties,
+): React.ReactNode {
+  return React.createElement('input', {
+    type: 'date',
+    value: value || '',
+    onChange: onChange
+      ? (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)
+      : undefined,
+    style: {
+      font: 'inherit',
+      fontSize: '0.85rem',
+      border: '1px solid color-mix(in srgb, currentColor 20%, transparent)',
+      borderRadius: '6px',
+      padding: '0.2rem 0.4rem',
+      background: 'var(--ui-grid-surface, white)',
+      color: 'inherit',
+      cursor: 'pointer',
+      ...extraStyle,
+    },
+  });
+}

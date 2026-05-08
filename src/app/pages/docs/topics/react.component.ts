@@ -13,13 +13,12 @@ import {
   FILTER_CONDITIONS,
   GridBenchmarkResult,
   GridCellTemplateContext,
-  GridExpandableTemplateContext,
   GridOptions,
   GridRecord,
   GridSavedState,
   UiGridApi,
 } from '@ornery/ui-grid';
-import { mountUiGrid, styledCell, updateUiGrid } from '@ornery/ui-grid-react';
+import { mountUiGrid, styledCell, datePickerCell, updateUiGrid } from '@ornery/ui-grid-react';
 import { CodeBlockComponent } from '../../shared/code-block.component';
 import { createDemoData } from '../../shared/demo-data';
 import {
@@ -35,7 +34,7 @@ import {
 
 type ReactRoot = ReturnType<typeof mountUiGrid>;
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
+type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'pagination' | 'infinite' | 'trading';
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -72,6 +71,20 @@ function createTreeRows(): GridRecord[] {
       },
     ],
   }));
+}
+
+function createInfiniteRows(start: number, count: number): GridRecord[] {
+  return Array.from({ length: count }, (_unused, i) => {
+    const idx = start + i;
+    return {
+      id: `infinite-${idx}`,
+      index: idx,
+      event: `Event #${idx + 1}`,
+      severity: ['info', 'warn', 'error', 'debug'][idx % 4],
+      source: ['auth', 'api', 'worker', 'scheduler', 'inventory'][idx % 5],
+      timestamp: new Date(2026, 0, 1, idx % 24, (idx * 3) % 60).toISOString(),
+    };
+  });
 }
 
 @Component({
@@ -200,11 +213,11 @@ function createTreeRows(): GridRecord[] {
       <section class="demo-panel usage-panel">
         <header class="panel-header">
           <div>
-            <h2>Cell &amp; Expandable Row Renderers</h2>
+            <h2>Cell Renderers</h2>
             <p>
-              Pass <code>cellRenderer</code> and <code>expandableRenderer</code> to
-              <code>mountUiGrid</code> / <code>updateUiGrid</code> for custom cell and detail-panel
-              rendering. Both receive typed context objects.
+              Pass a <code>cellRenderers</code> map to
+              <code>mountUiGrid</code> / <code>updateUiGrid</code> for custom cell
+              rendering. Each key is a column name, each value receives a typed context object.
             </p>
           </div>
         </header>
@@ -218,7 +231,7 @@ function createTreeRows(): GridRecord[] {
         <header class="panel-header">
           <div>
             <h2>Scenario Harness</h2>
-            <p>Same four scenarios as Angular: expandable, tree, templated, and pinning.</p>
+            <p>Same scenarios as Angular: expandable, tree, templated, pinning, pagination, infinite scroll, and trading.</p>
           </div>
         </header>
         <div class="scenario-switch" role="tablist" aria-label="React demo scenarios">
@@ -542,6 +555,11 @@ export class DocsReactComponent {
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0xabcdef12);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly INFINITE_PAGE_SIZE = 60;
+  private readonly INFINITE_MAX_ROWS = 2000;
+  private infiniteRows: GridRecord[] = createInfiniteRows(0, 60);
+  private harnessGridApi: UiGridApi | null = null;
+  private disposeInfiniteScroll: (() => void) | null = null;
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly demoError = signal<string | null>(null);
@@ -605,11 +623,11 @@ export function AccountsGrid() {
     { name: 'status', displayName: 'Status', width: '150px' },
   ],
 };`;
-  protected readonly reactCellRendererSnippet = `import { mountUiGrid } from '@ornery/ui-grid-react';
+  protected readonly reactCellRendererSnippet = `import { mountUiGrid, styledCell } from '@ornery/ui-grid-react';
 import type { GridCellTemplateContext } from '@ornery/ui-grid-core';
 
-// cellRenderer receives GridCellTemplateContext for every cell.
-// Return a string, number, ReactNode, or null (use default rendering).
+// cellRenderers is a map of column name → render function.
+// Each function receives GridCellTemplateContext and returns a ReactNode.
 //
 // GridCellTemplateContext shape:
 //   $implicit / value  — raw cell value (unknown)
@@ -619,41 +637,41 @@ import type { GridCellTemplateContext } from '@ornery/ui-grid-core';
 
 mountUiGrid(host, {
   options,
-  cellRenderer: ({ value, row, column, rowIndex }: GridCellTemplateContext) => {
-    if (column.name === 'status') {
+  cellRenderers: {
+    status: ({ value }: GridCellTemplateContext) => {
       const cls = String(value).toLowerCase();
-      return \`<span class="pill pill-\${cls}">\${String(value)}</span>\`;
-    }
-    return null; // fall back to default formatter
+      return styledCell(String(value), 'inherit', {
+        borderRadius: '999px',
+        padding: '0.2rem 0.55rem',
+        background: \`var(--pill-bg-\${cls})\`,
+      });
+    },
+    price: ({ value, row }: GridCellTemplateContext) =>
+      styledCell(String(value), String(row['priceColor'])),
   },
 });`;
 
   protected readonly reactExpandableRendererSnippet = `import { mountUiGrid } from '@ornery/ui-grid-react';
-import type { GridExpandableTemplateContext } from '@ornery/ui-grid-core';
+import type { GridOptions } from '@ornery/ui-grid-core';
 
-// expandableRenderer receives GridExpandableTemplateContext for each
-// expanded row's detail panel.
-//
-// GridExpandableTemplateContext shape:
-//   $implicit / row  — full row data record (GridRecord)
-//   expanded         — boolean, always true when the panel is rendered
-//   rowIndex         — 0-based visible row index
+// Expandable rows are configured via grid options.
+// The vanilla element handles expand/collapse rendering.
 
-mountUiGrid(host, {
-  options,
-  expandableRenderer: ({ row, rowIndex }: GridExpandableTemplateContext) =>
-    \`<article class="detail-card">
-       <h3>\${String(row['name'])}</h3>
-       <p>Owner: \${String(row['account']?.['owner'] ?? '')}</p>
-       <p>Row \${rowIndex}</p>
-     </article>\`,
-});`;
+const options: GridOptions = {
+  // ...
+  enableExpandable: true,
+  expandableRowHeight: 112,
+};
+
+mountUiGrid(host, { options });`;
 
   protected readonly scenarios = [
     { label: 'Expandable', value: 'expandable' as const },
     { label: 'Tree', value: 'tree' as const },
     { label: 'Templated', value: 'templated' as const },
     { label: 'Pinning', value: 'pinning' as const },
+    { label: 'Pagination', value: 'pagination' as const },
+    { label: 'Infinite', value: 'infinite' as const },
     { label: 'Trading', value: 'trading' as const },
   ];
 
@@ -673,6 +691,8 @@ mountUiGrid(host, {
       this.disposePrimaryVisibleRows = null;
       this.disposePrimaryBenchmark = null;
       this.primaryGridApi = null;
+      this.disposeInfiniteScroll?.();
+      this.disposeInfiniteScroll = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
         this.tradingIntervalId = null;
@@ -688,6 +708,15 @@ mountUiGrid(host, {
     if (mode !== 'trading' && this.tradingIntervalId !== null) {
       clearInterval(this.tradingIntervalId);
       this.tradingIntervalId = null;
+    }
+
+    if (mode !== 'infinite') {
+      this.disposeInfiniteScroll?.();
+      this.disposeInfiniteScroll = null;
+    }
+
+    if (mode === 'infinite') {
+      this.infiniteRows = createInfiniteRows(0, this.INFINITE_PAGE_SIZE);
     }
 
     this.mode.set(mode);
@@ -779,11 +808,11 @@ mountUiGrid(host, {
 
       if (mode === 'trading') {
         this.tradingRows = createTradingRows();
-        const cellRenderer = this.makeTradingCellRenderer();
+        const cellRenderers = this.makeTradingCellRenderers();
         this.harnessReactRoot = mountUiGrid(host, {
           options: this.tradingOptions(),
           className: 'react-docs-demo-grid',
-          cellRenderer,
+          cellRenderers,
         });
         if (this.tradingIntervalId === null) {
           this.tradingIntervalId = setInterval(() => {
@@ -792,35 +821,54 @@ mountUiGrid(host, {
             updateUiGrid(this.harnessReactRoot, {
               options: this.tradingOptions(),
               className: 'react-docs-demo-grid',
-              cellRenderer,
+              cellRenderers,
             });
-          }, 150);
+          }, 10);
         }
         this.demoError.set(null);
         return;
       }
 
-      const props = {
+      const props: Parameters<typeof mountUiGrid>[1] = {
         options: this.optionsForMode(mode),
         className: 'react-docs-demo-grid',
-        cellRenderer: undefined as Parameters<typeof mountUiGrid>[1]['cellRenderer'],
-        expandableRenderer: undefined as Parameters<typeof mountUiGrid>[1]['expandableRenderer'],
       };
 
       if (mode === 'templated') {
-        props.cellRenderer = (context: GridCellTemplateContext) => {
-          if (context.column.name !== 'status') {
-            return null;
-          }
-
-          return `Status: ${String(context.value)}`;
+        props.cellRenderers = {
+          status: (context: GridCellTemplateContext) =>
+            styledCell(String(context.value), 'inherit', {
+              display: 'inline-flex',
+              alignItems: 'center',
+              borderRadius: '999px',
+              padding: '0.2rem 0.55rem',
+              fontSize: '0.85rem',
+              fontWeight: '600',
+              background:
+                context.value === 'Active'
+                  ? 'color-mix(in srgb, #16a34a 14%, transparent)'
+                  : context.value === 'Pilot'
+                    ? 'color-mix(in srgb, #2563eb 14%, transparent)'
+                    : 'color-mix(in srgb, #d97706 14%, transparent)',
+              color:
+                context.value === 'Active'
+                  ? '#166534'
+                  : context.value === 'Pilot'
+                    ? '#1e40af'
+                    : '#92400e',
+            }),
+          renewalDate: (context: GridCellTemplateContext) =>
+            datePickerCell(String(context.value ?? ''), (newValue) => {
+              context.row['renewalDate'] = newValue;
+            }),
         };
       }
 
-      if (mode === 'expandable') {
-        const rowRecord = (context: GridExpandableTemplateContext): GridRecord => context.row;
-        props.expandableRenderer = (context: GridExpandableTemplateContext) =>
-          `Details for ${String(rowRecord(context)['name'])} • Owner: ${String((rowRecord(context)['account'] as Record<string, unknown> | undefined)?.['owner'] ?? 'n/a')}`;
+      if (mode === 'infinite') {
+        props.onRegisterApi = (api: UiGridApi) => {
+          this.harnessGridApi = api;
+          this.setupInfiniteScroll(api);
+        };
       }
 
       this.harnessReactRoot = mountUiGrid(host, props);
@@ -830,33 +878,35 @@ mountUiGrid(host, {
     }
   }
 
-  private makeTradingCellRenderer(): NonNullable<
-    Parameters<typeof mountUiGrid>[1]['cellRenderer']
-  > {
-    return (context: GridCellTemplateContext) => {
+  private makeTradingCellRenderers(): NonNullable<Parameters<typeof mountUiGrid>[1]['cellRenderers']> {
+    const priceRenderer = (context: GridCellTemplateContext) => {
       const row = context.row as TradingRow;
-      const name = context.column.name;
-      if (name === 'price' || name === 'bid' || name === 'ask') {
-        const preFormatted =
-          name === 'price' ? row['priceStr'] : name === 'bid' ? row['bidStr'] : row['askStr'];
-        return styledCell(
-          String(preFormatted ?? fmtPrice(context.value)),
-          String(row['priceColor'] ?? 'inherit'),
-        );
-      }
-      if (name === 'change') {
+      const name = context.column.name as 'price' | 'bid' | 'ask';
+      const preFormatted =
+        name === 'price' ? row['priceStr'] : name === 'bid' ? row['bidStr'] : row['askStr'];
+      return styledCell(
+        String(preFormatted ?? fmtPrice(context.value)),
+        String(row['priceColor'] ?? 'inherit'),
+      );
+    };
+    return {
+      price: priceRenderer,
+      bid: priceRenderer,
+      ask: priceRenderer,
+      change: (context: GridCellTemplateContext) => {
+        const row = context.row as TradingRow;
         return styledCell(
           String(row['changeStr'] ?? fmtChange(context.value)),
           String(row['changeColor'] ?? 'inherit'),
         );
-      }
-      if (name === 'changePct') {
+      },
+      changePct: (context: GridCellTemplateContext) => {
+        const row = context.row as TradingRow;
         return styledCell(
           String(row['changePctStr'] ?? fmtChangePct(context.value)),
           String(row['changeColor'] ?? 'inherit'),
         );
-      }
-      return null;
+      },
     };
   }
 
@@ -888,8 +938,11 @@ mountUiGrid(host, {
       enableFiltering: true,
       enableGrouping: true,
       enableColumnMoving: true,
+      enableColumnResizing: true,
       enableVirtualization: true,
       enableCellEditOnFocus: true,
+      enableRowSelection: true,
+      enableFullRowSelection: true,
       virtualizationThreshold: 25,
       grouping: {
         groupBy: ['status'],
@@ -951,6 +1004,10 @@ mountUiGrid(host, {
         return this.templatedOptions();
       case 'pinning':
         return this.pinningOptions();
+      case 'pagination':
+        return this.paginationOptions();
+      case 'infinite':
+        return this.infiniteOptions();
       default:
         return this.expandableOptions();
     }
@@ -1020,10 +1077,18 @@ mountUiGrid(host, {
         },
         {
           name: 'revenue',
+          displayName: 'Revenue',
           align: 'end',
           width: 'minmax(9rem, 0.7fr)',
           filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) => `$${value}`,
+          formatter: (value) =>
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value ?? 0)),
+        },
+        {
+          name: 'renewalDate',
+          displayName: 'Renewal',
+          type: 'date',
+          width: 'minmax(11rem, 0.9fr)',
         },
         {
           name: 'owner',
@@ -1076,5 +1141,83 @@ mountUiGrid(host, {
         { name: 'status', displayName: 'Status', width: '150px' },
       ],
     };
+  }
+
+  private paginationOptions(): GridOptions {
+    return {
+      id: 'react-demo-pagination',
+      title: 'React Demo: Pagination',
+      emptyMessage: 'No rows match the current filters.',
+      rowIdentity: (row) => String(row['id']),
+      data: createHarnessRows(200),
+      rowHeight: 46,
+      enableSorting: true,
+      enableFiltering: true,
+      enableColumnResizing: true,
+      enableVirtualization: false,
+      enablePagination: true,
+      enablePaginationControls: true,
+      paginationPageSize: 25,
+      paginationPageSizes: [10, 25, 50, 100],
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
+        { name: 'status', width: 'minmax(9rem, 0.7fr)' },
+        {
+          name: 'revenue',
+          align: 'end',
+          width: 'minmax(9rem, 0.7fr)',
+          filter: { condition: FILTER_CONDITIONS.greaterThan },
+          formatter: (value) => `$${value}`,
+        },
+        { name: 'renewalDate', displayName: 'Renewal', type: 'date', width: 'minmax(11rem, 0.9fr)' },
+        { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' },
+      ],
+    };
+  }
+
+  private infiniteOptions(): GridOptions {
+    return {
+      id: 'react-demo-infinite',
+      title: 'React Demo: Infinite Scroll',
+      emptyMessage: 'No rows loaded yet.',
+      rowIdentity: (row) => String(row['id']),
+      data: this.infiniteRows,
+      rowHeight: 40,
+      enableSorting: false,
+      enableFiltering: false,
+      enableColumnResizing: true,
+      enableVirtualization: true,
+      virtualizationThreshold: 50,
+      enableInfiniteScroll: true,
+      infiniteScrollUp: false,
+      infiniteScrollDown: true,
+      infiniteScrollRowsFromEnd: 20,
+      columnDefs: [
+        { name: 'index', displayName: '#', width: '80px' },
+        { name: 'event', displayName: 'Event', width: 'minmax(10rem, 0.9fr)' },
+        { name: 'severity', displayName: 'Severity', width: '120px' },
+        { name: 'source', displayName: 'Source', width: '140px' },
+        { name: 'timestamp', displayName: 'Timestamp', width: 'minmax(12rem, 1fr)' },
+      ],
+    };
+  }
+
+  private setupInfiniteScroll(api: UiGridApi): void {
+    this.disposeInfiniteScroll?.();
+    this.disposeInfiniteScroll = api.infiniteScroll.on.needLoadMoreData(async () => {
+      if (this.infiniteRows.length >= this.INFINITE_MAX_ROWS) {
+        await api.infiniteScroll.dataLoaded(false, false);
+        return;
+      }
+      const newRows = createInfiniteRows(this.infiniteRows.length, this.INFINITE_PAGE_SIZE);
+      this.infiniteRows = [...this.infiniteRows, ...newRows];
+      if (this.harnessReactRoot) {
+        updateUiGrid(this.harnessReactRoot, {
+          options: { ...this.infiniteOptions(), data: this.infiniteRows },
+          className: 'react-docs-demo-grid',
+        });
+      }
+      await api.infiniteScroll.dataLoaded(false, this.infiniteRows.length < this.INFINITE_MAX_ROWS);
+    });
   }
 }
