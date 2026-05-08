@@ -883,6 +883,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     // next full render() can take the fast per-cell patch path.
     this.lastItemsFingerprint = this.fingerprintItems(itemsToRender);
     this.lastVirtualOffset = virtualOffset;
+
+    this.frameworkSlots.flush();
   }
 
   /** @internal */
