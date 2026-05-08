@@ -34,7 +34,14 @@ import {
 
 type ReactRoot = ReturnType<typeof mountUiGrid>;
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'pagination' | 'infinite' | 'trading';
+type DemoMode =
+  | 'expandable'
+  | 'tree'
+  | 'templated'
+  | 'pinning'
+  | 'pagination'
+  | 'infinite'
+  | 'trading';
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -98,8 +105,10 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
           <p class="eyebrow">Root Demo App</p>
           <h1>React Wrapper</h1>
           <p class="page-summary">
-            React demo now includes the same 100K-row primary surface as Angular, plus the aligned
-            harness scenarios for expanded, tree, templated, and pinning behavior.
+            The React wrapper (<code>&#64;ornery/ui-grid-react</code>) mounts the vanilla
+            <code>&lt;ui-grid-element&gt;</code> and projects React render functions into it via a
+            slot-based portal system. Same primary surface as Angular, plus the aligned harness
+            scenarios.
           </p>
           <p class="page-links">
             <a routerLink="/home" class="demo-link">Angular Demo</a>
@@ -215,9 +224,9 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
           <div>
             <h2>Cell Renderers</h2>
             <p>
-              Pass a <code>cellRenderers</code> map to
-              <code>mountUiGrid</code> / <code>updateUiGrid</code> for custom cell
-              rendering. Each key is a column name, each value receives a typed context object.
+              Pass a <code>cellRenderers</code> map to <code>mountUiGrid</code> /
+              <code>updateUiGrid</code> for custom cell rendering. Each key is a column name, each
+              value receives a typed context object.
             </p>
           </div>
         </header>
@@ -231,7 +240,10 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
         <header class="panel-header">
           <div>
             <h2>Scenario Harness</h2>
-            <p>Same scenarios as Angular: expandable, tree, templated, pinning, pagination, infinite scroll, and trading.</p>
+            <p>
+              Same scenarios as Angular: expandable, tree, templated, pinning, pagination, infinite
+              scroll, and trading.
+            </p>
           </div>
         </header>
         <div class="scenario-switch" role="tablist" aria-label="React demo scenarios">
@@ -863,7 +875,9 @@ mountUiGrid(host, { options });`;
     }
   }
 
-  private makeTradingCellRenderers(): NonNullable<Parameters<typeof mountUiGrid>[1]['cellRenderers']> {
+  private makeTradingCellRenderers(): NonNullable<
+    Parameters<typeof mountUiGrid>[1]['cellRenderers']
+  > {
     const priceRenderer = (context: GridCellTemplateContext) => {
       const row = context.row as TradingRow;
       const name = context.column.name as 'price' | 'bid' | 'ask';
@@ -910,11 +924,7 @@ mountUiGrid(host, { options });`;
             ? 'color-mix(in srgb, #2563eb 14%, transparent)'
             : 'color-mix(in srgb, #d97706 14%, transparent)',
       color:
-        context.value === 'Active'
-          ? '#166534'
-          : context.value === 'Pilot'
-            ? '#1e40af'
-            : '#92400e',
+        context.value === 'Active' ? '#166534' : context.value === 'Pilot' ? '#1e40af' : '#92400e',
     });
 
   private tradingOptions() {
@@ -1089,7 +1099,11 @@ mountUiGrid(host, { options });`;
           width: 'minmax(9rem, 0.7fr)',
           filter: { condition: FILTER_CONDITIONS.greaterThan },
           formatter: (value) =>
-            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value ?? 0)),
+            new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            }).format(Number(value ?? 0)),
         },
         {
           name: 'renewalDate',
@@ -1176,8 +1190,18 @@ mountUiGrid(host, { options });`;
           filter: { condition: FILTER_CONDITIONS.greaterThan },
           formatter: (value) => `$${value}`,
         },
-        { name: 'renewalDate', displayName: 'Renewal', type: 'date', width: 'minmax(11rem, 0.9fr)' },
-        { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' },
+        {
+          name: 'renewalDate',
+          displayName: 'Renewal',
+          type: 'date',
+          width: 'minmax(11rem, 0.9fr)',
+        },
+        {
+          name: 'owner',
+          field: 'account.owner',
+          displayName: 'Owner',
+          width: 'minmax(10rem, 0.8fr)',
+        },
       ],
     };
   }

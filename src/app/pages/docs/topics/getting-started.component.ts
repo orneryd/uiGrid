@@ -38,8 +38,11 @@ import { createSmallDemoData } from '../../shared/demo-data';
         <app-ui-grid [options]="demoOptions" />
       </div>
 
-      <h2>Custom Element</h2>
-      <p>The grid also ships as a Web Component. Build it with <code>npm run build:element</code>, then use it in any HTML page:</p>
+      <h2>Web Component (Vanilla)</h2>
+      <p>
+        The grid also ships as a framework-free custom element via
+        <code>&#64;ornery/ui-grid-vanilla</code>. Use it in any HTML page:
+      </p>
       <app-code-block lang="html" [code]="elementSnippet" />
 
       <h2>Next Steps</h2>
@@ -90,16 +93,16 @@ export class MyGridComponent {
   };
 }`;
 
-  protected readonly elementSnippet = `<script type="module" src="ui-grid-element/main.js"></script>
+  protected readonly elementSnippet = `<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+  await defineStandaloneUiGridElement();
+</script>
 
-<ui-grid-element id="my-grid"></ui-grid-element>
-
-<script>
-  const grid = document.querySelector('#my-grid');
-  grid.options = {
-    id: 'element-demo',
-    data: [{ name: 'Alice', role: 'Engineer' }],
-    columnDefs: [{ name: 'name' }, { name: 'role' }],
-  };
-</script>`;
+<ui-grid-element
+  id="my-grid"
+  grid-id="element-demo"
+  enable-sorting
+  column-defs='[{"name":"name"},{"name":"role"}]'
+  data='[{"name":"Alice","role":"Engineer"},{"name":"Bob","role":"Designer"}]'>
+</ui-grid-element>`;
 }

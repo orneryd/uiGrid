@@ -43,7 +43,7 @@ import { createSmallDemoData } from '../../shared/demo-data';
           <tr><td>Auto Resize</td><td><code>enableAutoResize</code></td><td>false</td><td>ResizeObserver-driven viewport height recalculation</td></tr>
           <tr><td>Custom Templates</td><td><code>cellTemplate</code></td><td>—</td><td>Angular ng-template, React render prop, or web-component <code>&lt;template&gt;</code> slot for fully custom cell rendering</td></tr>
           <tr><td>Shadow DOM</td><td>always</td><td>—</td><td>Encapsulated styles with CSS custom property and <code>::part()</code> hooks</td></tr>
-          <tr><td>Web Component</td><td><code>npm run build:element</code></td><td>—</td><td>Ship as <code>&lt;ui-grid-element&gt;</code> for non-Angular apps</td></tr>
+          <tr><td>Web Component</td><td><code>&#64;ornery/ui-grid-vanilla</code></td><td>—</td><td>Framework-free <code>&lt;ui-grid-element&gt;</code> custom element — Angular and React wrappers mount this internally</td></tr>
           <tr><td>SSR Support</td><td>automatic</td><td>—</td><td>Server-side rendering with platform-safe guards</td></tr>
           <tr><td>i18n</td><td><code>gridApi.i18n</code></td><td>en-US</td><td>Bundled locales (en, es, fr, de, ja, zh-CN), <code>setCurrentLang()</code>, register custom locales, <code>languageChanged</code> event</td></tr>
         </tbody>
