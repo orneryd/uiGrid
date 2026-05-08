@@ -279,13 +279,60 @@
   color: var(--ui-grid-muted-color);
 }
 
+/*
+ * Grid table layout. Header + filter rows live in their own
+ * non-user-scrollable strips (real scroll containers so `position: sticky`
+ * on pinned cells anchors correctly); the body has its own viewport with
+ * visible scrollbars. Horizontal scroll on the body is mirrored onto the
+ * strips imperatively via React's onScroll/onWheel handlers so the columns
+ * always stay aligned.
+ */
 .grid-table {
-  display: grid;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  overflow-anchor: none;
+}
+
+.grid-header-strip,
+.grid-filter-strip {
+  flex: 0 0 auto;
+  position: sticky;
+  z-index: 3;
+  background: var(--ui-grid-surface);
+  /* Real scroll container so pinned sticky cells anchor to something,
+   * but we don't want the user scrolling it directly. JS drives the
+   * scrollLeft, the wheel handler forwards gestures to the body, and
+   * the scrollbar is hidden. */
+  overflow-x: scroll;
   overflow-y: hidden;
+  scrollbar-width: none;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+
+.grid-header-strip::-webkit-scrollbar,
+.grid-filter-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.grid-header-strip {
+  top: 0;
+}
+
+.grid-filter-strip {
+  top: var(--ui-grid-header-sticky-top, 0px);
+}
+
+.grid-body-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-anchor: none;
+  overscroll-behavior-x: none;
 }
 
 .header-grid,
@@ -294,20 +341,6 @@
   display: grid;
   width: max-content;
   min-width: 100%;
-}
-
-.header-grid,
-.filter-grid {
-  position: sticky;
-  z-index: 3;
-}
-
-.header-grid {
-  top: 0;
-}
-
-.filter-grid {
-  top: var(--ui-grid-header-sticky-top, 0px);
 }
 
 .header-cell,

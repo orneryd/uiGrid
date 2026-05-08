@@ -11,6 +11,12 @@ import type {
 import * as tsDisplay from './grid.core.display';
 import * as tsEdit from './grid.core.edit';
 import * as tsExport from './grid.core.export';
+import * as tsExporterMenu from './grid.core.exporter-menu';
+import * as tsImporter from './grid.core.importer';
+import * as tsImporterMenu from './grid.core.importer-menu';
+import * as tsRowEditMenu from './grid.core.row-edit-menu';
+import * as tsValidate from './grid.core.validate';
+import * as tsI18n from './grid.core.i18n';
 import * as tsFiltering from './grid.core.filtering';
 import * as tsGrouping from './grid.core.grouping';
 import * as tsIdentity from './grid.core.identity';
@@ -18,7 +24,9 @@ import * as tsInfiniteScroll from './grid.core.infinite-scroll';
 import * as tsPagination from './grid.core.pagination';
 import * as tsPinning from './grid.core.pinning';
 import * as tsPipeline from './grid.core.pipeline';
+import * as tsRowEdit from './grid.core.row-edit';
 import * as tsRowState from './grid.core.row-state';
+import * as tsSelection from './grid.core.selection';
 import * as tsSorting from './grid.core.sorting';
 import * as tsState from './grid.core.state';
 import * as tsTree from './grid.core.tree';
@@ -573,7 +581,127 @@ export const buildGridDisplayItems: typeof tsGrouping.buildGridDisplayItems = (
         () => tsGrouping.buildGridDisplayItems(rows, columns, options, groupBy, collapsedGroups),
       );
 
+// ---- Selection ---------------------------------------------------------
+export type {
+  GridSelectionState,
+  GridSelectionResolvedOptions,
+  SelectionChange,
+} from './grid.core.selection';
+export const createGridSelectionState = tsSelection.createGridSelectionState;
+export const resolveGridSelectionOptions = tsSelection.resolveGridSelectionOptions;
+export const toggleGridRowSelection = tsSelection.toggleGridRowSelection;
+export const shiftGridRowSelection = tsSelection.shiftGridRowSelection;
+export const selectAllGridRows = tsSelection.selectAllGridRows;
+export const selectAllVisibleGridRows = tsSelection.selectAllVisibleGridRows;
+export const clearAllGridSelection = tsSelection.clearAllGridSelection;
+export const findGridRowByKey = tsSelection.findGridRowByKey;
+export const reconcileGridSelection = tsSelection.reconcileGridSelection;
+export const mapSelectedRowsToEntities = tsSelection.mapSelectedRowsToEntities;
+
 export const headerLabel: typeof tsExport.headerLabel = (column) => tsExport.headerLabel(column);
+export const buildGridCsv = tsExport.buildGridCsv;
+export const resolveGridExporterOptions = tsExport.resolveGridExporterOptions;
+export const filterExporterColumns = tsExport.filterExporterColumns;
+export const resolveExporterFilename = tsExport.resolveExporterFilename;
+export const GRID_EXPORTER_CONSTANTS = tsExport.GRID_EXPORTER_CONSTANTS;
+export const buildGridPdfDocDefinition = tsExport.buildGridPdfDocDefinition;
+export const calculateGridPdfColumnWidths = tsExport.calculateGridPdfColumnWidths;
+export const formatGridPdfField = tsExport.formatGridPdfField;
+export const resolveGridExporterPdfOptions = tsExport.resolveGridExporterPdfOptions;
+export const buildGridExporterMenuItems = tsExporterMenu.buildGridExporterMenuItems;
+export const buildGridExcelSheetData = tsExport.buildGridExcelSheetData;
+export const formatGridExcelField = tsExport.formatGridExcelField;
+export const resolveGridExporterExcelOptions = tsExport.resolveGridExporterExcelOptions;
+export type {
+  GridExporterOptions,
+  GridExporterRowType,
+  GridExporterColumnType,
+  GridExporterPdfCell,
+  GridExporterPdfDocDefinition,
+  GridExporterPdfOptions,
+  GridExporterExcelCell,
+  GridExporterExcelSheetData,
+  GridExporterExcelOptions,
+} from './grid.core.export';
+export type {
+  GridExporterMenuItem,
+  GridExporterMenuLabels,
+  GridExporterMenuActions,
+} from './grid.core.exporter-menu';
+// Importer — pure state-free helpers. The vanilla element owns the DOM
+// (file picker) and FileReader, then hands the raw text to these parsers.
+export const resolveGridImporterOptions = tsImporter.resolveGridImporterOptions;
+export const flattenGridColumnDefsForImport = tsImporter.flattenGridColumnDefsForImport;
+export const defaultGridImporterProcessHeaders = tsImporter.defaultGridImporterProcessHeaders;
+export const createGridImporterNewObject = tsImporter.createGridImporterNewObject;
+export const applyGridImporterObjectCallback = tsImporter.applyGridImporterObjectCallback;
+export const parseGridImporterJson = tsImporter.parseGridImporterJson;
+export const parseGridImporterCsv = tsImporter.parseGridImporterCsv;
+export const buildGridImporterObjectsFromCsv = tsImporter.buildGridImporterObjectsFromCsv;
+export const buildGridImporterObjectsFromJson = tsImporter.buildGridImporterObjectsFromJson;
+export type {
+  GridImporterOptions,
+  GridImporterHeaderMapping,
+  GridImporterErrorKey,
+} from './grid.core.importer';
+
+// Importer + row-edit menu builders. Separate files from the feature
+// modules because menu shape + gating is distinct from the feature logic.
+export const buildGridImporterMenuItems = tsImporterMenu.buildGridImporterMenuItems;
+export const buildGridRowEditMenuItems = tsRowEditMenu.buildGridRowEditMenuItems;
+export type {
+  GridImporterMenuActions,
+  GridImporterMenuLabels,
+} from './grid.core.importer-menu';
+export type {
+  GridRowEditMenuActions,
+  GridRowEditMenuLabels,
+} from './grid.core.row-edit-menu';
+export type { GridMenuItem } from './grid.core.menu';
+
+// i18n service — singleton + class export. Ports `ui.grid.i18n.i18nService`.
+export const GridI18nService = tsI18n.GridI18nService;
+export const gridI18n = tsI18n.gridI18n;
+export const resolveLabelsFromI18n = tsI18n.resolveLabelsFromI18n;
+export type { GridLocaleCode, GridI18nLanguageListener } from './grid.core.i18n';
+
+// Validate — pure cell-validation helpers. Ports `ui.grid.validate`.
+export const GridValidatorRegistry = tsValidate.GridValidatorRegistry;
+// Type alias so consumers can write `GridValidatorRegistry` in a type
+// position (parameter / return / class-field annotation). The `const`
+// export above covers value-position usage (`new GridValidatorRegistry()`).
+export type GridValidatorRegistry = InstanceType<typeof tsValidate.GridValidatorRegistry>;
+export const createGridValidatorRegistry = tsValidate.createGridValidatorRegistry;
+export const isGridCellInvalid = tsValidate.isGridCellInvalid;
+export const setGridCellInvalid = tsValidate.setGridCellInvalid;
+export const setGridCellValid = tsValidate.setGridCellValid;
+export const setGridCellError = tsValidate.setGridCellError;
+export const clearGridCellError = tsValidate.clearGridCellError;
+export const getGridCellErrorNames = tsValidate.getGridCellErrorNames;
+export const getGridCellErrorMessages = tsValidate.getGridCellErrorMessages;
+export const runGridCellValidators = tsValidate.runGridCellValidators;
+export const validateAllGridRows = tsValidate.validateAllGridRows;
+export const invalidFieldFor = tsValidate.invalidFieldFor;
+export const errorsFieldFor = tsValidate.errorsFieldFor;
+export type {
+  GridValidatorFn,
+  GridValidatorFactory,
+  GridValidatorMessageFn,
+  GridValidatorRegistration,
+} from './grid.core.validate';
+
+// Row-edit pure helpers. All of these are DOM-free — the vanilla controller
+// wires them to edit events + a timer for auto-save.
+export const createGridRowEditState = tsRowEdit.createGridRowEditState;
+export const markGridRowDirty = tsRowEdit.markGridRowDirty;
+export const markGridRowClean = tsRowEdit.markGridRowClean;
+export const markGridRowSaving = tsRowEdit.markGridRowSaving;
+export const markGridRowError = tsRowEdit.markGridRowError;
+export const isGridRowEditTimerEnabled = tsRowEdit.isGridRowEditTimerEnabled;
+export const resolveGridRowEditWaitInterval = tsRowEdit.resolveGridRowEditWaitInterval;
+export const collectGridRowEntities = tsRowEdit.collectGridRowEntities;
+export type { GridRowEditState } from './grid.core.row-edit';
+
 export const exportCsvRows: typeof tsExport.exportCsvRows = (columns, rows, formatCell) => {
   if (
     formatCell ||

@@ -68,6 +68,10 @@
                     <span>group columns</span>
                 </article>
                 <article>
+                    <strong>{{ selectedRowCount() }}</strong>
+                    <span>selected rows</span>
+                </article>
+                <article>
                     <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
                     <span>benchmark avg</span>
                 </article>
@@ -91,7 +95,6 @@
                     [attr.title]="primaryConfig().title"
                     [attr.empty-message]="primaryConfig().emptyMessage"
                     [attr.row-height]="primaryConfig().rowHeight"
-                    [attr.viewport-height]="primaryConfig().viewportHeight"
                     [attr.virtualization-threshold]="primaryConfig().virtualizationThreshold"
                     [attr.grouping]="primaryConfig().groupingJson ?? null"
                     [attr.column-defs]="primaryConfig().columnDefsJson"
@@ -102,7 +105,9 @@
                     enable-column-moving
                     enable-column-resizing
                     enable-virtualization
-                    enable-cell-edit-on-focus>
+                    enable-cell-edit-on-focus
+                    enable-row-selection
+                    enable-full-row-selection>
                 </ui-grid-element>
             }
         </section>
@@ -154,7 +159,6 @@
                 [attr.title]="demoConfig().title"
                 [attr.empty-message]="demoConfig().emptyMessage"
                 [attr.row-height]="demoConfig().rowHeight"
-                [attr.viewport-height]="demoConfig().viewportHeight"
                 [attr.virtualization-threshold]="demoConfig().virtualizationThreshold"
                 [attr.tree-children-field]="demoConfig().treeChildrenField ?? null"
                 [attr.tree-indent]="demoConfig().treeIndent ?? null"
@@ -171,7 +175,15 @@
                 [attr.enable-pinning]="demoConfig().enablePinning ? '' : null"
                 [attr.enable-expandable]="demoConfig().enableExpandable ? '' : null"
                 [attr.enable-tree-view]="demoConfig().enableTreeView ? '' : null"
-                [attr.show-tree-expand-no-children]="demoConfig().showTreeExpandNoChildren ? '' : null">
+                [attr.show-tree-expand-no-children]="demoConfig().showTreeExpandNoChildren ? '' : null"
+                [attr.enable-pagination]="demoConfig().enablePagination ? '' : null"
+                [attr.enable-pagination-controls]="demoConfig().enablePaginationControls ? '' : null"
+                [attr.pagination-page-size]="demoConfig().paginationPageSize ?? null"
+                [attr.pagination-page-sizes]="demoConfig().paginationPageSizesJson ?? null"
+                [attr.enable-infinite-scroll]="demoConfig().enableInfiniteScroll === undefined ? null : (demoConfig().enableInfiniteScroll ? 'true' : 'false')"
+                [attr.infinite-scroll-up]="demoConfig().infiniteScrollUp ? '' : null"
+                [attr.infinite-scroll-down]="demoConfig().infiniteScrollDown ? '' : null"
+                [attr.infinite-scroll-rows-from-end]="demoConfig().infiniteScrollRowsFromEnd ?? null">
             </ui-grid-element>
         }
     </section>

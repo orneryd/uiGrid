@@ -3,8 +3,7 @@ import { FILTER_CONDITIONS, GridOptions, GridRecord, UiGridComponent } from '@or
 
 export const SSR_HARNESS_ROW_COUNT = 1000;
 export const SSR_HARNESS_ROW_HEIGHT = 48;
-export const SSR_HARNESS_VIEWPORT_HEIGHT = 240;
-export const SSR_HARNESS_VISIBLE_ROW_COUNT = Math.ceil(SSR_HARNESS_VIEWPORT_HEIGHT / SSR_HARNESS_ROW_HEIGHT);
+export const SSR_HARNESS_VISIBLE_ROW_COUNT = 5;
 
 function createSsrHarnessRows(count = SSR_HARNESS_ROW_COUNT): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -30,7 +29,7 @@ export class GridSsrHarnessComponent {
     data: createSsrHarnessRows(),
     rowIdentity: (row) => String(row['id']),
     rowHeight: SSR_HARNESS_ROW_HEIGHT,
-    viewportHeight: SSR_HARNESS_VIEWPORT_HEIGHT,
+    minRowsToShow: SSR_HARNESS_VISIBLE_ROW_COUNT,
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: false,

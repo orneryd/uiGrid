@@ -96,12 +96,16 @@ export function stringifyCellValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
-export function toCsvValue(value: string): string {
+export function toCsvValue(value: string, separator = ','): string {
   if (/^[=+\-@\t\r]/.test(value)) {
     value = `'${value}`;
   }
 
-  if (/[",\n]/.test(value)) {
+  // Always quote when the value contains the separator, a quote, or a newline.
+  // The separator check is dynamic so custom delimiters (e.g., ';' or '\t')
+  // trigger quoting too.
+  const needsQuoting = value.includes('"') || value.includes('\n') || value.includes(separator);
+  if (needsQuoting) {
     return `"${value.replace(/"/g, '""')}"`;
   }
 

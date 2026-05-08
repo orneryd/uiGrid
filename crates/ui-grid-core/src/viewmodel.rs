@@ -164,7 +164,7 @@ pub fn grid_column_width(column: &GridColumnDef) -> String {
     column
         .width
         .clone()
-        .unwrap_or_else(|| "minmax(11rem, max-content)".to_string())
+        .unwrap_or_else(|| "minmax(11rem, 1fr)".to_string())
 }
 
 pub fn grid_cell_indent(

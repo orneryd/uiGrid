@@ -31,7 +31,14 @@ import {
   tradingColumnDefs,
 } from '../shared/trading-data';
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
+type DemoMode =
+  | 'expandable'
+  | 'tree'
+  | 'templated'
+  | 'pinning'
+  | 'pagination'
+  | 'trading'
+  | 'infinite';
 
 type WebComponentGridElement = VanillaUiGridElement & {
   getState(): unknown;
@@ -48,7 +55,6 @@ type DeclarativeGridConfig = {
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
   readonly rowHeight: number;
-  readonly viewportHeight: number;
   readonly virtualizationThreshold: number;
   readonly treeChildrenField?: string;
   readonly treeIndent?: number;
@@ -64,6 +70,14 @@ type DeclarativeGridConfig = {
   readonly enableExpandable: boolean;
   readonly enableTreeView: boolean;
   readonly showTreeExpandNoChildren: boolean;
+  readonly enablePagination?: boolean;
+  readonly enablePaginationControls?: boolean;
+  readonly paginationPageSize?: number;
+  readonly paginationPageSizesJson?: string;
+  readonly enableInfiniteScroll?: boolean;
+  readonly infiniteScrollUp?: boolean;
+  readonly infiniteScrollDown?: boolean;
+  readonly infiniteScrollRowsFromEnd?: number;
 };
 
 function createHarnessRows(count = 18): GridRecord[] {
@@ -101,6 +115,20 @@ function createTreeRows(): GridRecord[] {
       },
     ],
   }));
+}
+
+function createInfiniteRows(start: number, count: number): GridRecord[] {
+  return Array.from({ length: count }, (_unused, i) => {
+    const idx = start + i;
+    return {
+      id: `infinite-${idx}`,
+      index: idx,
+      event: `Event #${idx + 1}`,
+      severity: ['info', 'warn', 'error', 'debug'][idx % 4],
+      source: ['auth', 'api', 'worker', 'scheduler', 'inventory'][idx % 5],
+      timestamp: new Date(2026, 0, 1, idx % 24, (idx * 3) % 60).toISOString(),
+    };
+  });
 }
 
 function createPinningRows(): GridRecord[] {
@@ -156,8 +184,7 @@ function createTradingDisplayRows(rows: readonly TradingRow[]): GridRecord[] {
 export class WebComponentsComponent {
   // ─── slot template markup strings (injected programmatically because
   //     Angular's compiler eats native <template> as ng-template) ────────
-  private static readonly STATUS_PILL_TEMPLATE =
-    `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
+  private static readonly STATUS_PILL_TEMPLATE = `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
 
   private static readonly EXPANDABLE_ROW_TEMPLATE =
     `<article class="detail-card">` +
@@ -168,10 +195,19 @@ export class WebComponentsComponent {
     `</article>`;
 
   private static readonly TRADING_TEMPLATES: ReadonlyArray<[slotName: string, markup: string]> = [
-    ['cell-price',     `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>`],
-    ['cell-bid',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>`],
-    ['cell-ask',       `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>`],
-    ['cell-change',    `<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>`],
+    [
+      'cell-price',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.priceStr}}</span>`,
+    ],
+    [
+      'cell-bid',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.bidStr}}</span>`,
+    ],
+    [
+      'cell-ask',
+      `<span style="color:{{row.priceColor}};font-variant-numeric:tabular-nums">{{row.askStr}}</span>`,
+    ],
+    ['cell-change', `<span style="color:{{row.changeColor}}">{{row.changeStr}}</span>`],
     ['cell-changePct', `<span style="color:{{row.changeColor}}">{{row.changePctStr}}</span>`],
   ];
 
@@ -186,12 +222,29 @@ export class WebComponentsComponent {
   private primaryGridApi: UiGridApi | null = null;
   private disposePrimaryVisibleRows: (() => void) | null = null;
   private disposePrimaryBenchmark: (() => void) | null = null;
+  private disposePrimarySelection: (() => void) | null = null;
+  private disposePrimarySelectionBatch: (() => void) | null = null;
   private tradingRows: TradingRow[] = createTradingRows();
   private readonly tradingRng = new TradingLcg(0x1a2b3c4d);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
   private readonly tradingDisplayDataSignal = signal<string>(
     JSON.stringify(createTradingDisplayRows(this.tradingRows)),
   );
+  // Infinite-scroll demo state. Starts with a small batch; the grid's
+  // needLoadMoreData event appends more rows on demand.
+  private readonly INFINITE_PAGE_SIZE = 60;
+  private readonly INFINITE_MAX_ROWS = 2000;
+  private infiniteRows: GridRecord[] = createInfiniteRows(0, this.INFINITE_PAGE_SIZE);
+  private readonly infiniteScrollDataSignal = signal<string>(JSON.stringify(this.infiniteRows));
+  private readonly infiniteScrollColumnDefs = [
+    { name: 'index', displayName: '#', width: '80px' },
+    { name: 'event', displayName: 'Event', width: 'minmax(10rem, 0.9fr)' },
+    { name: 'severity', displayName: 'Severity', width: '120px' },
+    { name: 'source', displayName: 'Source', width: '140px' },
+    { name: 'timestamp', displayName: 'Timestamp', width: 'minmax(12rem, 1fr)' },
+  ] as const;
+  private demoGridApi: UiGridApi | null = null;
+  private disposeDemoInfinite: (() => void) | null = null;
   private readonly primaryColumnDefs = [
     {
       name: 'name',
@@ -290,6 +343,7 @@ export class WebComponentsComponent {
 
   protected readonly mode = signal<DemoMode>('expandable');
   protected readonly visibleRowCount = signal(0);
+  protected readonly selectedRowCount = signal(0);
   protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
   protected readonly totalRows = signal(this.primaryData.length);
@@ -301,7 +355,6 @@ export class WebComponentsComponent {
     columnDefsJson: this.primaryColumnDefsJson,
     groupingJson: JSON.stringify({ groupBy: ['status'] }),
     rowHeight: 48,
-    viewportHeight: 620,
     virtualizationThreshold: 25,
     enableSorting: true,
     enableFiltering: true,
@@ -325,7 +378,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createTreeRows()),
           columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           treeChildrenField: 'children',
           treeIndent: 16,
@@ -349,7 +401,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createHarnessRows()),
           columnDefsJson: JSON.stringify(this.templatedColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           enableSorting: true,
           enableFiltering: true,
@@ -371,7 +422,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createPinningRows()),
           columnDefsJson: JSON.stringify(this.pinningColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           enableSorting: true,
           enableFiltering: true,
@@ -385,6 +435,58 @@ export class WebComponentsComponent {
           enableTreeView: false,
           showTreeExpandNoChildren: false,
         };
+      case 'pagination':
+        return {
+          id: 'web-components-demo-pagination',
+          title: 'Web Components Demo: Pagination',
+          emptyMessage: 'No rows match the current filters.',
+          dataJson: JSON.stringify(createHarnessRows(200)),
+          columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
+          rowHeight: 46,
+          virtualizationThreshold: 200,
+          enableSorting: true,
+          enableFiltering: true,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableColumnResizing: true,
+          enableVirtualization: false,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+          enablePagination: true,
+          enablePaginationControls: true,
+          paginationPageSize: 25,
+          paginationPageSizesJson: JSON.stringify([10, 25, 50, 100]),
+        };
+      case 'infinite':
+        return {
+          id: 'web-components-demo-infinite',
+          title: 'Web Components Demo: Infinite Scroll',
+          emptyMessage: 'No rows loaded yet.',
+          dataJson: this.infiniteScrollDataSignal(),
+          columnDefsJson: JSON.stringify(this.infiniteScrollColumnDefs),
+          rowHeight: 40,
+          virtualizationThreshold: 50,
+          enableSorting: false,
+          enableFiltering: false,
+          enableGrouping: false,
+          enableColumnMoving: false,
+          enableColumnResizing: true,
+          enableVirtualization: true,
+          enableCellEditOnFocus: false,
+          enablePinning: false,
+          enableExpandable: false,
+          enableTreeView: false,
+          showTreeExpandNoChildren: false,
+          enableInfiniteScroll: true,
+          // Only load more when the user scrolls near the bottom — the
+          // "top" direction is off so we demo forward-only infinite scroll.
+          infiniteScrollUp: false,
+          infiniteScrollDown: true,
+          infiniteScrollRowsFromEnd: 20,
+        };
       case 'trading':
         return {
           id: 'web-components-demo-trading',
@@ -393,7 +495,6 @@ export class WebComponentsComponent {
           dataJson: this.tradingDisplayDataSignal(),
           columnDefsJson: this.tradingColumnDefsJson,
           rowHeight: 40,
-          viewportHeight: 460,
           virtualizationThreshold: 64,
           enableSorting: true,
           enableFiltering: false,
@@ -415,7 +516,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createHarnessRows()),
           columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           expandableRowHeight: 112,
           enableSorting: true,
@@ -432,13 +532,13 @@ export class WebComponentsComponent {
         };
     }
   });
-  protected readonly webComponentPrimarySnippet = computed(() => `<ui-grid-element
+  protected readonly webComponentPrimarySnippet = computed(
+    () => `<ui-grid-element
   id="primary-grid"
   grid-id="ui-grid-web-components-primary"
   title="UI Grid Modernized (Web Component)"
   empty-message="No rows match the current filters."
   row-height="48"
-  viewport-height="620"
   virtualization-threshold="25"
   enable-sorting
   enable-filtering
@@ -478,7 +578,8 @@ export class WebComponentsComponent {
       // hook benchmark, export, and saved-state buttons
     },
   };
-</script>`);
+</script>`,
+  );
   protected readonly webComponentScenarioSnippet = computed(() => {
     switch (this.mode()) {
       case 'tree':
@@ -487,7 +588,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-tree"
   title="Web Components Demo: Tree"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   tree-children-field="children"
   tree-indent="16"
@@ -513,7 +613,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-templated"
   title="Web Components Demo: Templated"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
@@ -539,7 +638,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-pinning"
   title="Web Components Demo: Pinning"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
@@ -557,13 +655,36 @@ export class WebComponentsComponent {
   grid.setAttribute('column-defs', JSON.stringify(columnDefs));
   grid.setAttribute('data', JSON.stringify(rows));
 </script>`;
+      case 'pagination':
+        return `<ui-grid-element
+  id="demo-grid"
+  grid-id="web-components-demo-pagination"
+  title="Web Components Demo: Pagination"
+  row-height="46"
+  enable-sorting
+  enable-filtering
+  enable-column-resizing
+  enable-pagination
+  enable-pagination-controls
+  pagination-page-size="25"
+  pagination-page-sizes="[10,25,50,100]">
+</ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#demo-grid');
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+</script>`;
       case 'trading':
         return `<ui-grid-element
   id="trading-grid"
   grid-id="web-components-demo-trading"
   title="Web Components Demo: Trading Terminal"
   row-height="40"
-  viewport-height="460"
   enable-sorting
   enable-column-resizing
   >
@@ -586,7 +707,60 @@ export class WebComponentsComponent {
   setInterval(() => {
     rows = tickTradingRows(rows, rng, 6);
     grid.setData(rows);
-  }, 150);
+  }, 8);
+</script>`;
+      case 'infinite':
+        return `<ui-grid-element
+  id="infinite-grid"
+  grid-id="web-components-demo-infinite"
+  title="Web Components Demo: Infinite Scroll"
+  row-height="40"
+  virtualization-threshold="50"
+  enable-virtualization
+  enable-column-resizing
+  enable-infinite-scroll
+  infinite-scroll-down
+  infinite-scroll-rows-from-end="20"></ui-grid-element>
+
+<script type="module">
+  import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
+
+  await defineStandaloneUiGridElement();
+
+  const grid = document.querySelector('#infinite-grid');
+  const columnDefs = [
+    { name: 'index', displayName: '#', width: '80px' },
+    { name: 'event', displayName: 'Event' },
+    { name: 'severity', displayName: 'Severity', width: '120px' },
+    { name: 'source', displayName: 'Source', width: '140px' },
+    { name: 'timestamp', displayName: 'Timestamp' },
+  ];
+  const PAGE = 60;
+  let rows = createRows(0, PAGE);
+
+  grid.setAttribute('column-defs', JSON.stringify(columnDefs));
+  grid.setAttribute('data', JSON.stringify(rows));
+
+  grid.addEventListener('register-api', ({ detail: api }) => {
+    api.infiniteScroll.on.needLoadMoreData(async () => {
+      // Simulate a slow fetch.
+      await new Promise((r) => setTimeout(r, 200));
+      rows = rows.concat(createRows(rows.length, PAGE));
+      grid.setAttribute('data', JSON.stringify(rows));
+      await api.infiniteScroll.dataLoaded(false, rows.length < 2000);
+    });
+  });
+
+  function createRows(start, count) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: 'infinite-' + (start + i),
+      index: start + i,
+      event: 'Event #' + (start + i + 1),
+      severity: ['info', 'warn', 'error', 'debug'][(start + i) % 4],
+      source: ['auth', 'api', 'worker', 'scheduler', 'inventory'][(start + i) % 5],
+      timestamp: new Date(2026, 0, 1, (start + i) % 24).toISOString(),
+    }));
+  }
 </script>`;
       default:
         return `<ui-grid-element
@@ -594,7 +768,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-expandable"
   title="Web Components Demo: Expandable"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   expandable-row-height="112"
   enable-sorting
@@ -628,7 +801,9 @@ export class WebComponentsComponent {
     { label: 'Tree', value: 'tree' as const },
     { label: 'Templated', value: 'templated' as const },
     { label: 'Pinning', value: 'pinning' as const },
+    { label: 'Pagination', value: 'pagination' as const },
     { label: 'Trading', value: 'trading' as const },
+    { label: 'Infinite scroll', value: 'infinite' as const },
   ];
 
   constructor() {
@@ -642,13 +817,18 @@ export class WebComponentsComponent {
       this.installPrimaryGridBridge();
       this.injectDemoGridTemplates();
       this.syncTradingLoop();
+      this.syncInfiniteLoop();
     });
 
     inject(DestroyRef).onDestroy(() => {
       this.disposePrimaryVisibleRows?.();
       this.disposePrimaryBenchmark?.();
+      this.disposePrimarySelection?.();
+      this.disposePrimarySelectionBatch?.();
       this.disposePrimaryVisibleRows = null;
       this.disposePrimaryBenchmark = null;
+      this.disposePrimarySelection = null;
+      this.disposePrimarySelectionBatch = null;
       this.primaryGridApi = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
@@ -671,6 +851,7 @@ export class WebComponentsComponent {
     queueMicrotask(() => {
       this.injectDemoGridTemplates();
       this.syncTradingLoop();
+      this.syncInfiniteLoop();
     });
   }
 
@@ -691,6 +872,7 @@ export class WebComponentsComponent {
   protected resetDemo(): void {
     this.savedGridState = null;
     this.visibleRowCount.set(0);
+    this.selectedRowCount.set(0);
     this.benchmarkResult.set(null);
     this.savedStateJson.set('No saved state captured yet.');
     this.disposePrimaryVisibleRows?.();
@@ -738,6 +920,7 @@ export class WebComponentsComponent {
     this.disposePrimaryBenchmark = null;
     this.primaryGridApi = null;
     this.visibleRowCount.set(0);
+    this.selectedRowCount.set(0);
     this.benchmarkResult.set(null);
     grid.options = {
       ...grid.options,
@@ -747,14 +930,28 @@ export class WebComponentsComponent {
       onRegisterApi: (api) => {
         this.primaryGridApi = api as UiGridApi;
         this.visibleRowCount.set(this.primaryGridApi.core.getVisibleRows().length);
+        this.selectedRowCount.set(this.primaryGridApi.selection.getSelectedCount());
         this.disposePrimaryVisibleRows?.();
         this.disposePrimaryBenchmark?.();
+        this.disposePrimarySelection?.();
+        this.disposePrimarySelectionBatch?.();
         this.disposePrimaryVisibleRows = this.primaryGridApi.core.on.rowsVisibleChanged((rows) => {
           this.visibleRowCount.set(rows.length);
         });
         this.disposePrimaryBenchmark = this.primaryGridApi.core.on.benchmarkComplete((result) => {
           this.benchmarkResult.set(result as GridBenchmarkResult);
         });
+        // Refresh the selected-rows stat on every selection change. Both
+        // single and batch paths feed the same counter.
+        const syncSelected = (): void => {
+          if (this.primaryGridApi) {
+            this.selectedRowCount.set(this.primaryGridApi.selection.getSelectedCount());
+          }
+        };
+        this.disposePrimarySelection =
+          this.primaryGridApi.selection.on.rowSelectionChanged(syncSelected);
+        this.disposePrimarySelectionBatch =
+          this.primaryGridApi.selection.on.rowSelectionChangedBatch(syncSelected);
       },
     } as GridOptions;
   }
@@ -772,7 +969,9 @@ export class WebComponentsComponent {
   }
 
   private clearSlotTemplates(element: HTMLElement): void {
-    element.querySelectorAll('template[slot]').forEach((t) => t.remove());
+    element.querySelectorAll('template[slot]').forEach((t) => {
+      t.remove();
+    });
   }
 
   private injectPrimaryGridTemplates(): void {
@@ -780,11 +979,7 @@ export class WebComponentsComponent {
       return;
     }
     const el = this.primaryGridRef().nativeElement;
-    this.injectSlotTemplate(
-      el,
-      'cell-status',
-      WebComponentsComponent.STATUS_PILL_TEMPLATE,
-    );
+    this.injectSlotTemplate(el, 'cell-status', WebComponentsComponent.STATUS_PILL_TEMPLATE);
   }
 
   private injectDemoGridTemplates(): void {
@@ -805,6 +1000,71 @@ export class WebComponentsComponent {
     }
   }
 
+  private syncInfiniteLoop(): void {
+    // Tear down any prior listener whenever the demo mode changes.
+    this.disposeDemoInfinite?.();
+    this.disposeDemoInfinite = null;
+    this.demoGridApi = null;
+    this.infiniteImperativeOptions = null;
+
+    if (!isPlatformBrowser(this.platformId) || this.mode() !== 'infinite') {
+      return;
+    }
+
+    // Reset the demo dataset whenever we enter the infinite scenario.
+    this.infiniteRows = createInfiniteRows(0, this.INFINITE_PAGE_SIZE);
+    this.infiniteScrollDataSignal.set(JSON.stringify(this.infiniteRows));
+
+    const grid = this.demoGridRef().nativeElement;
+    // The vanilla element accepts options imperatively — we use this only
+    // to hook onRegisterApi for needLoadMoreData. All other config comes
+    // from the attribute bindings in the template.
+    this.infiniteImperativeOptions = {
+      id: 'web-components-demo-infinite',
+      columnDefs: [...this.infiniteScrollColumnDefs] as GridOptions['columnDefs'],
+      data: this.infiniteRows,
+      enableInfiniteScroll: true,
+      infiniteScrollUp: false,
+      infiniteScrollDown: true,
+      infiniteScrollRowsFromEnd: 20,
+      rowIdentity: (entity) => String((entity as { id: string }).id),
+      onRegisterApi: (api) => {
+        const gridApi = api as UiGridApi;
+        // Controller re-registers this callback every setOptions pass — tear
+        // down any prior subscription before wiring a fresh one so we don't
+        // stack listeners.
+        this.disposeDemoInfinite?.();
+        this.demoGridApi = gridApi;
+        this.disposeDemoInfinite = gridApi.infiniteScroll.on.needLoadMoreData(() => {
+          this.handleInfiniteLoadMore(grid);
+        });
+      },
+    };
+    grid.options = this.infiniteImperativeOptions;
+  }
+
+  private handleInfiniteLoadMore(grid: WebComponentGridElement): void {
+    if (!this.demoGridApi || !this.infiniteImperativeOptions) return;
+    const api = this.demoGridApi;
+    const imperativeOptions = this.infiniteImperativeOptions;
+    // Simulated async load.
+    window.setTimeout(() => {
+      if (this.mode() !== 'infinite') return;
+      const next = createInfiniteRows(this.infiniteRows.length, this.INFINITE_PAGE_SIZE);
+      this.infiniteRows = this.infiniteRows.concat(next);
+      // Mutate the stashed imperative options object in place so the
+      // element's `activeOptions` ref sees the new data. Then re-assign
+      // `grid.options` to trigger setOptions → refresh. Also sync the
+      // signal so any attribute-driven re-parse reflects the same data.
+      imperativeOptions.data = this.infiniteRows;
+      this.infiniteScrollDataSignal.set(JSON.stringify(this.infiniteRows));
+      grid.options = imperativeOptions;
+      const hasMore = this.infiniteRows.length < this.INFINITE_MAX_ROWS;
+      void api.infiniteScroll.dataLoaded(false, hasMore);
+    }, 200);
+  }
+  private infiniteImperativeOptions: GridOptions | null = null;
+
   private syncTradingLoop(): void {
     if (this.tradingIntervalId !== null) {
       clearInterval(this.tradingIntervalId);
@@ -820,6 +1080,6 @@ export class WebComponentsComponent {
     this.tradingIntervalId = setInterval(() => {
       this.tradingRows = tickTradingRows(this.tradingRows, this.tradingRng, 6);
       grid.setData(createTradingDisplayRows(this.tradingRows));
-    }, 150);
+    }, 8);
   }
 }

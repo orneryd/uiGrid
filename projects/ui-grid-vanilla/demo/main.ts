@@ -24,7 +24,6 @@ const options: GridOptions = {
   title: 'UI Grid Vanilla Demo',
   emptyMessage: 'No rows match the current filters.',
   rowHeight: 48,
-  viewportHeight: 620,
   enableSorting: true,
   enableFiltering: true,
   enableGrouping: true,

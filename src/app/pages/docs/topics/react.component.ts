@@ -159,8 +159,8 @@ function createTreeRows(): GridRecord[] {
               <span>of {{ totalRows() }} rows</span>
             </div>
             <p>
-              <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
-              templating, and virtualized rendering.
+              <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column
+              moving, templating, and virtualized rendering.
             </p>
           </div>
 
@@ -185,7 +185,10 @@ function createTreeRows(): GridRecord[] {
         <header class="panel-header">
           <div>
             <h2>React Demo Code</h2>
-            <p>These snippets match the live React wrapper demos on this page: the 100K primary grid and the pinning harness.</p>
+            <p>
+              These snippets match the live React wrapper demos on this page: the 100K primary grid
+              and the pinning harness.
+            </p>
           </div>
         </header>
         <div class="code-grid">
@@ -393,6 +396,8 @@ function createTreeRows(): GridRecord[] {
       border-radius: calc(var(--theme-radius) - 6px);
       padding: clamp(0.5rem, 1.2vw, 0.9rem);
       background: color-mix(in srgb, var(--panel-surface-strong) 86%, transparent);
+      width: 100%;
+      overflow-x: auto;
     }
 
     .react-primary-shell {
@@ -551,7 +556,6 @@ const options: GridOptions = {
   id: 'ui-grid-modern-react',
   data: createDemoData(),
   rowHeight: 48,
-  viewportHeight: 620,
   enableSorting: true,
   enableFiltering: true,
   enableGrouping: true,
@@ -583,7 +587,6 @@ export function AccountsGrid() {
   id: 'react-demo-pinning',
   data,
   rowHeight: 46,
-  viewportHeight: 300,
   enableSorting: true,
   enableFiltering: true,
   enablePinning: true,
@@ -602,8 +605,7 @@ export function AccountsGrid() {
     { name: 'status', displayName: 'Status', width: '150px' },
   ],
 };`;
-  protected readonly reactCellRendererSnippet =
-`import { mountUiGrid } from '@ornery/ui-grid-react';
+  protected readonly reactCellRendererSnippet = `import { mountUiGrid } from '@ornery/ui-grid-react';
 import type { GridCellTemplateContext } from '@ornery/ui-grid-core';
 
 // cellRenderer receives GridCellTemplateContext for every cell.
@@ -626,8 +628,7 @@ mountUiGrid(host, {
   },
 });`;
 
-  protected readonly reactExpandableRendererSnippet =
-`import { mountUiGrid } from '@ornery/ui-grid-react';
+  protected readonly reactExpandableRendererSnippet = `import { mountUiGrid } from '@ornery/ui-grid-react';
 import type { GridExpandableTemplateContext } from '@ornery/ui-grid-core';
 
 // expandableRenderer receives GridExpandableTemplateContext for each
@@ -829,19 +830,31 @@ mountUiGrid(host, {
     }
   }
 
-  private makeTradingCellRenderer(): NonNullable<Parameters<typeof mountUiGrid>[1]['cellRenderer']> {
+  private makeTradingCellRenderer(): NonNullable<
+    Parameters<typeof mountUiGrid>[1]['cellRenderer']
+  > {
     return (context: GridCellTemplateContext) => {
       const row = context.row as TradingRow;
       const name = context.column.name;
       if (name === 'price' || name === 'bid' || name === 'ask') {
-        const preFormatted = name === 'price' ? row['priceStr'] : name === 'bid' ? row['bidStr'] : row['askStr'];
-        return styledCell(String(preFormatted ?? fmtPrice(context.value)), String(row['priceColor'] ?? 'inherit'));
+        const preFormatted =
+          name === 'price' ? row['priceStr'] : name === 'bid' ? row['bidStr'] : row['askStr'];
+        return styledCell(
+          String(preFormatted ?? fmtPrice(context.value)),
+          String(row['priceColor'] ?? 'inherit'),
+        );
       }
       if (name === 'change') {
-        return styledCell(String(row['changeStr'] ?? fmtChange(context.value)), String(row['changeColor'] ?? 'inherit'));
+        return styledCell(
+          String(row['changeStr'] ?? fmtChange(context.value)),
+          String(row['changeColor'] ?? 'inherit'),
+        );
       }
       if (name === 'changePct') {
-        return styledCell(String(row['changePctStr'] ?? fmtChangePct(context.value)), String(row['changeColor'] ?? 'inherit'));
+        return styledCell(
+          String(row['changePctStr'] ?? fmtChangePct(context.value)),
+          String(row['changeColor'] ?? 'inherit'),
+        );
       }
       return null;
     };

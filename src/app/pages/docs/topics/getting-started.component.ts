@@ -56,7 +56,6 @@ export class DocsGettingStartedComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'getting-started-demo',
     data: createSmallDemoData(5),
-    viewportHeight: 320,
     rowHeight: 48,
     enableSorting: true,
     enableFiltering: false,

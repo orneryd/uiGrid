@@ -49,3 +49,4 @@ target
 projects/ui-grid/src/lib/grid/**/*.d.ts
 projects/ui-grid/src/lib/grid/**/*.d.ts.map
 .todos.md
+settings.local.json

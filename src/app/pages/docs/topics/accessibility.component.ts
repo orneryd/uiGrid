@@ -108,7 +108,6 @@ export class DocsAccessibilityComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'a11y-demo',
     data: createSmallDemoData(5),
-    viewportHeight: 320,
     rowHeight: 48,
     enableSorting: true,
     enableFiltering: true,

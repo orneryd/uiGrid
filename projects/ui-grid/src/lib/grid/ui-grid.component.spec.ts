@@ -668,7 +668,6 @@ describe('UiGridComponent', () => {
           enableColumnMoving: false,
           enableVirtualization: false,
           rowHeight: undefined,
-          viewportHeight: undefined,
           rowIdentity: undefined,
           columnDefs: [
             { name: 'name', visible: false },
@@ -691,7 +690,7 @@ describe('UiGridComponent', () => {
     expect(shadowRoot.querySelector('.filter-grid')).toBeNull();
     expect(shadowRoot.querySelector('.chip-action')).toBeNull();
     expect((fixture.componentInstance as any).rowSize()).toBe(44);
-    expect((fixture.componentInstance as any).viewportHeight()).toBe('560px');
+    expect((fixture.componentInstance as any).viewportHeight()).toBe('440px');
     expect((fixture.componentInstance as any).isVirtualizationEnabled(100)).toBe(false);
 
     gridApi.core.setFilter('status', 'Active');
@@ -1597,7 +1596,7 @@ describe('UiGridComponent', () => {
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
-    expect(component.gridTemplateColumns()).toContain('max-content');
+    expect(component.gridTemplateColumns()).toContain('minmax(11rem, 1fr)');
   });
 
   it('appends pinned columns in click order and returns unpinned columns to the normal area', () => {
@@ -1748,7 +1747,7 @@ describe('UiGridComponent', () => {
             account: { owner: `Owner ${index + 1}` },
           })),
           virtualizationThreshold: 1,
-          viewportHeight: 44,
+          minRowsToShow: 1,
           infiniteScrollRowsFromEnd: 1,
           infiniteScrollUp: true,
           infiniteScrollDown: true,
@@ -1788,7 +1787,7 @@ describe('UiGridComponent', () => {
             account: { owner: `Owner ${index + 1}` },
           })),
           virtualizationThreshold: 1,
-          viewportHeight: 44,
+          minRowsToShow: 1,
           infiniteScrollRowsFromEnd: 1,
           infiniteScrollUp: true,
           infiniteScrollDown: true,
@@ -1861,7 +1860,6 @@ describe('UiGridComponent', () => {
       createOptions(
         {
           enableAutoResize: true,
-          viewportHeight: undefined,
         },
         (api) => {
           gridApi = api;

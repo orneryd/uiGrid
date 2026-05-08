@@ -7,7 +7,7 @@ import {
 } from './grid.models';
 import { getCellValue, isNullOrUndefined } from './grid.utils';
 
-interface ParsedFilter {
+export interface ParsedFilter {
   term?: unknown;
   noTerm?: boolean;
   condition: GridFilterDescriptor['condition'];

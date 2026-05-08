@@ -28,7 +28,7 @@ describe('gridStateMath', () => {
   it('builds grid template columns deterministically', () => {
     expect(
       buildGridTemplateColumns(orderVisibleColumns(columns, ['status', 'revenue', 'customer'])),
-    ).toBe('2fr 120px minmax(11rem, max-content)');
+    ).toBe('2fr 120px minmax(11rem, 1fr)');
   });
 
   it('resolves benchmark iterations with a minimum of one', () => {
@@ -43,9 +43,9 @@ describe('gridStateMath', () => {
   });
 
   it('computes viewport height and viewport rows', () => {
-    expect(computeViewportHeightPx(undefined, undefined)).toBe('560px');
+    expect(computeViewportHeightPx(undefined, undefined)).toBe('440px');
     expect(computeViewportHeightPx(620, 480)).toBe('620px');
-    expect(computeViewportRows(undefined, undefined)).toBe(13);
+    expect(computeViewportRows(undefined, undefined)).toBe(10);
     expect(computeViewportRows(220, 44)).toBe(5);
   });
 });

@@ -1,8 +1,20 @@
 import { SORT_DIRECTIONS, SortDirection } from './grid.constants';
 import { DEFAULT_GRID_LABELS, GridColumnDef, GridLabels, GridOptions, GridRow } from './grid.models';
+import { gridI18n } from './grid.core.i18n';
 
+/**
+ * Resolve the effective labels bundle. Fallback chain (most specific first):
+ *  1. `options.labels` override supplied by the consumer.
+ *  2. The current language registered with the i18n service.
+ *  3. `DEFAULT_GRID_LABELS` (en-US) for anything still missing.
+ *
+ * The i18n service exposes `setCurrentLang()` + `add()` so consumers can
+ * swap languages or register custom locales without touching the options.
+ */
 export function resolveGridLabels(overrides?: Partial<GridLabels>): GridLabels {
-  return overrides ? { ...DEFAULT_GRID_LABELS, ...overrides } : DEFAULT_GRID_LABELS;
+  const localeLabels = gridI18n.getCurrentLabels();
+  if (!overrides) return localeLabels;
+  return { ...localeLabels, ...overrides };
 }
 
 export function isGridTreeEnabled(options: GridOptions): boolean {
@@ -120,7 +132,7 @@ export function gridEditorInputType(column: GridColumnDef): string {
 }
 
 export function gridColumnWidth(column: GridColumnDef): string {
-  return column.width ?? 'minmax(11rem, max-content)';
+  return column.width ?? 'minmax(11rem, 1fr)';
 }
 
 export function gridCellIndent(

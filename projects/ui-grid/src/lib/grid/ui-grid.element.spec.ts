@@ -94,7 +94,7 @@ describe('buildDeclarativeAttributeOptions', () => {
     const element = document.createElement('div');
     element.setAttribute('grid-id', 'declarative-grid');
     element.setAttribute('title', 'Team Roster');
-    element.setAttribute('viewport-height', '420');
+    element.setAttribute('row-height', '420');
     element.setAttribute('enable-sorting', '');
     element.setAttribute(
       'column-defs',
@@ -109,7 +109,7 @@ describe('buildDeclarativeAttributeOptions', () => {
 
     expect(options.id).toBe('declarative-grid');
     expect(options.title).toBe('Team Roster');
-    expect(options.viewportHeight).toBe(420);
+    expect(options.rowHeight).toBe(420);
     expect(options.enableSorting).toBe(true);
     expect(options.columnDefs).toEqual([
       { name: 'name' } satisfies GridColumnDef,
@@ -120,12 +120,12 @@ describe('buildDeclarativeAttributeOptions', () => {
 
   it('omits attributes that are absent or unparsable', () => {
     const element = document.createElement('div');
-    element.setAttribute('viewport-height', 'not-a-number');
+    element.setAttribute('row-height', 'not-a-number');
     element.setAttribute('column-defs', '{not json');
 
     const options = buildDeclarativeAttributeOptions(element);
 
-    expect(options.viewportHeight).toBeUndefined();
+    expect(options.rowHeight).toBeUndefined();
     expect(options.columnDefs).toBeUndefined();
     expect(options.id).toBeUndefined();
   });
@@ -145,7 +145,7 @@ describe('createDeclarativeUiGridElement', () => {
     grid.setAttribute('grid-id', 'declarative-grid');
     grid.setAttribute('title', 'Team Roster');
     grid.setAttribute('enable-sorting', '');
-    grid.setAttribute('viewport-height', '420');
+    grid.setAttribute('row-height', '420');
     grid.setAttribute(
       'column-defs',
       JSON.stringify([{ name: 'name' } satisfies GridColumnDef]),
@@ -158,7 +158,7 @@ describe('createDeclarativeUiGridElement', () => {
     expect(grid.options.id).toBe('declarative-grid');
     expect(grid.options.title).toBe('Team Roster');
     expect(grid.options.enableSorting).toBe(true);
-    expect(grid.options.viewportHeight).toBe(420);
+    expect(grid.options.rowHeight).toBe(420);
     expect(grid.options.data).toEqual([{ name: 'Alice' }]);
     expect(grid.optionsHistory.length).toBeGreaterThan(0);
     expect(grid.baseConnectedCalls).toBe(1);

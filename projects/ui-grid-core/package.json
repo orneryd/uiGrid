@@ -10,7 +10,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    }
+    },
+    "./src/lib/styles/*": "./src/lib/styles/*",
+    "./src/lib/grid.core.styles": "./src/lib/grid.core.styles.scss"
   },
   "sideEffects": false,
   "publishConfig": {

@@ -3,7 +3,7 @@
   "version": "0.1.10",
   "scripts": {
     "ng": "ng",
-    "start": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng serve",
+    "start": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && npm run build --prefix projects/ui-grid-vanilla && (trap 'kill 0' INT TERM; npm run watch --prefix projects/ui-grid-vanilla & ng serve)",
     "build": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng build",
     "build:rust:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target bundler --out-dir ../../dist/ui-grid-wasm --release",
     "build:rust:web": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target web --out-dir ../../dist/ui-grid-wasm-web --release",
@@ -18,7 +18,7 @@
     "start:react": "npm run start --prefix projects/ui-grid-react",
     "start:vanilla": "npm run build:core && npm run build:library && npm run build:rust:web && npm run start --prefix projects/ui-grid-vanilla",
     "build:vanilla": "npm run build:core && npm run build:library && npm run build:rust:web && npm run build --prefix projects/ui-grid-vanilla",
-    "test": "npm run build:rust:wasm && ng test --watch=false && npm test --prefix projects/ui-grid-react && npm test --prefix projects/ui-grid-vanilla",
+    "test": "npm run build:rust:wasm && ng test --watch=false && npm test --prefix projects/ui-grid-core && npm test --prefix projects/ui-grid-react && npm test --prefix projects/ui-grid-vanilla",
     "test:angular": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng test --watch=false",
     "test:rust": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --workspace",
     "test:react": "npm run build:rust:wasm && npm test --prefix projects/ui-grid-react",

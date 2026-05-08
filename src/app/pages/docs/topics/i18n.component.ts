@@ -74,7 +74,6 @@ export class DocsI18nComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'i18n-demo',
     data: createSmallDemoData(3),
-    viewportHeight: 280,
     rowHeight: 48,
     enableSorting: true,
     enableFiltering: true,

@@ -254,7 +254,6 @@ await defineUiGridElement();
   grid-id="accounts-grid"
   title="Accounts"
   row-height="48"
-  viewport-height="600"
   column-defs='[{"name":"name"},{"name":"status"},{"name":"revenue","type":"number"}]'
   data='[{"id":"1","name":"Alice","status":"Active","revenue":120000}]'
   enable-sorting
@@ -280,7 +279,6 @@ grid.options = {
 grid-id="my-id"
 title="My Grid"
 row-height="48"
-viewport-height="600"
 virtualization-threshold="25"
 empty-message="No rows found."
 
@@ -390,7 +388,6 @@ await defineStandaloneUiGridElement();
   grid-id="accounts-grid"
   title="Accounts"
   row-height="48"
-  viewport-height="600"
   column-defs='[{"name":"name"},{"name":"status"},{"name":"revenue","type":"number"}]'
   data='[{"id":"1","name":"Alice","status":"Active","revenue":120000}]'
   enable-sorting

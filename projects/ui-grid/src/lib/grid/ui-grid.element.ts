@@ -43,12 +43,6 @@ const declarativeSurface: readonly DeclarativeSurfaceEntry[] = [
     kind: 'number',
   },
   {
-    attribute: 'viewport-height',
-    property: 'viewportHeight',
-    optionKey: 'viewportHeight',
-    kind: 'number',
-  },
-  {
     attribute: 'pagination-page-size',
     property: 'paginationPageSize',
     optionKey: 'paginationPageSize',

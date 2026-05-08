@@ -18,8 +18,17 @@ export {
   type UiGridControlIconKey,
   type UiGridIconDefinition,
   type UiGridIconOverrides,
+  type FrameworkRenderedSlotsConfig,
+  type FrameworkCellSlot,
+  type FrameworkHeaderSlot,
+  type FrameworkFilterSlot,
+  type FrameworkGroupRowSlot,
+  type FrameworkExpandableRowSlot,
+  type FrameworkEmptyStateSlot,
+  type FrameworkSlotDelta,
 } from './ui-grid-standalone.element';
 
+export { UIGridTemplate } from './components/grid-template';
 export type { GridOptions, UiGridApi } from '@ornery/ui-grid-core';
 
 export interface UiGridRustWebModule {

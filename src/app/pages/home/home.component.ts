@@ -29,7 +29,12 @@ import {
 import { GridBrowserHarnessComponent } from '../../grid-browser-harness.component';
 import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
-import { createTradingRows, tickTradingRows, TradingLcg, type TradingRow } from '../shared/trading-data';
+import {
+  createTradingRows,
+  tickTradingRows,
+  TradingLcg,
+  type TradingRow,
+} from '../shared/trading-data';
 
 type AngularSurface = 'native' | 'element';
 type AngularElementMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
@@ -45,7 +50,6 @@ type DeclarativeGridConfig = {
   readonly description: string;
   readonly emptyMessage: string;
   readonly rowHeight: number;
-  readonly viewportHeight: number;
   readonly dataJson: string;
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
@@ -160,15 +164,16 @@ export class HomeComponent {
     viewChild<TemplateRef<GridCellTemplateContext>>('priceColorTemplate');
   private readonly changeColorTemplate =
     viewChild<TemplateRef<GridCellTemplateContext>>('changeColorTemplate');
-  private readonly scenarioGrid =
-    viewChild<ElementRef<AngularGridElement>>('scenarioGrid');
+  private readonly scenarioGrid = viewChild<ElementRef<AngularGridElement>>('scenarioGrid');
   private savedGridState: GridSavedState | null = null;
   private readonly primaryData = createDemoData();
   private primaryElementDataJsonCache: string | null = null;
   private tradingElementRows: TradingRow[] = [];
   private readonly tradingElementRng = new TradingLcg(0xabcdef42);
   private tradingElementIntervalId: ReturnType<typeof setInterval> | null = null;
-  private readonly tradingElementDataSignal = signal<string>(JSON.stringify(createDeclarativeTradingRows()));
+  private readonly tradingElementDataSignal = signal<string>(
+    JSON.stringify(createDeclarativeTradingRows()),
+  );
   protected readonly gridApi = signal<UiGridApi | null>(null);
   protected readonly surface = signal<AngularSurface>('native');
   protected readonly elementMode = signal<AngularElementMode>('expandable');
@@ -176,9 +181,11 @@ export class HomeComponent {
   protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
   protected readonly totalRows = computed(() => this.primaryData.length);
-  protected readonly groupColumnCount = computed(() => this.options().grouping?.groupBy?.length ?? 0);
+  protected readonly groupColumnCount = computed(
+    () => this.options().grouping?.groupBy?.length ?? 0,
+  );
   protected readonly virtualizationLabel = computed(() =>
-    this.options().enableVirtualization === false ? 'Off' : 'On'
+    this.options().enableVirtualization === false ? 'Off' : 'On',
   );
   protected readonly elementScenarios = [
     { label: 'Expandable', value: 'expandable' as const },
@@ -207,7 +214,6 @@ export class AccountsGridComponent {
     id: 'ui-grid-modern',
     data: createDemoData(),
     rowHeight: 48,
-    viewportHeight: 620,
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: true,
@@ -268,13 +274,12 @@ restoreState(): void {
     `  enable-column-resizing`,
     `  enable-virtualization`,
     `  enable-cell-edit-on-focus`,
-    `  viewport-height="620"`,
     `  row-height="48"`,
     `  virtualization-threshold="25"`,
     `  [attr.grouping]="groupingJson()"`,
     `  [attr.column-defs]="columnDefsJson()"`,
     `  [attr.data]="dataJson()">`,
-    `</ui-grid-element>\`,` ,
+    `</ui-grid-element>\`,`,
     `})`,
     `export class AccountsGridElementDemoComponent {`,
     `  readonly groupingJson = computed(() => JSON.stringify({ groupBy: ['status'] }));`,
@@ -290,13 +295,12 @@ restoreState(): void {
 
 - Same Angular rendering/runtime under the hood, exposed as <ui-grid-element>
 - Declarative attributes for markup-first setup
-- Use the separate /web-components page for the framework-free vanilla build from @ornery/ui-grid-vanilla`; 
+- Use the separate /web-components page for the framework-free vanilla build from @ornery/ui-grid-vanilla`;
   protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
     title: 'UI Grid Modernized',
     emptyMessage: 'No rows match the current filters.',
     rowHeight: 48,
-    viewportHeight: 620,
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: true,
@@ -365,7 +369,6 @@ restoreState(): void {
       'The same Angular package rendered through @angular/elements and configured with declarative HTML attributes.',
     emptyMessage: 'No rows match the current filters.',
     rowHeight: 48,
-    viewportHeight: 620,
     dataJson: this.elementPrimaryDataJson(),
     columnDefsJson: JSON.stringify([
       {
@@ -424,7 +427,6 @@ restoreState(): void {
     const base = {
       emptyMessage: 'No rows match the current filters.',
       rowHeight: 46,
-      viewportHeight: 300,
       enableSorting: true,
       enableFiltering: true,
       enableGrouping: false,
@@ -445,7 +447,8 @@ restoreState(): void {
           ...base,
           id: 'angular-element-demo-tree',
           title: 'Browser Harness: Tree',
-          description: 'Tree rows rendered through the Angular-backed custom element attribute surface.',
+          description:
+            'Tree rows rendered through the Angular-backed custom element attribute surface.',
           dataJson: JSON.stringify(createTreeRows()),
           columnDefsJson: JSON.stringify([
             { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
@@ -456,7 +459,12 @@ restoreState(): void {
               width: 'minmax(9rem, 0.7fr)',
               filter: { condition: FILTER_CONDITIONS.greaterThan },
             },
-            { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' },
+            {
+              name: 'owner',
+              field: 'account.owner',
+              displayName: 'Owner',
+              width: 'minmax(10rem, 0.8fr)',
+            },
           ]),
           treeChildrenField: 'children',
           treeIndent: 16,
@@ -472,14 +480,23 @@ restoreState(): void {
           dataJson: JSON.stringify(createHarnessRows()),
           columnDefsJson: JSON.stringify([
             { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
-            { name: 'status', width: 'minmax(9rem, 0.7fr)', filter: { condition: FILTER_CONDITIONS.exact } },
+            {
+              name: 'status',
+              width: 'minmax(9rem, 0.7fr)',
+              filter: { condition: FILTER_CONDITIONS.exact },
+            },
             {
               name: 'revenue',
               align: 'end',
               width: 'minmax(9rem, 0.7fr)',
               filter: { condition: FILTER_CONDITIONS.greaterThan },
             },
-            { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' },
+            {
+              name: 'owner',
+              field: 'account.owner',
+              displayName: 'Owner',
+              width: 'minmax(10rem, 0.8fr)',
+            },
           ]),
         };
       case 'pinning':
@@ -508,10 +525,10 @@ restoreState(): void {
           ...base,
           id: 'angular-element-demo-trading',
           title: 'Browser Harness: Trading Terminal',
-          description: 'Trading rows rendered declaratively through the Angular-backed custom element.',
+          description:
+            'Trading rows rendered declaratively through the Angular-backed custom element.',
           emptyMessage: 'No data',
           rowHeight: 40,
-          viewportHeight: 480,
           dataJson: this.tradingElementDataSignal(),
           columnDefsJson: JSON.stringify([
             { name: 'symbol', displayName: 'Symbol', width: '100px' },
@@ -545,7 +562,12 @@ restoreState(): void {
               width: 'minmax(9rem, 0.7fr)',
               filter: { condition: FILTER_CONDITIONS.greaterThan },
             },
-            { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' },
+            {
+              name: 'owner',
+              field: 'account.owner',
+              displayName: 'Owner',
+              width: 'minmax(10rem, 0.8fr)',
+            },
           ]),
           enableExpandable: true,
           expandableRowHeight: 112,
@@ -612,7 +634,11 @@ restoreState(): void {
         JSON.stringify(declarativeTradingDisplayRows(this.tradingElementRows)),
       );
       this.tradingElementIntervalId = setInterval(() => {
-        this.tradingElementRows = tickTradingRows(this.tradingElementRows, this.tradingElementRng, 6);
+        this.tradingElementRows = tickTradingRows(
+          this.tradingElementRows,
+          this.tradingElementRng,
+          6,
+        );
         this.tradingElementDataSignal.set(
           JSON.stringify(declarativeTradingDisplayRows(this.tradingElementRows)),
         );
@@ -634,18 +660,48 @@ restoreState(): void {
     const priceTemplate = this.priceColorTemplate() ?? undefined;
     const changeTemplate = this.changeColorTemplate() ?? undefined;
     const colDefs: GridColumnDef[] = [
-      { name: 'symbol',    displayName: 'Symbol',  width: '100px' },
-      { name: 'exchange',  displayName: 'Exch',    width: '80px' },
-      { name: 'sector',    displayName: 'Sector',  width: '120px' },
-      { name: 'price',     displayName: 'Price',   width: '110px', align: 'end', cellTemplate: priceTemplate },
-      { name: 'bid',       displayName: 'Bid',     width: '100px', align: 'end', cellTemplate: priceTemplate },
-      { name: 'ask',       displayName: 'Ask',     width: '100px', align: 'end', cellTemplate: priceTemplate },
-      { name: 'change',    displayName: 'Chg',     width: '100px', align: 'end', cellTemplate: changeTemplate },
-      { name: 'changePct', displayName: 'Chg %',   width: '90px',  align: 'end', cellTemplate: changeTemplate },
-      { name: 'high',      displayName: 'High',    width: '100px', align: 'end' },
-      { name: 'low',       displayName: 'Low',     width: '100px', align: 'end' },
-      { name: 'volume',    displayName: 'Volume',  width: '90px',  align: 'end' },
-      { name: 'lastSize',  displayName: 'Last Sz', width: '80px',  align: 'end' },
+      { name: 'symbol', displayName: 'Symbol', width: '100px' },
+      { name: 'exchange', displayName: 'Exch', width: '80px' },
+      { name: 'sector', displayName: 'Sector', width: '120px' },
+      {
+        name: 'price',
+        displayName: 'Price',
+        width: '110px',
+        align: 'end',
+        cellTemplate: priceTemplate,
+      },
+      {
+        name: 'bid',
+        displayName: 'Bid',
+        width: '100px',
+        align: 'end',
+        cellTemplate: priceTemplate,
+      },
+      {
+        name: 'ask',
+        displayName: 'Ask',
+        width: '100px',
+        align: 'end',
+        cellTemplate: priceTemplate,
+      },
+      {
+        name: 'change',
+        displayName: 'Chg',
+        width: '100px',
+        align: 'end',
+        cellTemplate: changeTemplate,
+      },
+      {
+        name: 'changePct',
+        displayName: 'Chg %',
+        width: '90px',
+        align: 'end',
+        cellTemplate: changeTemplate,
+      },
+      { name: 'high', displayName: 'High', width: '100px', align: 'end' },
+      { name: 'low', displayName: 'Low', width: '100px', align: 'end' },
+      { name: 'volume', displayName: 'Volume', width: '90px', align: 'end' },
+      { name: 'lastSize', displayName: 'Last Sz', width: '80px', align: 'end' },
     ];
     element.options = { columnDefs: colDefs } as unknown as GridOptions;
   }

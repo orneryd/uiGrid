@@ -59,7 +59,8 @@ is present to enable, absent to disable — no value needed.
   enable-expandable
   enable-tree-view
   enable-auto-resize
-  enable-virtualization>
+  enable-virtualization
+>
 </ui-grid-element>
 ```
 
@@ -69,25 +70,25 @@ property naming (`--ui-grid-*`). The element maps these to the camelCase
 
 Boolean attribute mapping:
 
-| HTML Attribute               | GridOptions Field           |
-|------------------------------|-----------------------------|
-| `enable-sorting`             | `enableSorting`             |
-| `enable-filtering`           | `enableFiltering`           |
-| `enable-grouping`            | `enableGrouping`            |
-| `enable-pinning`             | `enablePinning`             |
-| `enable-column-moving`       | `enableColumnMoving`        |
-| `enable-cell-edit`           | `enableCellEdit`            |
-| `enable-cell-edit-on-focus`  | `enableCellEditOnFocus`     |
-| `enable-pagination`          | `enablePagination`          |
-| `enable-pagination-controls` | `enablePaginationControls`  |
-| `enable-expandable`          | `enableExpandable`          |
-| `enable-tree-view`           | `enableTreeView`            |
-| `enable-auto-resize`         | `enableAutoResize`          |
-| `enable-virtualization`      | `enableVirtualization`      |
-| `use-external-pagination`    | `useExternalPagination`     |
-| `infinite-scroll-up`         | `infiniteScrollUp`          |
-| `infinite-scroll-down`       | `infiniteScrollDown`        |
-| `show-tree-expand-no-children` | `showTreeExpandNoChildren` |
+| HTML Attribute                   | GridOptions Field            |
+| -------------------------------- | ---------------------------- |
+| `enable-sorting`                 | `enableSorting`              |
+| `enable-filtering`               | `enableFiltering`            |
+| `enable-grouping`                | `enableGrouping`             |
+| `enable-pinning`                 | `enablePinning`              |
+| `enable-column-moving`           | `enableColumnMoving`         |
+| `enable-cell-edit`               | `enableCellEdit`             |
+| `enable-cell-edit-on-focus`      | `enableCellEditOnFocus`      |
+| `enable-pagination`              | `enablePagination`           |
+| `enable-pagination-controls`     | `enablePaginationControls`   |
+| `enable-expandable`              | `enableExpandable`           |
+| `enable-tree-view`               | `enableTreeView`             |
+| `enable-auto-resize`             | `enableAutoResize`           |
+| `enable-virtualization`          | `enableVirtualization`       |
+| `use-external-pagination`        | `useExternalPagination`      |
+| `infinite-scroll-up`             | `infiniteScrollUp`           |
+| `infinite-scroll-down`           | `infiniteScrollDown`         |
+| `show-tree-expand-no-children`   | `showTreeExpandNoChildren`   |
 | `tree-row-header-always-visible` | `treeRowHeaderAlwaysVisible` |
 
 ### Tier 2: Scalar attributes (string and number values)
@@ -97,7 +98,6 @@ Boolean attribute mapping:
   grid-id="accounts"
   title="Team Roster"
   row-height="48"
-  viewport-height="620"
   pagination-page-size="25"
   pagination-current-page="1"
   virtualization-threshold="40"
@@ -107,29 +107,29 @@ Boolean attribute mapping:
   expandable-row-header-width="40"
   empty-message="No results found."
   enable-sorting
-  enable-filtering>
+  enable-filtering
+>
 </ui-grid-element>
 ```
 
 Scalar attribute mapping:
 
-| HTML Attribute                  | GridOptions Field          | Type     |
-|---------------------------------|----------------------------|----------|
-| `grid-id`                       | `id`                       | `string` |
-| `title`                         | `title`                    | `string` |
-| `row-height`                    | `rowHeight`                | `number` |
-| `header-row-height`             | `headerRowHeight`          | `number` |
-| `viewport-height`               | `viewportHeight`           | `number` |
-| `pagination-page-size`          | `paginationPageSize`       | `number` |
-| `pagination-current-page`       | `paginationCurrentPage`    | `number` |
-| `total-items`                   | `totalItems`               | `number` |
-| `virtualization-threshold`      | `virtualizationThreshold`  | `number` |
-| `tree-children-field`           | `treeChildrenField`        | `string` |
-| `tree-indent`                   | `treeIndent`               | `number` |
-| `expandable-row-height`         | `expandableRowHeight`      | `number` |
-| `expandable-row-header-width`   | `expandableRowHeaderWidth` | `number` |
-| `empty-message`                 | `emptyMessage`             | `string` |
-| `infinite-scroll-rows-from-end` | `infiniteScrollRowsFromEnd`| `number` |
+| HTML Attribute                  | GridOptions Field           | Type     |
+| ------------------------------- | --------------------------- | -------- |
+| `grid-id`                       | `id`                        | `string` |
+| `title`                         | `title`                     | `string` |
+| `row-height`                    | `rowHeight`                 | `number` |
+| `header-row-height`             | `headerRowHeight`           | `number` |
+| `pagination-page-size`          | `paginationPageSize`        | `number` |
+| `pagination-current-page`       | `paginationCurrentPage`     | `number` |
+| `total-items`                   | `totalItems`                | `number` |
+| `virtualization-threshold`      | `virtualizationThreshold`   | `number` |
+| `tree-children-field`           | `treeChildrenField`         | `string` |
+| `tree-indent`                   | `treeIndent`                | `number` |
+| `expandable-row-height`         | `expandableRowHeight`       | `number` |
+| `expandable-row-header-width`   | `expandableRowHeaderWidth`  | `number` |
+| `empty-message`                 | `emptyMessage`              | `string` |
+| `infinite-scroll-rows-from-end` | `infiniteScrollRowsFromEnd` | `number` |
 
 ### Tier 3: JSON attributes for structured data
 
@@ -150,18 +150,19 @@ elements.
   data='[
     { "name": "Alice", "role": "Engineer", "salary": 120000 },
     { "name": "Bob", "role": "Designer", "salary": 95000 }
-  ]'>
+  ]'
+>
 </ui-grid-element>
 ```
 
 JSON attribute mapping:
 
-| HTML Attribute            | GridOptions Field      | Parsed Type               |
-|---------------------------|------------------------|---------------------------|
-| `column-defs`             | `columnDefs`           | `GridColumnDef[]`         |
-| `data`                    | `data`                 | `GridRecord[]`            |
-| `grouping`                | `grouping`             | `GridGroupingOptions`     |
-| `pagination-page-sizes`   | `paginationPageSizes`  | `number[] \| null`        |
+| HTML Attribute          | GridOptions Field     | Parsed Type           |
+| ----------------------- | --------------------- | --------------------- |
+| `column-defs`           | `columnDefs`          | `GridColumnDef[]`     |
+| `data`                  | `data`                | `GridRecord[]`        |
+| `grouping`              | `grouping`            | `GridGroupingOptions` |
+| `pagination-page-sizes` | `paginationPageSizes` | `number[] \| null`    |
 
 For `data`, inline JSON is practical for small/medium datasets. For large
 datasets (1K+ rows), the JS property path remains the correct approach. This
@@ -192,13 +193,16 @@ or set them individually:
   grid-id="my-grid"
   enable-sorting
   enable-filtering
-  column-defs='[{"name":"name"},{"name":"role"}]'>
+  column-defs='[{"name":"name"},{"name":"role"}]'
+>
 </ui-grid-element>
 
 <script type="module">
   const grid = document.querySelector('ui-grid-element');
   grid.data = fetchedData;
-  grid.onRegisterApi = (api) => { /* ... */ };
+  grid.onRegisterApi = (api) => {
+    /* ... */
+  };
 </script>
 ```
 
@@ -212,34 +216,49 @@ The `UiGridStandaloneElement` class adds the standard custom element hooks:
 
 ```typescript
 export class UiGridStandaloneElement extends HTMLElement {
-
   static get observedAttributes(): string[] {
     return [
-      'grid-id', 'title', 'data', 'column-defs',
-      'row-height', 'header-row-height', 'viewport-height',
-      'empty-message', 'pagination-page-size', 'pagination-current-page',
-      'pagination-page-sizes', 'total-items',
-      'virtualization-threshold', 'tree-children-field', 'tree-indent',
-      'expandable-row-height', 'expandable-row-header-width',
-      'infinite-scroll-rows-from-end', 'grouping',
+      'grid-id',
+      'title',
+      'data',
+      'column-defs',
+      'row-height',
+      'header-row-height',
+      'empty-message',
+      'pagination-page-size',
+      'pagination-current-page',
+      'pagination-page-sizes',
+      'total-items',
+      'virtualization-threshold',
+      'tree-children-field',
+      'tree-indent',
+      'expandable-row-height',
+      'expandable-row-header-width',
+      'infinite-scroll-rows-from-end',
+      'grouping',
       // boolean flags
-      'enable-sorting', 'enable-filtering', 'enable-grouping',
-      'enable-pinning', 'enable-column-moving',
-      'enable-cell-edit', 'enable-cell-edit-on-focus',
-      'enable-pagination', 'enable-pagination-controls',
+      'enable-sorting',
+      'enable-filtering',
+      'enable-grouping',
+      'enable-pinning',
+      'enable-column-moving',
+      'enable-cell-edit',
+      'enable-cell-edit-on-focus',
+      'enable-pagination',
+      'enable-pagination-controls',
       'use-external-pagination',
-      'enable-expandable', 'enable-tree-view',
-      'show-tree-expand-no-children', 'tree-row-header-always-visible',
-      'enable-auto-resize', 'enable-virtualization',
-      'infinite-scroll-up', 'infinite-scroll-down',
+      'enable-expandable',
+      'enable-tree-view',
+      'show-tree-expand-no-children',
+      'tree-row-header-always-visible',
+      'enable-auto-resize',
+      'enable-virtualization',
+      'infinite-scroll-up',
+      'infinite-scroll-down',
     ];
   }
 
-  attributeChangedCallback(
-    name: string,
-    _oldValue: string | null,
-    _newValue: string | null,
-  ): void {
+  attributeChangedCallback(name: string, _oldValue: string | null, _newValue: string | null): void {
     this.syncAttributesToOptions();
   }
 }
@@ -256,6 +275,7 @@ effective options = { ...attributeOptions, ...jsPropertyOptions }
 ```
 
 This means:
+
 - Setting `enable-sorting` on the element and later calling
   `grid.options = { enableSorting: false }` turns sorting off (JS wins).
 - Setting `grid.options = { id: 'x', data: [], columnDefs: [] }` and then
@@ -383,7 +403,8 @@ grid.enableSorting = true;
     {"name":"Alice","role":"Engineer","salary":120000},
     {"name":"Bob","role":"Designer","salary":95000},
     {"name":"Carol","role":"Manager","salary":130000}
-  ]'>
+  ]'
+>
 </ui-grid-element>
 ```
 
@@ -398,18 +419,18 @@ grid.enableSorting = true;
   enable-grouping
   enable-pinning
   row-height="48"
-  viewport-height="620"
   column-defs='[
     {"name":"name","displayName":"Customer"},
     {"name":"revenue","type":"number","align":"end"},
     {"name":"status"},
     {"name":"owner","field":"account.owner"}
-  ]'>
+  ]'
+>
 </ui-grid-element>
 
 <script type="module">
   const grid = document.querySelector('#big-grid');
-  grid.data = await fetch('/api/accounts').then(r => r.json());
+  grid.data = await fetch('/api/accounts').then((r) => r.json());
 </script>
 ```
 
@@ -421,7 +442,8 @@ grid.enableSorting = true;
   enable-sorting
   enable-expandable
   column-defs='[{"name":"name"},{"name":"status"}]'
-  data='[{"name":"Alice","status":"Active"}]'>
+  data='[{"name":"Alice","status":"Active"}]'
+>
   <template slot="cell-status">
     <span class="badge">{{ value }}</span>
   </template>
@@ -438,8 +460,9 @@ grid.enableSorting = true;
 <ui-grid-element
   grid-id="pricing-table"
   enable-sorting
-  column-defs='${JSON.stringify(columns)}'
-  data='${JSON.stringify(rows)}'>
+  column-defs="${JSON.stringify(columns)}"
+  data="${JSON.stringify(rows)}"
+>
 </ui-grid-element>
 ```
 
@@ -465,7 +488,6 @@ grid.enableSorting = true;
 
 1. **Boolean flags** — highest value, lowest effort. Covers the most common
    request ("I just want to toggle features from markup").
-2. **Scalar attributes** — `grid-id`, `row-height`, `viewport-height`, etc.
 3. **JSON attributes** — `column-defs`, `data`, `grouping`,
    `pagination-page-sizes`.
 4. **Individual JS properties** — mirrors of each attribute as a JS property
