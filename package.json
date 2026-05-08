@@ -31,6 +31,7 @@
   "packageManager": "npm@11.11.1",
   "dependencies": {
     "@ornery/ui-grid-core": "file:projects/ui-grid-core",
+    "@ornery/ui-grid-react": "file:projects/ui-grid-react",
     "@ornery/ui-grid-vanilla": "file:projects/ui-grid-vanilla",
     "@angular/cdk": "^21.2.8",
     "@angular/common": "^21.2.0",
