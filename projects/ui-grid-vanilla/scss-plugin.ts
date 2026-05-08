@@ -22,7 +22,10 @@ export function scssInlinePlugin(): Plugin {
       const filePath = id.slice(0, -SCSS_SUFFIX.length);
       const result = sass.compile(filePath, {
         style: 'compressed',
-        loadPaths: [path.resolve(process.cwd(), 'node_modules')],
+        loadPaths: [
+          path.resolve(process.cwd(), 'node_modules'),
+          path.resolve(process.cwd(), '../../node_modules'),
+        ],
       });
       return `export default ${JSON.stringify(result.css)};`;
     },
@@ -49,6 +52,7 @@ export function scssInlineEsbuild(): EsbuildPlugin {
           loadPaths: [
             path.resolve(process.cwd(), 'node_modules'),
             path.resolve(process.cwd(), '..'),
+            path.resolve(process.cwd(), '../../node_modules'),
           ],
         });
         return {
