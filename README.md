@@ -24,7 +24,7 @@ It proves that the datagrid cabal wants you to think it's hard to write a data g
 
 - **Original authorship** — built by the same engineer who created AngularJS ui-grid, with a decade of hindsight on what worked and what didn't
 - **Familiar API** — if you used the original ui-grid, you already know this one: `gridOptions`, `columnDefs`, `onRegisterApi`, `gridApi.core.*`
-- **Modern internals** — pure Angular signals architecture, `ChangeDetectionStrategy.OnPush`, Shadow DOM encapsulation, CDK virtual scrolling, standalone components
+- **Modern internals** — shared vanilla web component core with Shadow DOM encapsulation; Angular and React wrappers are thin bridges that project framework templates into the vanilla element via slot-based portals
 - **No legacy** — no `$scope`, no Bower, no Grunt, no jQuery, no module system from 2013
 
 ---
@@ -33,35 +33,44 @@ It proves that the datagrid cabal wants you to think it's hard to write a data g
 
 Everything below ships free and MIT-licensed. No enterprise tier, no license keys, no per-developer fees.
 
-| Feature                  | UI Grid  | ag-Grid Community | ag-Grid Enterprise |   Vaadin Grid   |  Kendo UI  |   Syncfusion    |
-| ------------------------ | :------: | :---------------: | :----------------: | :-------------: | :--------: | :-------------: |
-| Sorting                  | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
-| Filtering                | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
-| **Row Grouping**         | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
-| **Tree Data**            | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
-| **Master/Detail Rows**   | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
-| **Inline Cell Editing**  | **Free** |       Free        |         —          | Pro ~$99/dev/mo |    Paid    |   Community\*   |
-| CSV Export               | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
-| Virtual Scrolling        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
-| Pagination               | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
-| **Column Pinning**       | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |   Community\*   |
-| Column Reordering        | **Free** |       Free        |         —          |      Free       |    Paid    |   Community\*   |
-| **Save/Restore State**   | **Free** |         —         |    ~$999/dev/yr    |        —        |    Paid    |        —        |
-| **Infinite Scroll**      | **Free** |       Free        |         —          |        —        |    Paid    |   Community\*   |
-| **Shadow DOM**           | **Free** |         —         |         —          |        —        |     —      |        —        |
-| **Web Component Build**  | **Free** |         —         |         —          |     Native      |     —      |        —        |
-| **Feature Tree-Shaking** | **Free** |         —         |         —          |        —        |     —      |        —        |
-| **SSR Support**          | **Free** |         —         |    ~$999/dev/yr    |        —        |     —      |        —        |
-| i18n                     | **Free** |         —         |    ~$999/dev/yr    |      Free       |    Paid    |   Community\*   |
-| React Native             | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
-| Rust/egui Native         | **Yes**  |      No      |      No       |       No        |  No   |     No     |
-| C/LVGL Native            | **Yes**  |      No      |      No       |       No        |  No   |     No     |
-| Angular Native           | **Yes**  |      Wrapper      |      Wrapper       |       No        |  Wrapper   |     Wrapper     |
-| **License**              | **MIT**  |        MIT        |     Commercial     |  Apache/Comm.   | Commercial | Comm./Community |
+| Feature                    | UI Grid  | ag-Grid Community | ag-Grid Enterprise |    Vaadin Grid     |  Kendo UI   |   Syncfusion    |
+| -------------------------- | :------: | :---------------: | :----------------: | :----------------: | :---------: | :-------------: |
+| Sorting                    | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| Filtering                  | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| **Row Grouping**           | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
+| **Tree Data**              | **Free** |         —         |    ~$999/dev/yr    |        Free        |    Paid     |   Community\*   |
+| **Master/Detail Rows**     | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
+| **Inline Cell Editing**    | **Free** |       Free        |         —          | Pro ~$159/dev/mo   |    Paid     |   Community\*   |
+| Row Selection              | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| Column Resizing            | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| CSV Export                 | **Free** |       Free        |         —          |         —          |    Paid     |   Community\*   |
+| **Excel Export**           | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
+| **PDF Export**             | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
+| Virtual Scrolling          | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| Pagination                 | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| Column Pinning             | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| Column Reordering          | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| **Save/Restore State**     | **Free** |       Free        |         —          |         —          |    Paid     |        —        |
+| Infinite Scroll            | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| **Keyboard Cell Nav**      | **Free** |       Free        |         —          |         —          |    Paid     |   Community\*   |
+| **Row Edit (dirty/save)**  | **Free** |         —         |         —          |         —          |     —       |        —        |
+| **Cell Validation**        | **Free** |         —         |         —          |         —          |     —       |        —        |
+| **CSV/JSON Import**        | **Free** |         —         |         —          |         —          |     —       |        —        |
+| **Shadow DOM**             | **Free** |         —         |         —          |         —          |     —       |        —        |
+| **Web Component Build**    | **Free** |         —         |         —          |       Native       |     —       |        —        |
+| **Feature Tree-Shaking**   | **Free** |         —         |         —          |         —          |     —       |        —        |
+| **SSR Support**            | **Free** |         —         |    ~$999/dev/yr    |         —          |     —       |        —        |
+| i18n (6 locales built-in)  | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
+| React                      | **Yes**  |      Wrapper      |      Wrapper       |         No         |   Wrapper   |     Wrapper     |
+| Rust/egui Native           | **Yes**  |        No         |         No         |         No         |     No      |       No        |
+| C/LVGL Native              | **Yes**  |        No         |         No         |         No         |     No      |       No        |
+| Angular                    | **Yes**  |      Wrapper      |      Wrapper       |         No         |   Wrapper   |     Wrapper     |
+| **License**                | **MIT**  |        MIT        |     Commercial     |   Apache/Comm.     | Commercial  | Comm./Community |
+| **Price**                  | **$0**   |       $0          |   ~$999/dev/yr     | $159/dev/mo (Pro)  | ~$799/dev/yr |    See below   |
 
-> **Bold** = features where UI Grid gives you for free what competitors charge for.
+> **Bold** = features where UI Grid gives you for free what competitors charge for or don't offer at all.
 >
-> _Syncfusion Community license is free for companies with <$1M annual revenue. Prices are approximate and subject to change._
+> _Syncfusion Community license is free for companies with <$1M annual revenue, ≤5 developers, and ≤$3M outside capital. Their paid tier requires a custom quote. Kendo UI ranges $799–$1,299/dev/yr depending on support level. Prices are approximate and subject to change._
 
 ---
 
@@ -104,7 +113,7 @@ export class MyGridComponent {
 ### React
 
 ```bash
-npm install @ornery/ui-grid-react @ornery/ui-grid-core
+npm install @ornery/ui-grid-react @ornery/ui-grid-core @ornery/ui-grid-vanilla
 ```
 
 ```tsx
@@ -129,85 +138,15 @@ function MyGrid() {
 }
 ```
 
-### Web Components
+### Web Components (Vanilla)
 
-The grid ships **two separate web component outputs** that share the same default tag name, `<ui-grid-element>`.
-
-- **Angular Elements output**: `@ornery/ui-grid`, rendered through Angular via `@angular/elements`
-- **Vanilla output**: `@ornery/ui-grid-vanilla`, rendered by the framework-free DOM implementation
-
-Pick one output per page. They expose the same common declarative surface, but they are different packages with different runtime requirements.
-
-#### Angular Elements Output (`@ornery/ui-grid`)
-
-Built with `@angular/elements`, this wraps the full Angular component as a custom element. It requires the Angular runtime and is produced by the `build:element` script. Use this when you already have Angular in your stack or want the full Angular rendering pipeline.
-
-```bash
-npm run build:element
-```
-
-Declarative HTML usage is available for the same common setup surface as the vanilla build:
-
-```html
-<script type="module" src="ui-grid-element/main.js"></script>
-
-<ui-grid-element
-  grid-id="element-demo"
-  title="Team Roster"
-  enable-sorting
-  enable-filtering
-  viewport-height="420"
-  column-defs='[
-    { "name": "name" },
-    { "name": "role" },
-    { "name": "salary", "type": "number", "align": "end" }
-  ]'
-  data='[
-    { "name": "Alice", "role": "Engineer", "salary": 120000 },
-    { "name": "Bob", "role": "Designer", "salary": 95000 }
-  ]'>
-</ui-grid-element>
-```
-
-Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
-
-Declarative attributes are the lowest-friction setup path, but they are not the cheapest update path. Changing JSON attributes such as `data` or `column-defs` means reparsing the payload and re-running the custom element's configuration flow. That is fine for initial render, docs examples, SSR/CMS content, and occasional state changes, but it is not ideal for high-frequency feeds.
-
-For callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property:
-
-```html
-<script type="module" src="ui-grid-element/main.js"></script>
-
-<ui-grid-element id="my-grid"></ui-grid-element>
-
-<script type="module">
-  document.querySelector('#my-grid').options = {
-    id: 'element-demo',
-    data: [{ name: 'Alice', role: 'Engineer' }],
-    columnDefs: [{ name: 'name' }, { name: 'role' }],
-  };
-</script>
-```
-
-You can also register the element programmatically:
-
-```typescript
-import { defineUiGridElement } from '@ornery/ui-grid';
-
-await defineUiGridElement(); // registers <ui-grid-element>
-```
-
-For performance-sensitive updates on the Angular-backed custom element, prefer declarative attributes for first render and infrequent changes, then batch any imperative `options` updates so you do not replace large `data` payloads every frame. If you need very high-frequency streaming behavior, use the Angular component directly instead of the custom-element wrapper.
-
-#### Vanilla Output (`@ornery/ui-grid-vanilla`)
-
-A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No Angular dependency. Use this in non-Angular apps, static sites, or anywhere you want a zero-framework grid.
+The grid's rendering engine is a framework-free custom element (`<ui-grid-element>`) built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. Both the Angular and React wrappers are thin bridges around this same element — they mount `<ui-grid-element>`, pass options, and project framework-specific templates into it via a slot-based portal system.
 
 ```bash
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ```
 
-Declarative HTML usage is available out of the box for the same common setup surface:
+Declarative HTML usage:
 
 ```html
 <ui-grid-element
@@ -215,7 +154,6 @@ Declarative HTML usage is available out of the box for the same common setup sur
   title="Team Roster"
   enable-sorting
   enable-filtering
-  viewport-height="420"
   column-defs='[
     { "name": "name" },
     { "name": "role" },
@@ -234,11 +172,9 @@ Declarative HTML usage is available out of the box for the same common setup sur
 </script>
 ```
 
-Supported declarative inputs include boolean flags such as `enable-sorting` and `enable-filtering`, scalar attributes such as `grid-id`, `title`, and `viewport-height`, plus JSON attributes such as `column-defs` and `data`.
+Supported declarative inputs include boolean flags (`enable-sorting`, `enable-filtering`), scalar attributes (`grid-id`, `title`, `row-height`), and JSON attributes (`column-defs`, `data`).
 
-Declarative attributes are best for initial mount and occasional reconfiguration. Updating a large `data` JSON attribute repeatedly is more expensive than imperative row updates because the element must parse the new attribute value, merge options again, and potentially rebuild more of the grid state.
-
-When you need callbacks, function-valued column definitions, or one-shot bulk assignment, use the `options` property or the `mountVanillaUiGrid` helper instead:
+For callbacks, function-valued column definitions, or high-frequency updates, use the `options` property:
 
 ```typescript
 import { mountVanillaUiGrid } from '@ornery/ui-grid-vanilla';
@@ -249,8 +185,6 @@ await mountVanillaUiGrid(document.getElementById('app'), {
   columnDefs: [{ name: 'name' }, { name: 'role' }],
 });
 ```
-
-For live or high-frequency data, use the declarative surface only for the initial mount and then switch to imperative updates. In the vanilla element, `grid.setData(rows)` is the most efficient path for streaming row changes because it updates the pipeline and patches rendered cells in place instead of re-running the full declarative attribute sync path.
 
 ### Native Rust / egui
 
@@ -311,21 +245,30 @@ The LVGL demo currently exercises the native C grid shell with sorting, grouping
 - **Row Grouping** — nested multi-column grouping with collapsible group headers
 - **Tree View** — hierarchical data with expand/collapse per node, arbitrary nesting depth
 - **Expandable Rows** — master/detail pattern with custom templates (Angular `ng-template`, React render prop, or vanilla `<template>` slot)
-- **Cell Editing** — inline spreadsheet-style editing with full keyboard navigation (Tab, Enter, Escape)
+- **Cell Editing** — inline spreadsheet-style editing with full keyboard navigation (Tab, Enter, Escape), edit-on-focus, Enter/Tab commit+move across editable columns
+- **Keyboard Cell Navigation** — Arrow/Tab/Home/End navigation with wrap/clamp modes, focus persistence across re-renders, `keyDownOverrides` for custom key handling, full `gridApi.cellNav` surface
+- **Row Selection** — click/shift/ctrl/drag-paint mouse selection, keyboard (Space, Ctrl+A), row-header checkbox column, select-all header, `isRowSelectable` hook, 13 options, 18 API methods, 3 events
+- **Column Resizing** — drag column borders to resize, programmatic API, persisted via save/restore state
+- **Row Edit** — dirty/saving/error row lifecycle with `rowEditWaitInterval` debounce, `setSavePromise` pattern, auto-retry on error, visual row state indicators
+- **Cell Validation** — declarative per-column `validators` (built-in `required`, `minLength`, `maxLength` + custom), async validator support, invalid cell markers with error messages, `gridApi.validate` surface
 - **Pagination** — client-side or external pagination with configurable page sizes
-- **Infinite Scroll** — bi-directional infinite scrolling with loading state management
+- **Infinite Scroll** — bi-directional infinite scrolling with loading state management, `needLoadMoreData`/`needLoadMoreDataTop` events, full public API
 - **Column Pinning** — freeze columns left or right with CSS `position: sticky`, programmatic API, save/restore state
 - **Column Moving** — drag-and-drop column reordering (Angular CDK, native HTML drag in React and vanilla)
-- **CSV Export** — download visible rows with formula-injection protection
+- **CSV Export** — download visible/selected/all rows with formula-injection protection, full option matrix (separator, header filter, field callbacks, BOM compatibility)
+- **Excel Export** — ExcelBuilder-compatible sheet data with native numeric/boolean types preserved, configurable filename/sheet/header/custom formatters
+- **PDF Export** — pdfMake-ready document definition with orientation/page size/styles/header/footer/custom formatter, auto-download when pdfMake is available
+- **CSV/JSON Import** — file picker or programmatic import, full CSV parser (quoted values, escaped quotes, CRLF), header-to-column mapping, integrates with row-edit for dirty marking
+- **Export/Import Menu** — `buildGridExporterMenuItems()` with per-format and per-scope flags, i18n-driven menu labels
 - **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows
-- **Save/Restore State** — serialize and restore sort, filter, grouping, pagination, and expansion state
+- **Save/Restore State** — serialize and restore sort, filters, grouping, collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position (per-field opt-in flags)
 - **Native Rust and C Grids** — shared Rust core with native Rust/egui and native C/LVGL adapters driven by the same projection and command contract
 - **Auto Resize** — ResizeObserver-driven viewport height recalculation
-- **Custom Cell Templates** — Angular `ng-template`, React `cellRenderer` render prop, vanilla `<template>` slots, or `cellRenderer` function for fully custom cells
+- **Custom Cell Templates** — Angular `ng-template`, React `cellRenderers` map (per-column render functions), vanilla `<template>` slots with slot-based portal projection
 - **Shadow DOM** — encapsulated styles with CSS custom property and `::part()` hooks
-- **Web Component** — ship as `<ui-grid-element>` in two flavors: Angular-backed (`@ornery/ui-grid`) or framework-free vanilla (`@ornery/ui-grid-vanilla`)
+- **Web Component** — ships as `<ui-grid-element>`, a framework-free vanilla custom element (`@ornery/ui-grid-vanilla`); Angular and React wrappers mount this same element and project templates into it
 - **Feature-Flag Builds** — compile-time tree-shaking of unused features
-- **i18n** — override any UI string at runtime or bake in a locale at build time
+- **i18n** — 6 locales built-in (English, Spanish, French, German, Japanese, Simplified Chinese), runtime `gridApi.i18n` for language switching, fallback chain (`options.labels` → current locale → en-US), register additional locales via `gridApi.i18n.add()`
 - **SSR Support** — server-side rendering with platform-safe guards
 
 ---
@@ -391,7 +334,7 @@ See [docs/custom-builds.md](./docs/custom-builds.md) for the full feature flag t
 | [Tree View](./docs/tree-view.md)             | Hierarchical data, options, API                        |
 | [Expandable Rows](./docs/expandable-rows.md) | Master/detail, template context, API                   |
 | [Custom Builds](./docs/custom-builds.md)     | Feature flags, build presets, locale baking            |
-| [Web Component](./docs/web-component.md)     | Angular-backed and vanilla web component outputs       |
+| [Web Component](./docs/web-component.md)     | Vanilla `<ui-grid-element>` custom element usage       |
 | [Internationalization](./docs/i18n.md)       | Runtime overrides, build-time locales                  |
 | [Accessibility](./docs/accessibility.md)     | ARIA roles, keyboard navigation, screen reader support |
 | [Rust / WASM](./docs/rust.md)                | Rust pipeline in Angular, React, and vanilla hosts     |
@@ -409,7 +352,6 @@ npm start          # Dev server at localhost:4200
 npm test           # Run tests (Vitest)
 npm run build      # Production build
 npm run build:library   # Build the library (ng-packagr)
-npm run build:element   # Build the web component
 npm run build:rust:web  # Build the browser-native Rust/WASM artifact
 npm run start:vanilla   # Run the Rust-backed browser demo at 127.0.0.1:4174
 ```
