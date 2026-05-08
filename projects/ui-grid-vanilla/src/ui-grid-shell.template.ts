@@ -37,8 +37,8 @@ export default function gridShellTemplate(ctx: ShellContext) {
             `<div class="grid-body-viewport" style="${ctx.bodyViewportStyle}">` +
               ctx.bodyContent +
             `</div>` +
+            ctx.paginationContent +
           `</div>` +
-          ctx.paginationContent +
         `</section>`;
     },
   };

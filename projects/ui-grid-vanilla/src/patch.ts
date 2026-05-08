@@ -160,10 +160,13 @@ export function renderPatch(
     gridFrame.setAttribute('aria-label', nextTitle);
   }
 
-  // Grid table wrapper styles (sticky-top CSS var).
+  // Grid table wrapper styles (sticky-top CSS var + explicit height).
   const gridTable = root.querySelector<HTMLElement>('.grid-table');
   const stickyTop = el.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-  const nextTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
+  const paginationHeight = el.measuredPaginationHeight();
+  const hostHeight = el.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (el.measuredHeaderStickyHeight || options.headerRowHeight || 50) + el.measuredFilterStickyHeight + paginationHeight);
+  const tableHeight = hostHeight - paginationHeight;
+  const nextTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;height:${tableHeight}px;`;
   if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
     gridTable.setAttribute('style', nextTableStyle);
   }
@@ -214,9 +217,9 @@ export function renderPatch(
     totalVirtualHeight,
   );
 
-  // Pagination: show/hide + patch attributes. The element lives under
-  // .grid-frame as a direct child (sibling of .grid-table), so toggling
-  // its presence doesn't touch the filter input.
+  // Pagination: show/hide + patch attributes. Lives inside .grid-table
+  // (after .grid-body-viewport) so the flex column layout constrains the
+  // body viewport height and keeps pagination visible.
   reconcilePagination(el, root, snapshot, paginationEnabled && showPagination);
 
   // Flush framework-rendered slot deltas — see renderFull().
@@ -297,9 +300,8 @@ export function reconcileBodyRoot(
 
 /**
  * Pagination reconciliation: mount, patch, or remove the `<ui-grid-pagination>`
- * based on whether the snapshot should show it. Sits as a sibling of
- * `.grid-table` inside `.grid-frame` so toggling it doesn't touch the
- * filter input.
+ * based on whether the snapshot should show it. Lives inside `.grid-table`
+ * (after `.grid-body-viewport`) matching the Angular layout.
  */
 export function reconcilePagination(
   el: UiGridStandaloneElement,
@@ -307,9 +309,9 @@ export function reconcilePagination(
   snapshot: GridControllerSnapshot,
   shouldShow: boolean,
 ): void {
-  const frame = root.querySelector<HTMLElement>('.grid-frame');
-  if (!frame) return;
-  const existing = frame.querySelector<HTMLElement>(':scope > ui-grid-pagination');
+  const gridTable = root.querySelector<HTMLElement>('.grid-table');
+  if (!gridTable) return;
+  const existing = gridTable.querySelector<HTMLElement>(':scope > ui-grid-pagination');
 
   if (!shouldShow) {
     if (existing) existing.remove();
@@ -321,12 +323,12 @@ export function reconcilePagination(
     return;
   }
 
-  // Mount a fresh pagination element at the end of the grid-frame.
+  // Mount a fresh pagination element at the end of .grid-table.
   const wrapper = document.createElement('div');
   wrapper.innerHTML = renderPagination(el, snapshot);
   const fresh = wrapper.firstElementChild as HTMLElement | null;
   if (fresh) {
-    frame.appendChild(fresh);
+    gridTable.appendChild(fresh);
   }
 }
 

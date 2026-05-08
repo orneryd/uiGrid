@@ -976,6 +976,7 @@ export class UiGridStandaloneElement extends HTMLElement {
 
   /** @internal */
   private inAutoAdjust = false;
+  private lastAutoHeight = 0;
 
   private autoAdjustHeight(snapshot: GridControllerSnapshot): void {
     if (this.inAutoAdjust) return;
@@ -989,7 +990,8 @@ export class UiGridStandaloneElement extends HTMLElement {
     const paginationHeight = this.measuredPaginationHeight();
     const minHeight = headerHeight + filterHeight + paginationHeight + (minRows * rowHeight);
 
-    if (this.clientHeight < minHeight) {
+    if (this.clientHeight < minHeight || (paginationHeight > 0 && this.lastAutoHeight !== minHeight)) {
+      this.lastAutoHeight = minHeight;
       this.style.height = `${minHeight}px`;
       this.inAutoAdjust = true;
       this.render();
@@ -997,9 +999,10 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
   }
 
-  private measuredPaginationHeight(): number {
+  measuredPaginationHeight(): number {
     const paginationEl = this.shadowRoot?.querySelector<HTMLElement>('ui-grid-pagination');
-    return paginationEl?.offsetHeight ?? 0;
+    if (!paginationEl) return 0;
+    return paginationEl.offsetHeight || 44;
   }
 
   /** @internal */
@@ -1186,8 +1189,11 @@ export class UiGridStandaloneElement extends HTMLElement {
 
     this.gridTitle = escapeHtml(options.title ?? 'Data grid');
     const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-    this.gridTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
-    this.bodyViewportStyle = 'overflow-y:auto;';
+    const paginationHeight = this.measuredPaginationHeight();
+    const hostHeight = this.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (this.measuredHeaderStickyHeight || options.headerRowHeight || 50) + this.measuredFilterStickyHeight + paginationHeight);
+    const tableHeight = hostHeight - paginationHeight;
+    this.gridTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;height:${tableHeight}px;`;
+    this.bodyViewportStyle = '';
     this.templateColumns = templateColumns;
     this.slotRegistry = slotRegistry;
     this.headerContent = header;

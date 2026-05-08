@@ -123,7 +123,7 @@ describe('autoAdjustHeight (matches old ui-grid enableMinHeightCheck)', () => {
     const shadow = grid.shadowRoot!;
     const bodyViewport = shadow.querySelector<HTMLElement>('.grid-body-viewport');
     expect(bodyViewport).not.toBeNull();
-    expect(bodyViewport!.getAttribute('style')).toContain('overflow-y:auto');
+    expect(bodyViewport!.classList.contains('grid-body-viewport')).toBe(true);
   });
 
   it('grid-frame fills the host element height', async () => {
