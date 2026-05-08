@@ -22,6 +22,7 @@ import { DocsExporterComponent } from './topics/exporter.component';
 import { DocsImporterComponent } from './topics/importer.component';
 import { DocsCustomBuildsComponent } from './topics/custom-builds.component';
 import { DocsWebComponentComponent } from './topics/web-component.component';
+import { DocsCustomComponentsComponent } from './topics/custom-components.component';
 import { DocsI18nComponent } from './topics/i18n.component';
 import { DocsAccessibilityComponent } from './topics/accessibility.component';
 import { DocsReactComponent } from './topics/react.component';
@@ -52,6 +53,7 @@ import { DocsRustEguiComponent } from './topics/rust-egui.component';
     DocsImporterComponent,
     DocsCustomBuildsComponent,
     DocsWebComponentComponent,
+    DocsCustomComponentsComponent,
     DocsI18nComponent,
     DocsAccessibilityComponent,
     DocsReactComponent,
@@ -84,6 +86,7 @@ export class DocsLayoutComponent {
     { id: 'importer', label: 'Importer' },
     { id: 'custom-builds', label: 'Custom Builds' },
     { id: 'web-component', label: 'Web Component' },
+    { id: 'custom-components', label: 'Custom Sub-Components' },
     { id: 'i18n', label: 'Internationalization' },
     { id: 'accessibility', label: 'Accessibility' },
     { id: 'rust', label: 'Rust / WASM' },

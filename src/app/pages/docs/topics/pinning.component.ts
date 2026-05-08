@@ -12,8 +12,9 @@ import { createSmallDemoData } from '../../shared/demo-data';
       <h1>Column Pinning</h1>
       <p class="docs-lead">
         Pin columns to the left or right edge. Pinned columns stick during horizontal scroll via
-        <code>position: sticky</code> offsets computed per row — no separate scroll containers or
-        render trees.
+        <code>position: sticky</code> offsets computed per cell. The grid uses three separate scroll
+        containers (header strip, filter strip, body viewport) with JS-synced
+        <code>scrollLeft</code> so sticky positioning resolves correctly in each region.
       </p>
 
       <h2>Live Example</h2>
@@ -47,11 +48,13 @@ import { createSmallDemoData } from '../../shared/demo-data';
       <h2>How the Sticky Layout Works</h2>
       <p>
         Each pinned cell gets <code>position: sticky</code> with a computed <code>left</code> or
-        <code>right</code> offset. The three sub-grids (header, filter, body) share the same column
-        track template so the pinned rails stay perfectly aligned horizontally — no JavaScript is in
-        the scroll path, just CSS. Horizontal scroll is driven by the body viewport; the header and
-        filter strips mirror <code>scrollLeft</code> so pinned offsets resolve identically in every
-        strip.
+        <code>right</code> offset. The three regions (header strip, filter strip, body viewport)
+        are each their own scroll container so <code>sticky</code> resolves correctly even inside
+        the virtualized body. They share the same column track template so the pinned rails stay
+        perfectly aligned. Horizontal scroll is driven by the body viewport;
+        <code>syncHeaderHorizontalScroll</code> mirrors <code>scrollLeft</code> onto the header
+        and filter strips on every scroll frame. A wheel handler on the strips forwards gestures
+        to the body viewport to prevent desync.
       </p>
 
       <h2>Styling</h2>

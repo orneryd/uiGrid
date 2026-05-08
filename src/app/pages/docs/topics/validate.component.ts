@@ -83,7 +83,7 @@ interface ValidateRow extends Record<string, unknown> {
         <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
         <tbody>
           <tr><td><code>--ui-grid-cell-invalid-bg</code></td><td>red-tinted surface</td><td>Background color of invalid cells</td></tr>
-          <tr><td><code>--ui-grid-cell-invalid-marker</code></td><td>#FF0000</td><td>Corner marker color</td></tr>
+          <tr><td><code>--ui-grid-cell-invalid-marker-color</code></td><td>#FF0000</td><td>Corner marker color</td></tr>
           <tr><td><code>--ui-grid-cell-invalid-marker-size</code></td><td>8px</td><td>Corner marker size</td></tr>
         </tbody>
       </table>
