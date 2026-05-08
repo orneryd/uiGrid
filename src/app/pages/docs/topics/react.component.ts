@@ -777,6 +777,7 @@ mountUiGrid(host, { options });`;
       this.primaryReactRoot = mountUiGrid(host, {
         options: this.primaryOptions(),
         className: 'react-docs-demo-grid react-docs-demo-grid-primary',
+        cellRenderers: { status: this.statusCellRenderer },
         onRegisterApi: (api: UiGridApi) => {
           this.primaryGridApi = api;
           this.visibleRowCount.set(api.core.getVisibleRows().length);
@@ -834,29 +835,13 @@ mountUiGrid(host, { options });`;
         className: 'react-docs-demo-grid',
       };
 
+      if (mode !== 'infinite') {
+        props.cellRenderers = { status: this.statusCellRenderer };
+      }
+
       if (mode === 'templated') {
         props.cellRenderers = {
-          status: (context: GridCellTemplateContext) =>
-            styledCell(String(context.value), 'inherit', {
-              display: 'inline-flex',
-              alignItems: 'center',
-              borderRadius: '999px',
-              padding: '0.2rem 0.55rem',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              background:
-                context.value === 'Active'
-                  ? 'color-mix(in srgb, #16a34a 14%, transparent)'
-                  : context.value === 'Pilot'
-                    ? 'color-mix(in srgb, #2563eb 14%, transparent)'
-                    : 'color-mix(in srgb, #d97706 14%, transparent)',
-              color:
-                context.value === 'Active'
-                  ? '#166534'
-                  : context.value === 'Pilot'
-                    ? '#1e40af'
-                    : '#92400e',
-            }),
+          ...props.cellRenderers,
           renewalDate: (context: GridCellTemplateContext) =>
             datePickerCell(String(context.value ?? ''), (newValue) => {
               context.row['renewalDate'] = newValue;
@@ -909,6 +894,28 @@ mountUiGrid(host, { options });`;
       },
     };
   }
+
+  private readonly statusCellRenderer = (context: GridCellTemplateContext) =>
+    styledCell(String(context.value), 'inherit', {
+      display: 'inline-flex',
+      alignItems: 'center',
+      borderRadius: '999px',
+      padding: '0.2rem 0.55rem',
+      fontSize: '0.85rem',
+      fontWeight: '600',
+      background:
+        context.value === 'Active'
+          ? 'color-mix(in srgb, #16a34a 14%, transparent)'
+          : context.value === 'Pilot'
+            ? 'color-mix(in srgb, #2563eb 14%, transparent)'
+            : 'color-mix(in srgb, #d97706 14%, transparent)',
+      color:
+        context.value === 'Active'
+          ? '#166534'
+          : context.value === 'Pilot'
+            ? '#1e40af'
+            : '#92400e',
+    });
 
   private tradingOptions() {
     return {
