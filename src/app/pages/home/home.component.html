@@ -87,6 +87,10 @@
             <span>group columns</span>
           </article>
           <article>
+            <strong>{{ selectedRowCount() }}</strong>
+            <span>selected</span>
+          </article>
+          <article>
             <strong>{{ benchmarkResult()?.averageMs?.toFixed(2) || '—' }}</strong>
             <span>benchmark avg</span>
           </article>

@@ -178,6 +178,7 @@ export class HomeComponent {
   protected readonly surface = signal<AngularSurface>('native');
   protected readonly elementMode = signal<AngularElementMode>('expandable');
   protected readonly visibleRowCount = signal(0);
+  protected readonly selectedRowCount = signal(0);
   protected readonly benchmarkResult = signal<GridBenchmarkResult | null>(null);
   protected readonly savedStateJson = signal('No saved state captured yet.');
   protected readonly totalRows = computed(() => this.primaryData.length);
@@ -308,6 +309,8 @@ restoreState(): void {
     enableColumnResizing: true,
     enableVirtualization: true,
     enableCellEditOnFocus: true,
+    enableRowSelection: true,
+    enableFullRowSelection: true,
     virtualizationThreshold: 25,
     grouping: {
       groupBy: ['status'],
@@ -597,20 +600,29 @@ restoreState(): void {
       const api = this.gridApi();
       if (!api) {
         this.visibleRowCount.set(0);
+        this.selectedRowCount.set(0);
         return;
       }
 
       this.visibleRowCount.set(api.core.getVisibleRows().length);
+      this.selectedRowCount.set(api.selection.getSelectedCount());
       const unsubscribeVisibleRows = api.core.on.rowsVisibleChanged((rows) => {
         this.visibleRowCount.set(rows.length);
       });
       const unsubscribeBenchmark = api.core.on.benchmarkComplete((result) => {
         this.benchmarkResult.set(result as GridBenchmarkResult);
       });
+      const syncSelected = (): void => {
+        this.selectedRowCount.set(api.selection.getSelectedCount());
+      };
+      const unsubscribeSelection = api.selection.on.rowSelectionChanged(syncSelected);
+      const unsubscribeSelectionBatch = api.selection.on.rowSelectionChangedBatch(syncSelected);
 
       onCleanup(() => {
         unsubscribeVisibleRows();
         unsubscribeBenchmark();
+        unsubscribeSelection();
+        unsubscribeSelectionBatch();
       });
     });
   }
@@ -642,7 +654,7 @@ restoreState(): void {
         this.tradingElementDataSignal.set(
           JSON.stringify(declarativeTradingDisplayRows(this.tradingElementRows)),
         );
-      }, 150);
+      }, 10);
     }
   }
 

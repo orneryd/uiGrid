@@ -5,6 +5,7 @@ import {
   GridExpandableTemplateContext,
   GridOptions,
   GridRecord,
+  UiGridApi,
   UiGridComponent
 } from '@ornery/ui-grid';
 import {
@@ -18,7 +19,21 @@ import {
   tradingColumnDefs,
 } from './pages/shared/trading-data';
 
-type HarnessMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'trading';
+type HarnessMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'pagination' | 'infinite' | 'trading';
+
+function createInfiniteRows(start: number, count: number): GridRecord[] {
+  return Array.from({ length: count }, (_unused, i) => {
+    const idx = start + i;
+    return {
+      id: `infinite-${idx}`,
+      index: idx,
+      event: `Event #${idx + 1}`,
+      severity: ['info', 'warn', 'error', 'debug'][idx % 4],
+      source: ['auth', 'api', 'worker', 'scheduler', 'inventory'][idx % 5],
+      timestamp: new Date(2026, 0, 1, idx % 24, (idx * 3) % 60).toISOString(),
+    };
+  });
+}
 
 function createHarnessRows(count = 18): GridRecord[] {
   return Array.from({ length: count }, (_value, index) => ({
@@ -117,7 +132,7 @@ function createTreeRows(): GridRecord[] {
         <span [style.color]="$any(row)['changeColor']">{{ fmtTradingChangePct(value) }}</span>
       </ng-template>
 
-      <app-ui-grid [options]="options()" />
+      <app-ui-grid [options]="options()" (apiReady)="onApiReady($event)" />
     </section>
   `,
   styles: `
@@ -256,6 +271,11 @@ export class GridBrowserHarnessComponent {
   private readonly tradingRows = signal<TradingRow[]>(createTradingRows());
   private readonly tradingRng = new TradingLcg(0xabcdef12);
   private tradingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly INFINITE_PAGE_SIZE = 60;
+  private readonly INFINITE_MAX_ROWS = 2000;
+  private infiniteRows = signal<GridRecord[]>(createInfiniteRows(0, 60));
+  private harnessApi: UiGridApi | null = null;
+  private disposeInfiniteScroll: (() => void) | null = null;
 
   protected readonly fmtTradingPrice = fmtPrice;
   protected readonly fmtTradingChange = fmtChange;
@@ -267,6 +287,8 @@ export class GridBrowserHarnessComponent {
     { label: 'Tree', value: 'tree' },
     { label: 'Templated', value: 'templated' },
     { label: 'Pinning', value: 'pinning' },
+    { label: 'Pagination', value: 'pagination' },
+    { label: 'Infinite', value: 'infinite' },
     { label: 'Trading', value: 'trading' },
   ] as const;
 
@@ -276,6 +298,8 @@ export class GridBrowserHarnessComponent {
         clearInterval(this.tradingIntervalId);
         this.tradingIntervalId = null;
       }
+      this.disposeInfiniteScroll?.();
+      this.disposeInfiniteScroll = null;
     });
   }
 
@@ -291,6 +315,10 @@ export class GridBrowserHarnessComponent {
         return this.templatedOptions();
       case 'pinning':
         return this.pinningOptions();
+      case 'pagination':
+        return this.paginationOptions();
+      case 'infinite':
+        return this.infiniteOptions();
       case 'trading':
         return this.tradingOptions();
       default:
@@ -304,12 +332,41 @@ export class GridBrowserHarnessComponent {
       clearInterval(this.tradingIntervalId);
       this.tradingIntervalId = null;
     }
+    if (mode !== 'infinite') {
+      this.disposeInfiniteScroll?.();
+      this.disposeInfiniteScroll = null;
+    }
+    if (mode === 'infinite') {
+      this.infiniteRows.set(createInfiniteRows(0, this.INFINITE_PAGE_SIZE));
+    }
     this.mode.set(mode);
     if (mode === 'trading' && this.tradingIntervalId === null) {
       this.tradingIntervalId = setInterval(() => {
         this.tradingRows.set(tickTradingRows(this.tradingRows(), this.tradingRng, 6));
-      }, 150);
+      }, 10);
     }
+  }
+
+  protected onApiReady(api: UiGridApi): void {
+    this.harnessApi = api;
+    if (this.mode() === 'infinite') {
+      this.setupInfiniteScroll(api);
+    }
+  }
+
+  private setupInfiniteScroll(api: UiGridApi): void {
+    this.disposeInfiniteScroll?.();
+    this.disposeInfiniteScroll = api.infiniteScroll.on.needLoadMoreData(async () => {
+      const current = this.infiniteRows();
+      if (current.length >= this.INFINITE_MAX_ROWS) {
+        await api.infiniteScroll.dataLoaded(false, false);
+        return;
+      }
+      const newRows = createInfiniteRows(current.length, this.INFINITE_PAGE_SIZE);
+      const combined = [...current, ...newRows];
+      this.infiniteRows.set(combined);
+      await api.infiniteScroll.dataLoaded(false, combined.length < this.INFINITE_MAX_ROWS);
+    });
   }
 
   private baseOptions(data: readonly GridRecord[]): GridOptions {
@@ -436,6 +493,65 @@ export class GridBrowserHarnessComponent {
   protected onDateChange(event: Event, row: GridRecord): void {
     const input = event.target as HTMLInputElement;
     row['renewalDate'] = input.value;
+  }
+
+  private paginationOptions(): GridOptions {
+    return {
+      id: 'browser-harness-pagination',
+      title: 'Browser Harness: Pagination',
+      emptyMessage: 'No rows match the current filters.',
+      rowIdentity: (row) => String(row['id']),
+      data: createHarnessRows(200),
+      rowHeight: 46,
+      enableSorting: true,
+      enableFiltering: true,
+      enableColumnResizing: true,
+      enableVirtualization: false,
+      enablePagination: true,
+      enablePaginationControls: true,
+      paginationPageSize: 25,
+      paginationPageSizes: [10, 25, 50, 100],
+      columnDefs: [
+        { name: 'name', displayName: 'Customer', width: 'minmax(13rem, 1.1fr)' },
+        { name: 'status', width: 'minmax(9rem, 0.7fr)' },
+        {
+          name: 'revenue',
+          align: 'end',
+          width: 'minmax(9rem, 0.7fr)',
+          filter: { condition: FILTER_CONDITIONS.greaterThan },
+          formatter: (value) => `$${value}`
+        },
+        { name: 'renewalDate', displayName: 'Renewal', type: 'date', width: 'minmax(11rem, 0.9fr)' },
+        { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' }
+      ]
+    };
+  }
+
+  private infiniteOptions(): GridOptions {
+    return {
+      id: 'browser-harness-infinite',
+      title: 'Browser Harness: Infinite Scroll',
+      emptyMessage: 'No rows loaded yet.',
+      rowIdentity: (row) => String(row['id']),
+      data: this.infiniteRows(),
+      rowHeight: 40,
+      enableSorting: false,
+      enableFiltering: false,
+      enableColumnResizing: true,
+      enableVirtualization: true,
+      virtualizationThreshold: 50,
+      enableInfiniteScroll: true,
+      infiniteScrollUp: false,
+      infiniteScrollDown: true,
+      infiniteScrollRowsFromEnd: 20,
+      columnDefs: [
+        { name: 'index', displayName: '#', width: '80px' },
+        { name: 'event', displayName: 'Event', width: 'minmax(10rem, 0.9fr)' },
+        { name: 'severity', displayName: 'Severity', width: '120px' },
+        { name: 'source', displayName: 'Source', width: '140px' },
+        { name: 'timestamp', displayName: 'Timestamp', width: 'minmax(12rem, 1fr)' },
+      ]
+    };
   }
 
   private tradingOptions(): GridOptions {

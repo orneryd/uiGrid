@@ -28,6 +28,7 @@ import type {
   GridCellTemplateContext,
   GridColumnDef,
   GridOptions,
+  GridRecord,
   GridTemplateRefLike,
   UiGridApi,
 } from '@ornery/ui-grid-core';
@@ -62,8 +63,9 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private gridElement: UiGridStandaloneElement | null = null;
   private elementReady = false;
   private listenerAttached = false;
-  private slotViews = new Map<string, EmbeddedViewRef<GridCellTemplateContext>>();
+  private slotViews = new Map<string, { view: EmbeddedViewRef<GridCellTemplateContext>; columnName: string; rowId: string }>();
   private templateColumns = new Map<string, GridTemplateRefLike<GridCellTemplateContext>>();
+  private currentSlotColumnNames: string[] = [];
 
   constructor() {
     effect(() => {
@@ -106,13 +108,13 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     this.zone.runOutsideAngular(() => {
       // Extract Angular TemplateRef columns
       const cellSlotColumns: string[] = [];
-      this.templateColumns.clear();
+      const newTemplateColumns = new Map<string, GridTemplateRefLike<GridCellTemplateContext>>();
 
       if (opts.columnDefs) {
         for (const col of opts.columnDefs) {
           if (col.cellTemplate?.createEmbeddedView) {
             cellSlotColumns.push(col.name);
-            this.templateColumns.set(col.name, col.cellTemplate);
+            newTemplateColumns.set(col.name, col.cellTemplate);
           }
         }
       }
@@ -123,8 +125,18 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         this.listenerAttached = true;
       }
 
-      // Destroy existing slot views — the new render pass will recreate them
-      this.destroyAllSlotViews();
+      // Determine if the template column set changed structurally
+      const columnsChanged =
+        cellSlotColumns.length !== this.currentSlotColumnNames.length ||
+        cellSlotColumns.some((name, i) => name !== this.currentSlotColumnNames[i]);
+
+      this.templateColumns = newTemplateColumns;
+
+      if (columnsChanged) {
+        // Structural change — destroy all views and reconfigure slots
+        this.destroyAllSlotViews();
+        this.currentSlotColumnNames = cellSlotColumns;
+      }
 
       // Strip cellTemplate from columnDefs before passing to the element
       const cleanedColumnDefs: GridColumnDef[] | undefined = opts.columnDefs?.map((col) => {
@@ -144,22 +156,60 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         },
       };
 
-      // Set options first so the element has data, then configure framework
-      // slots — the re-render triggered by setFrameworkRenderedSlots will
-      // emit all template cells as `added` in the cellSlotsChanged event.
       el.options = wrappedOptions;
-      el.setFrameworkRenderedSlots({ cells: cellSlotColumns });
+
+      if (columnsChanged) {
+        // Triggers re-render → flush → cellSlotsChanged with all cells as added
+        el.setFrameworkRenderedSlots({ cells: cellSlotColumns });
+      } else if (this.slotViews.size > 0) {
+        // Data-only update — refresh existing view contexts in place
+        this.updateSlotViewContexts(opts.data ?? []);
+      }
     });
+  }
+
+  private updateSlotViewContexts(data: readonly GridRecord[]): void {
+    const dataById = new Map<string, GridRecord>();
+    for (const row of data) {
+      const id = String(row['id'] ?? '');
+      if (id) dataById.set(id, row);
+    }
+
+    for (const [, entry] of this.slotViews) {
+      const row = dataById.get(entry.rowId);
+      if (!row) continue;
+
+      const col = this.findColumnDef(entry.columnName);
+      const value = col?.field ? this.getNestedValue(row, col.field) : row[entry.columnName];
+
+      entry.view.context.$implicit = value;
+      entry.view.context.value = value;
+      entry.view.context.row = row;
+      entry.view.detectChanges();
+    }
+  }
+
+  private findColumnDef(name: string): GridColumnDef | undefined {
+    return this.options()?.columnDefs?.find((c) => c.name === name);
+  }
+
+  private getNestedValue(obj: GridRecord, field: string): unknown {
+    const parts = field.split('.');
+    let current: unknown = obj;
+    for (const part of parts) {
+      if (current == null || typeof current !== 'object') return undefined;
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
   }
 
   private destroyAllSlotViews(): void {
     const el = this.gridElement;
-    for (const view of this.slotViews.values()) {
-      this.appRef.detachView(view);
-      view.destroy();
+    for (const entry of this.slotViews.values()) {
+      this.appRef.detachView(entry.view);
+      entry.view.destroy();
     }
     this.slotViews.clear();
-    // Remove projected light-DOM slot wrappers
     if (el) {
       el.querySelectorAll(':scope > [slot]').forEach((node) => node.remove());
     }
@@ -170,10 +220,10 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     const el = this.gridElement!;
 
     for (const slot of detail.removed) {
-      const view = this.slotViews.get(slot.slotName);
-      if (view) {
-        this.appRef.detachView(view);
-        view.destroy();
+      const entry = this.slotViews.get(slot.slotName);
+      if (entry) {
+        this.appRef.detachView(entry.view);
+        entry.view.destroy();
         this.slotViews.delete(slot.slotName);
       }
       el.querySelector(`:scope > [slot="${slot.slotName}"]`)?.remove();
@@ -194,12 +244,12 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       }
       el.appendChild(wrapper);
 
-      const oldView = this.slotViews.get(slot.slotName);
-      if (oldView) {
-        this.appRef.detachView(oldView);
-        oldView.destroy();
+      const oldEntry = this.slotViews.get(slot.slotName);
+      if (oldEntry) {
+        this.appRef.detachView(oldEntry.view);
+        oldEntry.view.destroy();
       }
-      this.slotViews.set(slot.slotName, viewRef);
+      this.slotViews.set(slot.slotName, { view: viewRef, columnName: slot.columnName, rowId: slot.rowId });
     }
   };
 }
