@@ -1190,8 +1190,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.gridTitle = escapeHtml(options.title ?? 'Data grid');
     const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
     const paginationHeight = this.measuredPaginationHeight();
-    const hostHeight = this.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (this.measuredHeaderStickyHeight || options.headerRowHeight || 50) + this.measuredFilterStickyHeight + paginationHeight);
-    const tableHeight = hostHeight - paginationHeight;
+    const tableHeight = this.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (this.measuredHeaderStickyHeight || options.headerRowHeight || 50) + this.measuredFilterStickyHeight + paginationHeight);
     this.gridTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;height:${tableHeight}px;`;
     this.bodyViewportStyle = '';
     this.templateColumns = templateColumns;

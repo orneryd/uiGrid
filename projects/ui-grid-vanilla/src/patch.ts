@@ -163,9 +163,7 @@ export function renderPatch(
   // Grid table wrapper styles (sticky-top CSS var + explicit height).
   const gridTable = root.querySelector<HTMLElement>('.grid-table');
   const stickyTop = el.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-  const paginationHeight = el.measuredPaginationHeight();
-  const hostHeight = el.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (el.measuredHeaderStickyHeight || options.headerRowHeight || 50) + el.measuredFilterStickyHeight + paginationHeight);
-  const tableHeight = hostHeight - paginationHeight;
+  const tableHeight = el.clientHeight || ((options.minRowsToShow ?? 10) * snapshot.rowSize + (el.measuredHeaderStickyHeight || options.headerRowHeight || 50) + el.measuredFilterStickyHeight + el.measuredPaginationHeight());
   const nextTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;height:${tableHeight}px;`;
   if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
     gridTable.setAttribute('style', nextTableStyle);
