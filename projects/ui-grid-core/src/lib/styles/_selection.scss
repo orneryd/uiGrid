@@ -165,3 +165,11 @@
   outline: 2px solid var(--_ui-grid-accent, var(--ui-grid-accent, #2563eb));
   outline-offset: -2px;
 }
+
+// Disable text highlighting on the body viewport when row selection is
+// enabled. Click-drag is used for multi-row selection, so browser text
+// selection would conflict and produce a jarring UX.
+.grid-body-viewport:has([data-column="selectionRowHeaderCol"]) {
+  user-select: none;
+  -webkit-user-select: none;
+}
