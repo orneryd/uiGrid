@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0 — 2026-05-08
+
+### Added
+
+- **Major web-suite feature expansion across Angular, React, and Web Components** — the shared grid runtime now ships row selection, keyboard cell navigation, infinite scroll, row edit workflows, cell validation, CSV/JSON import, CSV/Excel/PDF export, pagination, richer i18n coverage, and custom component/template integration across the web hosts.
+- **Full declarative and imperative Web Component surface** — `@ornery/ui-grid-vanilla` now exposes a much broader framework-free custom-element API, including stronger attribute/property bridging, standalone mounting helpers, better template projection, and documentation/examples that cover both declarative markup-first usage and programmatic control.
+- **Expanded docs and live examples for the new grid capabilities** — the docs app now includes dedicated user-facing guides and demos for exporting, importing, selection, save state, validation, pagination, infinite scroll, keyboard navigation, pinning, column moving, and custom components.
+
+### Changed
+
+- **1.0.0 unifies the web packages around one shared runtime** — Angular and React now act as thin framework bridges over the same vanilla custom-element engine, giving all three web surfaces closer feature parity and a more consistent behavior model.
+- **Angular package setup is lighter for consumers** — `@ornery/ui-grid` now wraps the shared vanilla runtime directly, reducing Angular-specific package surface and aligning the Angular package more closely with the cross-framework architecture.
+- **React package positioning moved to the shared web-component runtime** — `@ornery/ui-grid-react` now depends on the vanilla package as part of its public integration model, so React consumers inherit the same underlying grid engine and slot/template behavior as the other web hosts.
+
 ## v0.1.10 — 2026-05-05
 
 ### Added
@@ -94,7 +108,7 @@
 
 ### Added
 
-- **`/rust` top-level page** — new hero page at `/rust` with a switchable tab layout: *Rust / WASM* (browser delivery) and *egui Native* (desktop/native delivery). Replaces the previous docs-embedded Rust landing and presents both delivery paths as first-class options.
+- **`/rust` top-level page** — new hero page at `/rust` with a switchable tab layout: _Rust / WASM_ (browser delivery) and _egui Native_ (desktop/native delivery). Replaces the previous docs-embedded Rust landing and presents both delivery paths as first-class options.
 - **egui pinned-grid screenshot** — `docs/screenshots/pinning-100k.png` added to the egui tab of the Rust page, showing fixed headers and pinned-column layout at 100 k rows.
 
 ## v0.1.7 — 2026-05-01
