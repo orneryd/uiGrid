@@ -1,10 +1,10 @@
 import path from 'path';
 import { defineConfig } from 'vite';
-import webComponents from '@ornery/web-components/vite';
+import { scssInlinePlugin } from './scss-plugin';
 
 export default defineConfig({
   root: path.resolve(__dirname, 'demo'),
-  plugins: [webComponents()],
+  plugins: [scssInlinePlugin()],
   resolve: {
     alias: {
       '@ornery/ui-grid-core': path.resolve(__dirname, '../ui-grid-core/src/index.ts'),

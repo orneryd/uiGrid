@@ -355,7 +355,7 @@ export class UiGridComponent {
           this.lastGridHeight = nextHeight;
           this.lastGridWidth = nextWidth;
 
-          if (!this.options().viewportHeight && nextHeight > 0) {
+          if (nextHeight > 0) {
             this.autoViewportHeight.set(nextHeight);
           }
 
@@ -1882,7 +1882,7 @@ export class UiGridComponent {
   }
 
   private viewportHeightValue(): number {
-    return this.options().viewportHeight ?? this.autoViewportHeight() ?? 560;
+    return this.autoViewportHeight() ?? (this.options().minRowsToShow ?? 10) * this.rowSize();
   }
 
   private displayItemHeight(item: DisplayItem): number {

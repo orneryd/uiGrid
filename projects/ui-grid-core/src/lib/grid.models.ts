@@ -319,7 +319,8 @@ export interface GridOptions {
   infiniteScrollUp?: boolean;
   infiniteScrollDown?: boolean;
   virtualizationThreshold?: number;
-  viewportHeight?: number;
+  minRowsToShow?: number;
+  enableMinHeightCheck?: boolean;
   grouping?: GridGroupingOptions;
   /** Enable column pinning (freeze left/right) */
   enablePinning?: boolean;

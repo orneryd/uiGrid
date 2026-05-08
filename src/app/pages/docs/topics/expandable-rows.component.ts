@@ -92,7 +92,6 @@ export class DocsExpandableRowsComponent {
     return {
       id: 'expandable-demo',
       data: createSmallDemoData(8),
-      viewportHeight: 440,
       rowHeight: 46,
       enableSorting: true,
       enableFiltering: false,

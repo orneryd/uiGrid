@@ -14,7 +14,6 @@ export class ThemesComponent {
   protected readonly previewOptions: GridOptions = {
     id: 'theme-preview',
     data: createSmallDemoData(8),
-    viewportHeight: 380,
     rowHeight: 46,
     enableSorting: true,
     enableFiltering: true,

@@ -128,8 +128,6 @@ export function renderPatch(
     paginationEnabled: boolean;
     showPagination: boolean;
     virtualizationEnabled: boolean;
-    viewportHeight: number;
-    hasViewportScroll: boolean;
     itemsToRender: readonly DisplayItem[];
     startIndex: number;
     virtualOffset: number;
@@ -149,8 +147,6 @@ export function renderPatch(
     paginationEnabled,
     showPagination,
     virtualizationEnabled,
-    viewportHeight,
-    hasViewportScroll,
     itemsToRender,
     startIndex,
     virtualOffset,
@@ -164,23 +160,12 @@ export function renderPatch(
     gridFrame.setAttribute('aria-label', nextTitle);
   }
 
-  // Grid table wrapper styles (viewport height + sticky-top CSS var).
+  // Grid table wrapper styles (sticky-top CSS var).
   const gridTable = root.querySelector<HTMLElement>('.grid-table');
   const stickyTop = el.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-  const nextTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
+  const nextTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
   if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
     gridTable.setAttribute('style', nextTableStyle);
-  }
-
-  // Body viewport scroll style.
-  const bodyViewport = root.querySelector<HTMLElement>('.grid-body-viewport');
-  const nextViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
-  if (bodyViewport && (bodyViewport.getAttribute('style') ?? '') !== nextViewportStyle) {
-    if (nextViewportStyle) {
-      bodyViewport.setAttribute('style', nextViewportStyle);
-    } else {
-      bodyViewport.removeAttribute('style');
-    }
   }
 
   // Header grid: track sizes + cells.

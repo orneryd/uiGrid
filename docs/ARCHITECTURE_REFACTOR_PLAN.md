@@ -103,7 +103,6 @@ The wrappers mirror this surface one-to-one:
   [enable-filtering]="true"
   [enable-pinning]="true"
   [row-height]="48"
-  [viewport-height]="400"
   (rowSelectionChanged)="onRowSelected($event)"
   (saveRow)="onSaveRow($event)">
 
@@ -144,7 +143,6 @@ Matching idioms:
   enableFiltering
   enablePinning
   rowHeight={48}
-  viewportHeight={400}
   onRowSelectionChanged={handleRowSelected}
   onSaveRow={handleSaveRow}
   cellRenderers={{
@@ -448,7 +446,6 @@ refactor ships.
 | ------------------------------------- | ------------------------------------ | --------------------------------- |
 | `grid-id`                             | `[grid-id]` / `[gridId]`             | `gridId`                          |
 | `row-height`                          | `[row-height]` / `[rowHeight]`       | `rowHeight`                       |
-| `viewport-height`                     | `[viewport-height]`                  | `viewportHeight`                  |
 | `data` (JSON)                         | `[data]` (array)                     | `data` (array)                    |
 | `column-defs` (JSON)                  | `[column-defs]` / `[columnDefs]`     | `columnDefs`                      |
 | `grouping` (JSON)                     | `[grouping]`                         | `grouping`                        |

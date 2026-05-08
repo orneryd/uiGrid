@@ -82,7 +82,6 @@ export class DocsPinningComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-pinning-demo',
     data: createSmallDemoData(8),
-    viewportHeight: 320,
     rowHeight: 44,
     enableSorting: true,
     enableFiltering: true,

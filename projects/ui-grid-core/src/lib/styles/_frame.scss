@@ -4,6 +4,8 @@
 .grid-frame {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
   border-radius: var(--ui-grid-radius);
   background: var(--ui-grid-surface);
   border: 1px solid var(--ui-grid-border-color);

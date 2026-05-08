@@ -19,9 +19,9 @@ interface ValidateRow extends Record<string, unknown> {
       <p class="docs-lead">
         Built-in <code>required</code> / <code>minLength</code> / <code>maxLength</code> validators
         plus a registry for your own. Sync and async validators both resolve to the same
-        <code>$$invalid&lt;col&gt;</code> / <code>$$errors&lt;col&gt;</code> markers on the row entity
-        so existing cell templates keep working. Invalid cells paint a red corner marker and a
-        <code>title</code> tooltip with the joined error messages.
+        <code>$$invalid&lt;col&gt;</code> / <code>$$errors&lt;col&gt;</code> markers on the row
+        entity so existing cell templates keep working. Invalid cells paint a red corner marker and
+        a <code>title</code> tooltip with the joined error messages.
       </p>
 
       <h2>Declaring Validators</h2>
@@ -42,49 +42,117 @@ interface ValidateRow extends Record<string, unknown> {
 
       <h2>Built-in Validators</h2>
       <table class="docs-table">
-        <thead><tr><th>Name</th><th>Argument</th><th>Rejects</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Argument</th>
+            <th>Rejects</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td><code>required</code></td><td><code>true</code></td><td><code>null</code>, <code>undefined</code>, empty string</td></tr>
-          <tr><td><code>minLength</code></td><td><code>number</code></td><td>Strings shorter than the threshold</td></tr>
-          <tr><td><code>maxLength</code></td><td><code>number</code></td><td>Strings longer than the threshold</td></tr>
+          <tr>
+            <td><code>required</code></td>
+            <td><code>true</code></td>
+            <td><code>null</code>, <code>undefined</code>, empty string</td>
+          </tr>
+          <tr>
+            <td><code>minLength</code></td>
+            <td><code>number</code></td>
+            <td>Strings shorter than the threshold</td>
+          </tr>
+          <tr>
+            <td><code>maxLength</code></td>
+            <td><code>number</code></td>
+            <td>Strings longer than the threshold</td>
+          </tr>
         </tbody>
       </table>
 
       <h2>Custom Validators</h2>
       <p>
         Register a factory + message builder via <code>gridApi.validate.setValidator</code>. The
-        factory receives the argument declared in the column def and returns a function that validates
-        <code>(oldValue, newValue, rowEntity, colDef)</code>. Return a <code>Promise&lt;boolean&gt;</code>
+        factory receives the argument declared in the column def and returns a function that
+        validates <code>(oldValue, newValue, rowEntity, colDef)</code>. Return a
+        <code>Promise&lt;boolean&gt;</code>
         for async validation.
       </p>
       <app-code-block lang="typescript" [code]="customSnippet" />
 
       <h2>Public API</h2>
       <table class="docs-table">
-        <thead><tr><th>Method / Event</th><th>Description</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Method / Event</th>
+            <th>Description</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td><code>validate.isInvalid(rowEntity, colDef)</code></td><td>Is the cell currently flagged invalid?</td></tr>
-          <tr><td><code>validate.getErrorMessages(rowEntity, colDef)</code></td><td>Ordered list of localized error messages for the cell</td></tr>
-          <tr><td><code>validate.getFormattedErrors(rowEntity, colDef)</code></td><td>HTML-formatted error block suitable for a tooltip / popover</td></tr>
-          <tr><td><code>validate.getTitleFormattedErrors(rowEntity, colDef)</code></td><td>Plaintext error block for the <code>title</code> attribute</td></tr>
-          <tr><td><code>validate.runValidators(rowEntity, colDef, newValue, oldValue)</code></td><td>Run the column's validators and await async resolutions</td></tr>
-          <tr><td><code>validate.setValidator(name, factory, message)</code></td><td>Register a custom validator</td></tr>
-          <tr><td><code>validate.getInvalidRows()</code></td><td>Returns every row that currently has at least one invalid cell</td></tr>
-          <tr><td><code>validate.on.validationFailed(fn)</code></td><td>Fires on every rejected edit with <code>(rowEntity, colDef, newValue, oldValue)</code></td></tr>
+          <tr>
+            <td><code>validate.isInvalid(rowEntity, colDef)</code></td>
+            <td>Is the cell currently flagged invalid?</td>
+          </tr>
+          <tr>
+            <td><code>validate.getErrorMessages(rowEntity, colDef)</code></td>
+            <td>Ordered list of localized error messages for the cell</td>
+          </tr>
+          <tr>
+            <td><code>validate.getFormattedErrors(rowEntity, colDef)</code></td>
+            <td>HTML-formatted error block suitable for a tooltip / popover</td>
+          </tr>
+          <tr>
+            <td><code>validate.getTitleFormattedErrors(rowEntity, colDef)</code></td>
+            <td>Plaintext error block for the <code>title</code> attribute</td>
+          </tr>
+          <tr>
+            <td><code>validate.runValidators(rowEntity, colDef, newValue, oldValue)</code></td>
+            <td>Run the column's validators and await async resolutions</td>
+          </tr>
+          <tr>
+            <td><code>validate.setValidator(name, factory, message)</code></td>
+            <td>Register a custom validator</td>
+          </tr>
+          <tr>
+            <td><code>validate.getInvalidRows()</code></td>
+            <td>Returns every row that currently has at least one invalid cell</td>
+          </tr>
+          <tr>
+            <td><code>validate.on.validationFailed(fn)</code></td>
+            <td>
+              Fires on every rejected edit with <code>(rowEntity, colDef, newValue, oldValue)</code>
+            </td>
+          </tr>
         </tbody>
       </table>
 
       <h2>Styling Hooks</h2>
       <p>
-        Invalid cells get the <code>.ui-grid-cell-invalid</code> class. Override the red corner marker
-        and background via the usual CSS custom properties:
+        Invalid cells get the <code>.ui-grid-cell-invalid</code> class. Override the red corner
+        marker and background via the usual CSS custom properties:
       </p>
       <table class="docs-table">
-        <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Default</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td><code>--ui-grid-cell-invalid-bg</code></td><td>red-tinted surface</td><td>Background color of invalid cells</td></tr>
-          <tr><td><code>--ui-grid-cell-invalid-marker-color</code></td><td>#FF0000</td><td>Corner marker color</td></tr>
-          <tr><td><code>--ui-grid-cell-invalid-marker-size</code></td><td>8px</td><td>Corner marker size</td></tr>
+          <tr>
+            <td><code>--ui-grid-cell-invalid-bg</code></td>
+            <td>red-tinted surface</td>
+            <td>Background color of invalid cells</td>
+          </tr>
+          <tr>
+            <td><code>--ui-grid-cell-invalid-marker-color</code></td>
+            <td>#FF0000</td>
+            <td>Corner marker color</td>
+          </tr>
+          <tr>
+            <td><code>--ui-grid-cell-invalid-marker-size</code></td>
+            <td>8px</td>
+            <td>Corner marker size</td>
+          </tr>
         </tbody>
       </table>
 
@@ -97,12 +165,13 @@ interface ValidateRow extends Record<string, unknown> {
       </p>
     </section>
   `,
-  styles: `@use '../docs-topic';`,
+  styles: `
+    @use '../docs-topic';
+  `,
 })
 export class DocsValidateComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-validate-demo',
-    viewportHeight: 280,
     rowHeight: 44,
     enableCellEdit: true,
     rowIdentity: (row) => String((row as ValidateRow).id),

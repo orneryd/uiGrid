@@ -1183,9 +1183,9 @@ export function useGridState(
 
   // --- Auto resize effect ---
 
-  // Auto-resize is on by default so the grid fills its container. Setting an
-  // explicit `viewportHeight` opts back into fixed sizing because the observer
-  // only writes `autoViewportHeight` when `viewportHeight` is unset.
+  // Auto-resize is on by default so the grid fills its container. The
+  // ResizeObserver measures the host element and writes `autoViewportHeight`
+  // so the grid always fills available space (matching the old ui-grid).
   useEffect(() => {
     if (!FEATURE_AUTO_RESIZE) return;
 
@@ -1206,14 +1206,14 @@ export function useGridState(
       lastGridHeightRef.current = nextHeight;
       lastGridWidthRef.current = nextWidth;
 
-      if (!options.viewportHeight && nextHeight > 0) {
+      if (nextHeight > 0) {
         setAutoViewportHeight(nextHeight);
       }
     });
 
     if (!observer) return;
     return () => observer.disconnect();
-  }, [options.enableAutoResize, options.viewportHeight, gridApi]);
+  }, [options.enableAutoResize, gridApi]);
 
   // --- Computed values ---
 
@@ -1225,7 +1225,7 @@ export function useGridState(
   const paginationCurrentPage = getCurrentPageValueFn();
   const paginationTotalPages = getTotalPagesValueFn();
   const paginationSelectedPageSize = effectivePageSizeFn(pipeline.totalItems);
-  const viewportHeightPx = computeViewportHeightPx(options.viewportHeight, autoViewportHeight);
+  const viewportHeightPx = computeViewportHeightPx(autoViewportHeight, options.minRowsToShow, options.rowHeight);
 
   // --- Display helper functions ---
 
@@ -1770,8 +1770,9 @@ export function useGridState(
       startIndex,
       visibleRows: pipelineRef.current.visibleRows.length,
       viewportRows: computeViewportRows(
-        optionsRef.current.viewportHeight,
+        autoViewportHeight,
         optionsRef.current.rowHeight,
+        optionsRef.current.minRowsToShow,
       ),
       threshold: optionsRef.current.infiniteScrollRowsFromEnd ?? 20,
       setState: (state) => setInfiniteScrollState(state),

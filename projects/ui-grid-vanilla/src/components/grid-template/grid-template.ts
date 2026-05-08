@@ -1,15 +1,82 @@
-import { template } from '@ornery/web-components';
-import { bindEvents, setupConnect } from '@ornery/web-components/templates';
+const thisRegex = /^(this|props)\./i;
+const nestedES6 = /\$\{.*(\$\{(.+?)\}).*\}/g;
+const es6Regex = /\$\{(.+?)\}/g;
+
+function getFromObj(path: string, obj: Record<string, unknown> = {}): unknown {
+  path = path?.trim();
+  if (path != null) {
+    if (obj[path] != null) return obj[path];
+    if (/^[\w-]+(\.[\w-]+)+$/.test(path)) {
+      return path.split('.').reduce<unknown>((res, key) => {
+        return (res as Record<string, unknown>)?.[key] ?? path;
+      }, obj);
+    }
+  }
+  return path;
+}
+
+function interpolate(expr: string, context: Record<string, unknown>): string {
+  if (typeof expr !== 'string') return expr;
+  es6Regex.lastIndex = 0;
+  nestedES6.lastIndex = 0;
+  let result = expr.replace(thisRegex, '');
+  let matchArr: RegExpExecArray | null;
+  while ((matchArr = nestedES6.exec(result))) {
+    const [, outerMatch, key] = matchArr;
+    const replacement = String(getFromObj(key.replace(thisRegex, ''), context));
+    result = interpolate(result.replace(outerMatch, replacement).trim(), context);
+  }
+  return result.replace(es6Regex, (_match, $1: string) =>
+    String(getFromObj($1.replace(thisRegex, ''), context))
+  );
+}
+
+function bindEvents(root: HTMLElement, context: Record<string, unknown>): HTMLElement {
+  const domElements = Array.from(root.querySelectorAll('*'));
+  domElements.forEach((el) => {
+    Array.from(el.attributes).forEach((attribute) => {
+      if (attribute.name.startsWith('on')) {
+        let fnOrName: unknown = interpolate(attribute.value, context);
+        if (typeof (context as Record<string, unknown>)[fnOrName as string] === 'function') {
+          fnOrName = (context as Record<string, unknown>)[fnOrName as string];
+        }
+        if (typeof fnOrName === 'function') {
+          const fn = fnOrName as (...args: unknown[]) => void;
+          el.addEventListener(attribute.name.replace('on', ''), function (...args: unknown[]) {
+            fn.apply(context, args);
+          });
+        }
+        el.removeAttribute(attribute.name);
+      }
+    });
+  });
+  return root;
+}
+
+type ConnectableNodeList = Node[] & {
+  connect(root: Element | ShadowRoot): void;
+};
+
+function setupConnect(nodeList: Node[], _context: Record<string, unknown>): ConnectableNodeList {
+  const result = nodeList as ConnectableNodeList;
+  result.connect = function (root: Element | ShadowRoot) {
+    if (typeof HTMLElement === 'undefined') return;
+    if (root) {
+      root.innerHTML = '';
+      result.forEach((node) => root.appendChild(node));
+    }
+  };
+  return result;
+}
 
 /**
  * A declarative template element for defining reusable cell/row templates
  * without writing JavaScript.
- * 
+ *
  * Supports both `${this.prop}` and `{{prop}}` binding syntax.
  *
  * @example
  * ```html
- * <!-- Define a reusable badge component from markup alone -->
  * <template is="ui-grid-template" name="ui-status-badge" status="unknown">
  *   <style>
  *     :host { display: inline-block; }
@@ -20,7 +87,6 @@ import { bindEvents, setupConnect } from '@ornery/web-components/templates';
  *   <span class="badge badge-${this.status}">${this.status}</span>
  * </template>
  *
- * <!-- Use it inside a grid cell slot -->
  * <ui-grid-element>
  *   <template slot="cell-status">
  *     <ui-status-badge status="{{value}}"></ui-status-badge>
@@ -43,11 +109,10 @@ export class UIGridTemplate extends HTMLTemplateElement {
     const defaultAttrs = this;
 
     const render = (props: Record<string, unknown> = {}) => {
-      // Support both ${} and {{}} bindings
       const rendered = htmlTemplate.replace(/\$\{.+?}/gim, (s) => {
-        return template(s, props) as string;
+        return interpolate(s, props) as string;
       }).replace(/{{\s*([^}]+?)\s*}}/g, (_match, expression) => {
-        return template('${' + String(expression).trim() + '}', props) as string;
+        return interpolate('${' + String(expression).trim() + '}', props) as string;
       });
       const parsed = new DOMParser().parseFromString(rendered, 'text/html');
       const elements = [...parsed.head.children, ...bindEvents(parsed.body, props).childNodes];
@@ -73,13 +138,11 @@ export class UIGridTemplate extends HTMLTemplateElement {
 
           applyAttributes(): void {
             const props: Record<string, string> = {};
-            // Apply defaults from the template definition
             Array.from(defaultAttrs.attributes).forEach((attr) => {
               if (attr.name !== 'is' && attr.name !== 'name' && attr.name !== 'id') {
                 props[attr.name] = attr.value;
               }
             });
-            // Override with instance attributes
             Array.from(this.attributes).forEach((attr) => {
               props[attr.name] = attr.value;
             });

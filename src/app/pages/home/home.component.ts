@@ -50,7 +50,6 @@ type DeclarativeGridConfig = {
   readonly description: string;
   readonly emptyMessage: string;
   readonly rowHeight: number;
-  readonly viewportHeight?: number;
   readonly dataJson: string;
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
@@ -428,7 +427,6 @@ restoreState(): void {
     const base = {
       emptyMessage: 'No rows match the current filters.',
       rowHeight: 46,
-      viewportHeight: 300,
       enableSorting: true,
       enableFiltering: true,
       enableGrouping: false,
@@ -531,7 +529,6 @@ restoreState(): void {
             'Trading rows rendered declaratively through the Angular-backed custom element.',
           emptyMessage: 'No data',
           rowHeight: 40,
-          viewportHeight: 480,
           dataJson: this.tradingElementDataSignal(),
           columnDefsJson: JSON.stringify([
             { name: 'symbol', displayName: 'Symbol', width: '100px' },

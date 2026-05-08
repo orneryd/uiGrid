@@ -77,7 +77,6 @@ export class DocsInfiniteScrollComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-infinite-scroll-demo',
     data: this.rows,
-    viewportHeight: 320,
     rowHeight: 40,
     enableInfiniteScroll: true,
     infiniteScrollRowsFromEnd: 8,

@@ -88,7 +88,6 @@ export class DocsRowEditComponent {
 
   protected readonly demoOptions: GridOptions = {
     id: 'docs-row-edit-demo',
-    viewportHeight: 320,
     rowHeight: 44,
     enableCellEdit: true,
     rowEditWaitInterval: 600,

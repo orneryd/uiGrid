@@ -53,12 +53,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <td>Row height in pixels</td>
           </tr>
           <tr>
-            <td><code>viewportHeight</code></td>
-            <td><code>number|string</code></td>
-            <td>100%</td>
-            <td>Grid viewport height</td>
-          </tr>
-          <tr>
             <td><code>emptyMessage</code></td>
             <td><code>string</code></td>
             <td>—</td>

@@ -78,11 +78,9 @@ export function UiGrid({
   const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
   const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
   const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
-  // Prefer the explicit viewportHeight, otherwise fall back to the container
-  // height measured by the autoresize observer so the grid fills its parent
-  // by default. The 560 fallback only applies before the first measurement.
+  const minRows = options.minRowsToShow ?? 10;
   const resolvedViewportHeight =
-    options.viewportHeight ?? (autoViewportHeight && autoViewportHeight > 0 ? autoViewportHeight : 560);
+    autoViewportHeight && autoViewportHeight > 0 ? autoViewportHeight : minRows * rowSize;
   const bodyViewportHeight = Math.max(rowSize, resolvedViewportHeight - stickyChromeHeight);
 
   const virtualScroll = useVirtualScroll({
@@ -496,208 +494,208 @@ export function UiGrid({
         <div
           className="grid-table ui-grid-contents-wrapper"
           data-part="grid-table"
-          style={
-            virtualizationEnabled ? { height: scrollContainerHeight } : undefined
-          }
+          style={virtualizationEnabled ? { height: scrollContainerHeight } : undefined}
         >
           <div className="grid-header-strip" ref={headerStripRef} onWheel={onStripWheel}>
-          <div
-            className="header-grid ui-grid-header ui-grid-header-canvas"
-            data-part="header"
-            role="row"
-            ref={headerGridRef}
-            style={{ gridTemplateColumns }}
-          >
-            {visibleColumns.map((column) => {
-              const pinned = state.isPinned(column);
-              const pinOffset = pinned ? state.pinnedOffset(column) : null;
-              const pinMenuOpen = isPinMenuOpen(column);
-              return (
-                <div
-                  key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}${draggedColumnName === column.name ? ' is-dragging' : ''}${dropTargetColumnName === column.name ? ' is-drag-target' : ''}`}
-                  data-part="header-cell"
-                  data-col-name={column.name}
-                  aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
-                  draggable={columnMovingFeature}
-                  onDragStart={(event) => handleHeaderDragStart(column, event)}
-                  onDragOver={(event) => handleHeaderDragOver(column, event)}
-                  onDrop={(event) => handleHeaderDrop(column, event)}
-                  onDragEnd={handleHeaderDragEnd}
-                  onDragLeave={() => {
-                    if (dropTargetColumnName === column.name) {
-                      setDropTargetColumnName(null);
-                    }
-                  }}
-                  style={{
-                    position: pinned ? 'sticky' : undefined,
-                    left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
-                    right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-                    zIndex: pinMenuOpen ? 8 : pinned ? 2 : undefined,
-                  }}
-                >
-                  <span className="header-label">{renderHeaderContent(column)}</span>
-
-                  <div className="header-actions">
-                    {sortingFeature && (
-                      <button
-                        type="button"
-                        className={`header-action${!state.isColumnSortable(column) ? ' header-action-disabled' : ''}`}
-                        disabled={!state.isColumnSortable(column)}
-                        aria-label={state.sortButtonLabel(column)}
-                        title={state.sortButtonLabel(column)}
-                        onClick={() => state.toggleSort(column)}
-                      >
-                        {renderSortIcon(column)}
-                        <span className="sr-only ui-grid-sr-only">
-                          {state.sortButtonLabel(column)}
-                        </span>
-                      </button>
-                    )}
-
-                    {groupingFeature &&
-                      state.isGroupingEnabled() &&
-                      column.enableGrouping !== false && (
-                        <button
-                          type="button"
-                          className={`chip-action${state.isGrouped(column) ? ' chip-action-active' : ''}`}
-                          data-part="group-toggle"
-                          aria-label={state.groupingButtonLabel(column)}
-                          title={state.groupingButtonLabel(column)}
-                          onClick={(e) => state.toggleGrouping(column, e)}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                            <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z" />
-                          </svg>
-                          <span className="sr-only ui-grid-sr-only">
-                            {state.groupingButtonLabel(column)}
-                          </span>
-                        </button>
-                      )}
-
-                    {state.pinningFeature &&
-                      state.isPinningEnabled() &&
-                      state.isColumnPinnable(column) && (
-                        <div
-                          className={`pin-control${pinMenuOpen ? ' pin-control-open' : ''}`}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className={`chip-action pin-trigger${pinned || pinMenuOpen ? ' chip-action-active' : ''}`}
-                            data-part="pin-toggle"
-                            aria-label={pinButtonLabel(column)}
-                            title={pinButtonLabel(column)}
-                            aria-haspopup={pinned ? undefined : 'menu'}
-                            aria-expanded={pinned ? undefined : pinMenuOpen}
-                            onClick={(event) => onPinTrigger(column, event)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
-                            </svg>
-                            <span className="sr-only ui-grid-sr-only">{pinButtonLabel(column)}</span>
-                          </button>
-
-                          <div
-                            className="pin-menu"
-                            data-part="pin-menu"
-                            role="menu"
-                            aria-label="Pin options"
-                            aria-hidden={!pinMenuOpen}
-                          >
-                            <button
-                              type="button"
-                              className="pin-menu-action"
-                              data-part="pin-left-action"
-                              role="menuitem"
-                              aria-label={labels.pinLeft}
-                              title={labels.pinLeft}
-                              tabIndex={pinMenuOpen ? 0 : -1}
-                              onClick={(event) => choosePinDirection(column, 'left', event)}
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                                <path d="M10 6 4 12l6 6v-4h10v-4H10V6z" />
-                              </svg>
-                              <span className="sr-only ui-grid-sr-only">{labels.pinLeft}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="pin-menu-action"
-                              data-part="pin-right-action"
-                              role="menuitem"
-                              aria-label={labels.pinRight}
-                              title={labels.pinRight}
-                              tabIndex={pinMenuOpen ? 0 : -1}
-                              onClick={(event) => choosePinDirection(column, 'right', event)}
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                                <path d="M14 6v4H4v4h10v4l6-6-6-6z" />
-                              </svg>
-                              <span className="sr-only ui-grid-sr-only">{labels.pinRight}</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-
-                  {state.canResizeColumns() && (
-                    <button
-                      type="button"
-                      className="column-resizer"
-                      data-col-name={column.name}
-                      aria-label={`Resize ${state.headerLabel(column)} column`}
-                      title="Drag to resize, double-click to auto fit"
-                      onMouseDown={(event) => state.handleHeaderResizeMouseDown(column, event)}
-                      onDoubleClick={(event) => state.autoSizeColumn(column, event)}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          </div>
-
-          {filteringFeature && state.isFilteringEnabled() && (
-            <div className="grid-filter-strip" ref={filterStripRef} onWheel={onStripWheel}>
             <div
-              className="filter-grid ui-grid-header"
-              data-part="filters"
-              ref={filterGridRef}
-              style={{
-                gridTemplateColumns,
-                ['--ui-grid-header-sticky-top' as string]: `${headerStickyHeight}px`,
-              }}
+              className="header-grid ui-grid-header ui-grid-header-canvas"
+              data-part="header"
+              role="row"
+              ref={headerGridRef}
+              style={{ gridTemplateColumns }}
             >
               {visibleColumns.map((column) => {
                 const pinned = state.isPinned(column);
                 const pinOffset = pinned ? state.pinnedOffset(column) : null;
+                const pinMenuOpen = isPinMenuOpen(column);
                 return (
-                  <label
+                  <div
                     key={column.name}
-                    className={`filter-cell ui-grid-filter-container${pinned ? ' is-pinned' : ''}`}
-                    data-part="filter-cell"
+                    className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}${draggedColumnName === column.name ? ' is-dragging' : ''}${dropTargetColumnName === column.name ? ' is-drag-target' : ''}`}
+                    data-part="header-cell"
+                    data-col-name={column.name}
+                    aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
+                    draggable={columnMovingFeature}
+                    onDragStart={(event) => handleHeaderDragStart(column, event)}
+                    onDragOver={(event) => handleHeaderDragOver(column, event)}
+                    onDrop={(event) => handleHeaderDrop(column, event)}
+                    onDragEnd={handleHeaderDragEnd}
+                    onDragLeave={() => {
+                      if (dropTargetColumnName === column.name) {
+                        setDropTargetColumnName(null);
+                      }
+                    }}
                     style={{
                       position: pinned ? 'sticky' : undefined,
                       left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
                       right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-                      zIndex: pinned ? 2 : undefined,
+                      zIndex: pinMenuOpen ? 8 : pinned ? 2 : undefined,
                     }}
                   >
-                    <span className="sr-only ui-grid-sr-only">
-                      {labels.filterColumn} {state.headerLabel(column)}
-                    </span>
-                    <input
-                      className="ui-grid-filter-input"
-                      type="text"
-                      defaultValue={state.filterValue(column.name)}
-                      placeholder={state.filterPlaceholder(column)}
-                      disabled={state.isFilterInputDisabled(column)}
-                      onChange={(e) => state.updateFilter(column.name, e.target.value)}
-                    />
-                  </label>
+                    <span className="header-label">{renderHeaderContent(column)}</span>
+
+                    <div className="header-actions">
+                      {sortingFeature && (
+                        <button
+                          type="button"
+                          className={`header-action${!state.isColumnSortable(column) ? ' header-action-disabled' : ''}`}
+                          disabled={!state.isColumnSortable(column)}
+                          aria-label={state.sortButtonLabel(column)}
+                          title={state.sortButtonLabel(column)}
+                          onClick={() => state.toggleSort(column)}
+                        >
+                          {renderSortIcon(column)}
+                          <span className="sr-only ui-grid-sr-only">
+                            {state.sortButtonLabel(column)}
+                          </span>
+                        </button>
+                      )}
+
+                      {groupingFeature &&
+                        state.isGroupingEnabled() &&
+                        column.enableGrouping !== false && (
+                          <button
+                            type="button"
+                            className={`chip-action${state.isGrouped(column) ? ' chip-action-active' : ''}`}
+                            data-part="group-toggle"
+                            aria-label={state.groupingButtonLabel(column)}
+                            title={state.groupingButtonLabel(column)}
+                            onClick={(e) => state.toggleGrouping(column, e)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                              <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z" />
+                            </svg>
+                            <span className="sr-only ui-grid-sr-only">
+                              {state.groupingButtonLabel(column)}
+                            </span>
+                          </button>
+                        )}
+
+                      {state.pinningFeature &&
+                        state.isPinningEnabled() &&
+                        state.isColumnPinnable(column) && (
+                          <div
+                            className={`pin-control${pinMenuOpen ? ' pin-control-open' : ''}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className={`chip-action pin-trigger${pinned || pinMenuOpen ? ' chip-action-active' : ''}`}
+                              data-part="pin-toggle"
+                              aria-label={pinButtonLabel(column)}
+                              title={pinButtonLabel(column)}
+                              aria-haspopup={pinned ? undefined : 'menu'}
+                              aria-expanded={pinned ? undefined : pinMenuOpen}
+                              onClick={(event) => onPinTrigger(column, event)}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
+                              </svg>
+                              <span className="sr-only ui-grid-sr-only">
+                                {pinButtonLabel(column)}
+                              </span>
+                            </button>
+
+                            <div
+                              className="pin-menu"
+                              data-part="pin-menu"
+                              role="menu"
+                              aria-label="Pin options"
+                              aria-hidden={!pinMenuOpen}
+                            >
+                              <button
+                                type="button"
+                                className="pin-menu-action"
+                                data-part="pin-left-action"
+                                role="menuitem"
+                                aria-label={labels.pinLeft}
+                                title={labels.pinLeft}
+                                tabIndex={pinMenuOpen ? 0 : -1}
+                                onClick={(event) => choosePinDirection(column, 'left', event)}
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                                  <path d="M10 6 4 12l6 6v-4h10v-4H10V6z" />
+                                </svg>
+                                <span className="sr-only ui-grid-sr-only">{labels.pinLeft}</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="pin-menu-action"
+                                data-part="pin-right-action"
+                                role="menuitem"
+                                aria-label={labels.pinRight}
+                                title={labels.pinRight}
+                                tabIndex={pinMenuOpen ? 0 : -1}
+                                onClick={(event) => choosePinDirection(column, 'right', event)}
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                                  <path d="M14 6v4H4v4h10v4l6-6-6-6z" />
+                                </svg>
+                                <span className="sr-only ui-grid-sr-only">{labels.pinRight}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+
+                    {state.canResizeColumns() && (
+                      <button
+                        type="button"
+                        className="column-resizer"
+                        data-col-name={column.name}
+                        aria-label={`Resize ${state.headerLabel(column)} column`}
+                        title="Drag to resize, double-click to auto fit"
+                        onMouseDown={(event) => state.handleHeaderResizeMouseDown(column, event)}
+                        onDoubleClick={(event) => state.autoSizeColumn(column, event)}
+                      />
+                    )}
+                  </div>
                 );
               })}
             </div>
+          </div>
+
+          {filteringFeature && state.isFilteringEnabled() && (
+            <div className="grid-filter-strip" ref={filterStripRef} onWheel={onStripWheel}>
+              <div
+                className="filter-grid ui-grid-header"
+                data-part="filters"
+                ref={filterGridRef}
+                style={{
+                  gridTemplateColumns,
+                  ['--ui-grid-header-sticky-top' as string]: `${headerStickyHeight}px`,
+                }}
+              >
+                {visibleColumns.map((column) => {
+                  const pinned = state.isPinned(column);
+                  const pinOffset = pinned ? state.pinnedOffset(column) : null;
+                  return (
+                    <label
+                      key={column.name}
+                      className={`filter-cell ui-grid-filter-container${pinned ? ' is-pinned' : ''}`}
+                      data-part="filter-cell"
+                      style={{
+                        position: pinned ? 'sticky' : undefined,
+                        left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
+                        right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
+                        zIndex: pinned ? 2 : undefined,
+                      }}
+                    >
+                      <span className="sr-only ui-grid-sr-only">
+                        {labels.filterColumn} {state.headerLabel(column)}
+                      </span>
+                      <input
+                        className="ui-grid-filter-input"
+                        type="text"
+                        defaultValue={state.filterValue(column.name)}
+                        placeholder={state.filterPlaceholder(column)}
+                        disabled={state.isFilterInputDisabled(column)}
+                        onChange={(e) => state.updateFilter(column.name, e.target.value)}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -707,34 +705,42 @@ export function UiGrid({
             style={virtualizationEnabled ? { overflowY: 'auto' } : undefined}
             onScroll={onBodyViewportScroll}
           >
-          {displayItems.length > 0 ? (
-            virtualizationEnabled ? (
-              <div className="grid-virtual-spacer" style={{ height: `${virtualScroll.totalHeight}px` }}>
+            {displayItems.length > 0 ? (
+              virtualizationEnabled ? (
                 <div
-                  className="body-grid ui-grid-canvas grid-virtual-body"
+                  className="grid-virtual-spacer"
+                  style={{ height: `${virtualScroll.totalHeight}px` }}
+                >
+                  <div
+                    className="body-grid ui-grid-canvas grid-virtual-body"
+                    data-part="body"
+                    role="rowgroup"
+                    style={{
+                      gridTemplateColumns,
+                      position: 'absolute',
+                      top: `${virtualScroll.offsetY}px`,
+                      left: 0,
+                    }}
+                  >
+                    {itemsToRender.map(renderDisplayItem)}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="body-grid ui-grid-canvas"
                   data-part="body"
                   role="rowgroup"
-                  style={{
-                    gridTemplateColumns,
-                    position: 'absolute',
-                    top: `${virtualScroll.offsetY}px`,
-                    left: 0,
-                  }}
+                  style={{ gridTemplateColumns }}
                 >
-                  {itemsToRender.map(renderDisplayItem)}
+                  {displayItems.map(renderDisplayItem)}
                 </div>
-              </div>
+              )
             ) : (
-              <div className="body-grid ui-grid-canvas" data-part="body" role="rowgroup" style={{ gridTemplateColumns }}>
-                {displayItems.map(renderDisplayItem)}
+              <div className="empty-state ui-grid-no-row-overlay" data-part="empty-state">
+                <strong>{options.emptyMessage ?? labels.emptyHeading}</strong>
+                <p>{labels.emptyDescription}</p>
               </div>
-            )
-          ) : (
-            <div className="empty-state ui-grid-no-row-overlay" data-part="empty-state">
-              <strong>{options.emptyMessage ?? labels.emptyHeading}</strong>
-              <p>{labels.emptyDescription}</p>
-            </div>
-          )}
+            )}
           </div>
         </div>
 
@@ -754,13 +760,19 @@ export function UiGrid({
                 disabled={paginationCurrentPage <= 1}
                 onClick={() => state.previousPage()}
               >
-                <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                <svg
+                  className="pagination-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable={false}
+                >
                   <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                 </svg>
                 <span className="sr-only">{labels.paginationPrevious}</span>
               </button>
               <span>
-                {labels.paginationPage} {paginationCurrentPage} {labels.paginationOf} {paginationTotalPages}
+                {labels.paginationPage} {paginationCurrentPage} {labels.paginationOf}{' '}
+                {paginationTotalPages}
               </span>
               <button
                 type="button"
@@ -769,7 +781,12 @@ export function UiGrid({
                 disabled={paginationCurrentPage >= paginationTotalPages}
                 onClick={() => state.nextPage()}
               >
-                <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
+                <svg
+                  className="pagination-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable={false}
+                >
                   <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
                 </svg>
                 <span className="sr-only">{labels.paginationNext}</span>

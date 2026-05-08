@@ -46,7 +46,6 @@ function baseOptions(overrides: Partial<GridOptions> = {}): GridOptions {
     columnDefs: [{ name: 'name', displayName: 'Name' }],
     enableRowSelection: false,
     rowIdentity: (entity) => String((entity as Row).id),
-    viewportHeight: 200,
     rowHeight: 20,
     virtualizationThreshold: 1,
     onRegisterApi: (api) => {

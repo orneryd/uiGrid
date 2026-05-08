@@ -1,4 +1,4 @@
-import template from './grid-pagination.html';
+import { renderPagination } from './grid-pagination.template';
 
 /**
  * `<ui-grid-pagination>` — Pagination controls element.
@@ -53,7 +53,7 @@ export class UIGridPagination extends HTMLElement {
   connectedCallback(): void {
     if (!this.mounted) {
       this.captureTemplateBindings();
-      template(this).connect();
+      renderPagination(this, this.shadowRoot!);
       this.cacheElements();
       this.attachSelectListener();
       this.mounted = true;

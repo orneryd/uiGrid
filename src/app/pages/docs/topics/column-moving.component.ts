@@ -60,7 +60,6 @@ export class DocsColumnMovingComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-column-moving-demo',
     data: createSmallDemoData(6),
-    viewportHeight: 320,
     rowHeight: 44,
     enableSorting: true,
     enableColumnMoving: true,

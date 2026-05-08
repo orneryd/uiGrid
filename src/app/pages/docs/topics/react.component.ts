@@ -587,7 +587,6 @@ export function AccountsGrid() {
   id: 'react-demo-pinning',
   data,
   rowHeight: 46,
-  viewportHeight: 300,
   enableSorting: true,
   enableFiltering: true,
   enablePinning: true,

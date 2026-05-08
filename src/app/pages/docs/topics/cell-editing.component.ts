@@ -72,7 +72,6 @@ export class DocsCellEditingComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'cell-editing-demo',
     data: createSmallDemoData(5),
-    viewportHeight: 320,
     rowHeight: 48,
     enableSorting: true,
     enableFiltering: false,

@@ -34,12 +34,15 @@ export function formatPaginationSummary(
 }
 
 export function computeViewportHeightPx(
-  viewportHeight?: number,
   autoViewportHeight?: number | null,
+  minRowsToShow?: number,
+  rowHeight?: number,
 ): string {
-  return `${viewportHeight ?? autoViewportHeight ?? 560}px`;
+  const fallback = (minRowsToShow ?? 10) * (rowHeight ?? 44);
+  return `${autoViewportHeight ?? fallback}px`;
 }
 
-export function computeViewportRows(viewportHeight?: number, rowHeight?: number): number {
-  return Math.max(1, Math.ceil((viewportHeight ?? 560) / (rowHeight ?? 44)));
+export function computeViewportRows(autoViewportHeight?: number | null, rowHeight?: number, minRowsToShow?: number): number {
+  const height = autoViewportHeight ?? (minRowsToShow ?? 10) * (rowHeight ?? 44);
+  return Math.max(1, Math.ceil(height / (rowHeight ?? 44)));
 }

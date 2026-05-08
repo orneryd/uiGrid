@@ -69,7 +69,6 @@ export class DocsFeaturesComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'features-demo',
     data: createSmallDemoData(8),
-    viewportHeight: 400,
     rowHeight: 48,
     enableSorting: true,
     enableFiltering: true,

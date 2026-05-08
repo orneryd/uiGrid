@@ -77,7 +77,6 @@ export class DocsPaginationComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-pagination-demo',
     data: createSmallDemoData(24),
-    viewportHeight: 360,
     rowHeight: 44,
     enableSorting: true,
     enableFiltering: true,

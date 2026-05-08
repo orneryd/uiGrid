@@ -71,7 +71,6 @@ That means explicit JS property values win over declarative attributes when both
 | `title`                      | `string`                                           | —          | Grid heading text                          |
 | `rowHeight`                  | `number`                                           | 44         | Row height in pixels                       |
 | `headerRowHeight`            | `number`                                           | —          | Header row height override                 |
-| `viewportHeight`             | `number`                                           | 100%       | Grid viewport height                       |
 | `emptyMessage`               | `string`                                           | —          | Message when no rows match                 |
 | `labels`                     | `Partial<GridLabels>`                              | en-US      | i18n string overrides                      |
 | `enableSorting`              | `boolean`                                          | true       | Enable column sorting                      |

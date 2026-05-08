@@ -1,13 +1,13 @@
-import template from './grid-filter-cell.html';
+import { renderFilterCell } from './grid-filter-cell.template';
 
 /**
  * `<ui-grid-filter-cell>` — Column filter input element.
  *
  * An autonomous custom element that renders a filter input for a single grid column.
- * Uses shadow DOM with a declarative `.html` template via `@ornery/web-components`.
+ * Uses shadow DOM with scoped styles via `adoptedStyleSheets`.
  *
  * **Rendering pattern:** the template is mounted once in `connectedCallback` via
- * `template(this).connect()`. Attribute updates patch the existing input in place
+ * `renderFilterCell()`. Attribute updates patch the existing input in place
  * (value, placeholder, disabled) so the filter input never loses focus on re-renders.
  *
  * **CSS architecture:** Styles are scoped to the shadow DOM via `grid-filter-cell.scss`.
@@ -43,7 +43,7 @@ export class UIGridFilterCell extends HTMLElement {
       this.columnName = this.getAttribute('data-column') ?? '';
       this.value = this.getAttribute('data-value') ?? '';
       this.placeholder = this.getAttribute('data-placeholder') ?? '';
-      template(this).connect();
+      renderFilterCell(this, this.shadowRoot!);
       this.inputEl = this.shadowRoot!.querySelector('input');
       this.mounted = true;
     }

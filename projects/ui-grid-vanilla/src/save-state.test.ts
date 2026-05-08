@@ -186,7 +186,6 @@ describe('vanilla grid saveState', () => {
         status: 'Active',
       })),
       rowHeight: 20,
-      viewportHeight: 200,
       virtualizationThreshold: 1,
     });
     const { shadow } = await mountGrid(options);

@@ -37,7 +37,6 @@ The Angular Elements output supports the same declarative attribute surface as t
     title="Team Roster"
     enable-sorting
     enable-filtering
-    viewport-height="420"
     column-defs='[
       { "name": "name" },
       { "name": "role" },
@@ -55,7 +54,6 @@ The Angular Elements output supports the same declarative attribute surface as t
 Supported declarative inputs include:
 
 - Boolean attributes such as `enable-sorting`, `enable-filtering`, `enable-grouping`, `enable-pinning`, `enable-pagination`, and `enable-virtualization`
-- Scalar attributes such as `grid-id`, `title`, `row-height`, `viewport-height`, `pagination-page-size`, and `empty-message`
 - JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
 
 Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
@@ -138,7 +136,6 @@ The vanilla element supports the same declarative attribute surface. Small and m
   title="Team Roster"
   enable-sorting
   enable-filtering
-  viewport-height="420"
   column-defs='[
     { "name": "name" },
     { "name": "role" },
@@ -160,7 +157,6 @@ The vanilla element supports the same declarative attribute surface. Small and m
 Supported declarative inputs include:
 
 - Boolean attributes such as `enable-sorting`, `enable-filtering`, `enable-grouping`, `enable-pinning`, `enable-pagination`, and `enable-virtualization`
-- Scalar attributes such as `grid-id`, `title`, `row-height`, `viewport-height`, `pagination-page-size`, and `empty-message`
 - JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
 
 Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
@@ -189,7 +185,6 @@ The vanilla element also exposes individual JS properties that mirror the declar
   grid.title = 'Team Roster';
   grid.enableSorting = true;
   grid.enableFiltering = true;
-  grid.viewportHeight = 420;
   grid.columnDefs = [
     { name: 'name' },
     { name: 'role' },

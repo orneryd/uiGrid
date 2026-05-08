@@ -83,7 +83,6 @@ export class DocsKeyboardNavigationComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-cellnav-demo',
     data: createSmallDemoData(8),
-    viewportHeight: 320,
     rowHeight: 44,
     enableSorting: true,
     enableFiltering: true,

@@ -102,7 +102,6 @@ export class DocsImporterComponent {
 
   protected readonly demoOptions: GridOptions = {
     id: 'docs-importer-demo',
-    viewportHeight: 280,
     rowHeight: 44,
     enableImporter: true,
     enableCellEdit: true,

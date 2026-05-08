@@ -55,7 +55,6 @@ type DeclarativeGridConfig = {
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
   readonly rowHeight: number;
-  readonly viewportHeight?: number;
   readonly virtualizationThreshold: number;
   readonly treeChildrenField?: string;
   readonly treeIndent?: number;
@@ -379,7 +378,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createTreeRows()),
           columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           treeChildrenField: 'children',
           treeIndent: 16,
@@ -403,7 +401,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createHarnessRows()),
           columnDefsJson: JSON.stringify(this.templatedColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           enableSorting: true,
           enableFiltering: true,
@@ -425,7 +422,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createPinningRows()),
           columnDefsJson: JSON.stringify(this.pinningColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           enableSorting: true,
           enableFiltering: true,
@@ -447,7 +443,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createHarnessRows(200)),
           columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
           rowHeight: 46,
-          viewportHeight: 360,
           virtualizationThreshold: 200,
           enableSorting: true,
           enableFiltering: true,
@@ -473,7 +468,6 @@ export class WebComponentsComponent {
           dataJson: this.infiniteScrollDataSignal(),
           columnDefsJson: JSON.stringify(this.infiniteScrollColumnDefs),
           rowHeight: 40,
-          viewportHeight: 420,
           virtualizationThreshold: 50,
           enableSorting: false,
           enableFiltering: false,
@@ -501,7 +495,6 @@ export class WebComponentsComponent {
           dataJson: this.tradingDisplayDataSignal(),
           columnDefsJson: this.tradingColumnDefsJson,
           rowHeight: 40,
-          viewportHeight: 460,
           virtualizationThreshold: 64,
           enableSorting: true,
           enableFiltering: false,
@@ -523,7 +516,6 @@ export class WebComponentsComponent {
           dataJson: JSON.stringify(createHarnessRows()),
           columnDefsJson: JSON.stringify(this.baseHarnessColumnDefs),
           rowHeight: 46,
-          viewportHeight: 300,
           virtualizationThreshold: 1,
           expandableRowHeight: 112,
           enableSorting: true,
@@ -596,7 +588,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-tree"
   title="Web Components Demo: Tree"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   tree-children-field="children"
   tree-indent="16"
@@ -622,7 +613,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-templated"
   title="Web Components Demo: Templated"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
@@ -648,7 +638,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-pinning"
   title="Web Components Demo: Pinning"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   enable-sorting
   enable-filtering
@@ -672,7 +661,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-pagination"
   title="Web Components Demo: Pagination"
   row-height="46"
-  viewport-height="360"
   enable-sorting
   enable-filtering
   enable-column-resizing
@@ -697,7 +685,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-trading"
   title="Web Components Demo: Trading Terminal"
   row-height="40"
-  viewport-height="460"
   enable-sorting
   enable-column-resizing
   >
@@ -728,7 +715,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-infinite"
   title="Web Components Demo: Infinite Scroll"
   row-height="40"
-  viewport-height="420"
   virtualization-threshold="50"
   enable-virtualization
   enable-column-resizing
@@ -782,7 +768,6 @@ export class WebComponentsComponent {
   grid-id="web-components-demo-expandable"
   title="Web Components Demo: Expandable"
   row-height="46"
-  viewport-height="300"
   virtualization-threshold="1"
   expandable-row-height="112"
   enable-sorting

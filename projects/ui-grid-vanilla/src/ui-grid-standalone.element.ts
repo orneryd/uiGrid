@@ -85,8 +85,8 @@ import {
   type GridSaveState,
   type VanillaGridController,
 } from './grid-controller';
-import emptyTemplate from './ui-grid-empty.html';
-import gridShellTemplate from './ui-grid-shell.html';
+import emptyTemplate from './ui-grid-empty.template';
+import gridShellTemplate from './ui-grid-shell.template';
 import {
   bodyStaticMarkup,
   bodyVirtualMarkup,
@@ -150,7 +150,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */ benchmarkAverage = '—';
   /** @internal */ skipNextRender = false;
 
-  // Template-facing properties for ui-grid-shell.html
+  // Template-facing properties for the grid shell template
   gridTitle = 'Data grid';
   gridTableStyle = '';
   bodyViewportStyle = '';
@@ -315,14 +315,6 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
   set headerRowHeight(value: number) {
     this.activeOptions = { ...this.activeOptions, headerRowHeight: value } as any;
-    this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
-  }
-
-  get viewportHeight(): number {
-    return this.options.viewportHeight ?? 560;
-  }
-  set viewportHeight(value: number) {
-    this.activeOptions = { ...this.activeOptions, viewportHeight: value } as any;
     this.ensureController(this.buildEffectiveOptions(this.activeOptions as VanillaGridOptions));
   }
 
@@ -868,7 +860,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     const bodyViewport = root?.querySelector<HTMLElement>('.grid-body-viewport');
     const bodyViewportHeight = bodyViewport
       ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
-      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
+      : Math.max(snapshot.rowSize, (snapshot.options.minRowsToShow ?? 10) * snapshot.rowSize);
     const overscan = 4;
     const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     this.lastVirtualStartIndex = startIndex;
@@ -974,6 +966,30 @@ export class UiGridStandaloneElement extends HTMLElement {
         this.render();
       });
     }
+
+    this.autoAdjustHeight(snapshot);
+  }
+
+  /** @internal */
+  private inAutoAdjust = false;
+
+  private autoAdjustHeight(snapshot: GridControllerSnapshot): void {
+    if (this.inAutoAdjust) return;
+    const options = snapshot.options;
+    if (options.enableMinHeightCheck === false) return;
+
+    const rowHeight = snapshot.rowSize;
+    const minRows = options.minRowsToShow ?? 10;
+    const headerHeight = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
+    const filterHeight = this.measuredFilterStickyHeight;
+    const minHeight = headerHeight + filterHeight + (minRows * rowHeight);
+
+    if (this.clientHeight < minHeight) {
+      this.style.height = `${minHeight}px`;
+      this.inAutoAdjust = true;
+      this.render();
+      this.inAutoAdjust = false;
+    }
   }
 
   private buildRenderPlan(snapshot: GridControllerSnapshot): {
@@ -988,8 +1004,6 @@ export class UiGridStandaloneElement extends HTMLElement {
     paginationEnabled: boolean;
     showPagination: boolean;
     virtualizationEnabled: boolean;
-    viewportHeight: number;
-    hasViewportScroll: boolean;
     itemsToRender: readonly DisplayItem[];
     startIndex: number;
     virtualOffset: number;
@@ -1007,13 +1021,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     const paginationEnabled = controller.isPaginationEnabled();
     const showPagination = controller.shouldShowPaginationControls();
     const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
-    const viewportHeight = options.viewportHeight ?? 560;
-    // Body viewport height: use the measured DOM height when available
-    // (body viewport no longer includes header/filter chrome), otherwise
-    // fall back to the configured viewportHeight minus header/filter.
-    const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
+    // Measure the body viewport from the DOM when available; on first paint
+    // fall back to a reasonable default so virtualisation has something to
+    // slice against until the element is measured.
+    const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+    const bodyViewportHeight = bodyViewport
+      ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
+      : Math.max(snapshot.rowSize, (options.minRowsToShow ?? 10) * snapshot.rowSize);
 
     let startIndex = 0;
     let itemsToRender: readonly DisplayItem[] = snapshot.pipeline.displayItems;
@@ -1063,8 +1077,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       paginationEnabled,
       showPagination,
       virtualizationEnabled,
-      viewportHeight,
-      hasViewportScroll,
       itemsToRender,
       startIndex,
       virtualOffset,
@@ -1089,8 +1101,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       paginationEnabled,
       showPagination,
       virtualizationEnabled,
-      viewportHeight,
-      hasViewportScroll,
       itemsToRender,
       startIndex,
       virtualOffset,
@@ -1128,12 +1138,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     const pagination = paginationEnabled && showPagination ? this.renderPagination(snapshot) : '';
 
     this.gridTitle = escapeHtml(options.title ?? 'Data grid');
-    // Sticky-top CSS var so `.grid-filter-strip` sits just below the header
-    // strip. Falls back to the configured headerRowHeight on first paint
-    // (before the header has measured), otherwise uses the measured height.
     const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
-    this.bodyViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
+    this.gridTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
+    this.bodyViewportStyle = 'overflow-y:auto;';
     this.templateColumns = templateColumns;
     this.slotRegistry = slotRegistry;
     this.headerContent = header;
@@ -1435,7 +1442,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
     const bodyViewportHeight = bodyViewport
       ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
-      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
+      : Math.max(snapshot.rowSize, (snapshot.options.minRowsToShow ?? 10) * snapshot.rowSize);
     const overscan = 4;
     const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;

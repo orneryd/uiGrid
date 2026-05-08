@@ -120,7 +120,6 @@ Scalar attribute mapping:
 | `title`                         | `title`                     | `string` |
 | `row-height`                    | `rowHeight`                 | `number` |
 | `header-row-height`             | `headerRowHeight`           | `number` |
-| `viewport-height`               | `viewportHeight`            | `number` |
 | `pagination-page-size`          | `paginationPageSize`        | `number` |
 | `pagination-current-page`       | `paginationCurrentPage`     | `number` |
 | `total-items`                   | `totalItems`                | `number` |
@@ -225,7 +224,6 @@ export class UiGridStandaloneElement extends HTMLElement {
       'column-defs',
       'row-height',
       'header-row-height',
-      'viewport-height',
       'empty-message',
       'pagination-page-size',
       'pagination-current-page',
@@ -490,7 +488,6 @@ grid.enableSorting = true;
 
 1. **Boolean flags** — highest value, lowest effort. Covers the most common
    request ("I just want to toggle features from markup").
-2. **Scalar attributes** — `grid-id`, `row-height`, `viewport-height`, etc.
 3. **JSON attributes** — `column-defs`, `data`, `grouping`,
    `pagination-page-sizes`.
 4. **Individual JS properties** — mirrors of each attribute as a JS property

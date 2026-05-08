@@ -1,15 +1,14 @@
-import template from './grid-group-row.html';
+import { renderGroupRow } from './grid-group-row.template';
 
 /**
  * `<ui-grid-group-row>` — Group disclosure row element.
  *
  * An autonomous custom element that renders a group header row with a disclosure
- * toggle icon, group field/label, and row count. Uses shadow DOM with a declarative
- * `.html` template via `@ornery/web-components`.
+ * toggle icon, group field/label, and row count. Uses shadow DOM with scoped styles
+ * via `adoptedStyleSheets`.
  *
- * **Rendering pattern:** `template(this).connect()` — instance properties are populated
- * from data attributes, then the HTML template resolves `${this.prop}` bindings.
- * `connect()` auto-detects the open shadowRoot and renders into it.
+ * **Rendering pattern:** instance properties are populated from data attributes,
+ * then `renderGroupRow(this, shadowRoot)` writes the markup into the shadow root.
  *
  * **CSS architecture:** Styles are scoped to the shadow DOM via `grid-group-row.scss`.
  * CSS custom properties (`--ui-grid-*`) inherit from the parent grid's shadow tree.
@@ -84,7 +83,7 @@ export class UIGridGroupRow extends HTMLElement {
     this.className = 'group-row ui-grid-row ui-grid-group-row';
     this.setAttribute('style', `grid-column: 1 / -1; padding-inline-start:${depth * 20 + 10}px`);
 
-    template(this).connect();
+    renderGroupRow(this, this.shadowRoot!);
   }
 
   static define(tagName = UIGridGroupRow.TAG): void {

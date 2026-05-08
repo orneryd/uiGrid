@@ -131,7 +131,6 @@ export class DocsExporterComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-exporter-demo',
     data: createSmallDemoData(6),
-    viewportHeight: 300,
     rowHeight: 44,
     enableSorting: true,
     enableFiltering: true,

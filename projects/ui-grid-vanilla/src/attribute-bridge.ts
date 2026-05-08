@@ -25,7 +25,6 @@ export const OBSERVED_GRID_ATTRIBUTES: readonly string[] = [
   'title',
   'row-height',
   'header-row-height',
-  'viewport-height',
   'pagination-page-size',
   'pagination-current-page',
   'total-items',
@@ -105,9 +104,6 @@ export function parseGridAttributeOptions(el: Element): Partial<GridOptions> {
 
   const headerRowHeight = parseNumber(el, 'header-row-height');
   if (headerRowHeight !== undefined) out.headerRowHeight = headerRowHeight;
-
-  const viewportHeight = parseNumber(el, 'viewport-height');
-  if (viewportHeight !== undefined) out.viewportHeight = viewportHeight;
 
   const paginationPageSize = parseNumber(el, 'pagination-page-size');
   if (paginationPageSize !== undefined) out.paginationPageSize = paginationPageSize;

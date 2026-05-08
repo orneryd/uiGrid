@@ -77,7 +77,6 @@ export class DocsSelectionComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-selection-demo',
     data: createSmallDemoData(8),
-    viewportHeight: 340,
     rowHeight: 44,
     enableRowSelection: true,
     enableRowHeaderSelection: true,

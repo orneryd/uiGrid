@@ -298,11 +298,11 @@ describe('mountVanillaUiGrid integration', () => {
     // Simulate the bridge pattern: augment without losing attribute-derived data.
     grid.options = {
       ...grid.options,
-      viewportHeight: 999,
+      minRowsToShow: 20,
     };
 
     expect((grid.options.data as Array<{ id: string; name: string }>)[0].name).toBe('Gamma');
-    expect(grid.options.viewportHeight).toBe(999);
+    expect(grid.options.minRowsToShow).toBe(20);
   });
 
 });

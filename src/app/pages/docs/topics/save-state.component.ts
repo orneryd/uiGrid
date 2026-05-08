@@ -79,7 +79,6 @@ export class DocsSaveStateComponent {
   protected readonly demoOptions: GridOptions = {
     id: 'docs-save-state-demo',
     data: createSmallDemoData(12),
-    viewportHeight: 320,
     rowHeight: 44,
     enableSorting: true,
     enableFiltering: true,
