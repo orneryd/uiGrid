@@ -87,7 +87,20 @@ function createTreeRows(): GridRecord[] {
       </header>
 
       <ng-template #status let-value>
-        <span class="browser-harness__status">{{ value }}</span>
+        <span class="browser-harness__status"
+          [class.browser-harness__status--active]="value === 'Active'"
+          [class.browser-harness__status--pilot]="value === 'Pilot'"
+          [class.browser-harness__status--expansion]="value === 'Expansion'">
+          {{ value }}
+        </span>
+      </ng-template>
+
+      <ng-template #renewalDateCell let-value let-row="row">
+        <input
+          type="date"
+          class="browser-harness__date-picker"
+          [value]="value"
+          (change)="onDateChange($event, row)" />
       </ng-template>
 
       <ng-template #detail let-row>
@@ -192,6 +205,37 @@ function createTreeRows(): GridRecord[] {
       font-weight: 600;
     }
 
+    .browser-harness__status--active {
+      background: color-mix(in srgb, #16a34a 14%, transparent);
+      color: #166534;
+    }
+
+    .browser-harness__status--pilot {
+      background: color-mix(in srgb, #2563eb 14%, transparent);
+      color: #1e40af;
+    }
+
+    .browser-harness__status--expansion {
+      background: color-mix(in srgb, #d97706 14%, transparent);
+      color: #92400e;
+    }
+
+    .browser-harness__date-picker {
+      font: inherit;
+      font-size: 0.85rem;
+      border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+      border-radius: 6px;
+      padding: 0.2rem 0.4rem;
+      background: var(--ui-grid-surface, white);
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .browser-harness__date-picker:focus {
+      outline: 2px solid var(--ui-grid-accent, #2563eb);
+      outline-offset: 1px;
+    }
+
     .browser-harness__detail {
       padding: 0.85rem 1rem;
       border-radius: 0.75rem;
@@ -236,6 +280,7 @@ export class GridBrowserHarnessComponent {
   }
 
   private readonly statusTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('status');
+  private readonly renewalDateTemplate = viewChild<TemplateRef<GridCellTemplateContext>>('renewalDateCell');
   private readonly detailTemplate = viewChild<TemplateRef<GridExpandableTemplateContext>>('detail');
 
   protected readonly options = computed<GridOptions>(() => {
@@ -369,14 +414,28 @@ export class GridBrowserHarnessComponent {
         },
         {
           name: 'revenue',
+          displayName: 'Revenue',
           align: 'end',
           width: 'minmax(9rem, 0.7fr)',
           filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) => `$${value}`
+          formatter: (value) =>
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value ?? 0))
+        },
+        {
+          name: 'renewalDate',
+          displayName: 'Renewal',
+          type: 'date',
+          width: 'minmax(11rem, 0.9fr)',
+          cellTemplate: this.renewalDateTemplate() ?? undefined,
         },
         { name: 'owner', field: 'account.owner', displayName: 'Owner', width: 'minmax(10rem, 0.8fr)' }
       ]
     };
+  }
+
+  protected onDateChange(event: Event, row: GridRecord): void {
+    const input = event.target as HTMLInputElement;
+    row['renewalDate'] = input.value;
   }
 
   private tradingOptions(): GridOptions {
