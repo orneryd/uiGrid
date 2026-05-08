@@ -14,4 +14,3 @@ export * from './lib/ui-grid.engine.wasm';
 export * from './lib/ui-grid.events';
 export * from './lib/ui-grid.host';
 export * from './lib/ui-grid.state';
-export { GRID_CORE_CSS } from './lib/grid-core-styles';

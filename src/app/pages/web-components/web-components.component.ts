@@ -31,7 +31,14 @@ import {
   tradingColumnDefs,
 } from '../shared/trading-data';
 
-type DemoMode = 'expandable' | 'tree' | 'templated' | 'pinning' | 'pagination' | 'trading' | 'infinite';
+type DemoMode =
+  | 'expandable'
+  | 'tree'
+  | 'templated'
+  | 'pinning'
+  | 'pagination'
+  | 'trading'
+  | 'infinite';
 
 type WebComponentGridElement = VanillaUiGridElement & {
   getState(): unknown;
@@ -48,7 +55,7 @@ type DeclarativeGridConfig = {
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
   readonly rowHeight: number;
-  readonly viewportHeight: number;
+  readonly viewportHeight?: number;
   readonly virtualizationThreshold: number;
   readonly treeChildrenField?: string;
   readonly treeIndent?: number;
@@ -229,9 +236,7 @@ export class WebComponentsComponent {
   private readonly INFINITE_PAGE_SIZE = 60;
   private readonly INFINITE_MAX_ROWS = 2000;
   private infiniteRows: GridRecord[] = createInfiniteRows(0, this.INFINITE_PAGE_SIZE);
-  private readonly infiniteScrollDataSignal = signal<string>(
-    JSON.stringify(this.infiniteRows),
-  );
+  private readonly infiniteScrollDataSignal = signal<string>(JSON.stringify(this.infiniteRows));
   private readonly infiniteScrollColumnDefs = [
     { name: 'index', displayName: '#', width: '80px' },
     { name: 'event', displayName: 'Event', width: 'minmax(10rem, 0.9fr)' },
@@ -351,7 +356,6 @@ export class WebComponentsComponent {
     columnDefsJson: this.primaryColumnDefsJson,
     groupingJson: JSON.stringify({ groupBy: ['status'] }),
     rowHeight: 48,
-    viewportHeight: 620,
     virtualizationThreshold: 25,
     enableSorting: true,
     enableFiltering: true,
@@ -543,7 +547,6 @@ export class WebComponentsComponent {
   title="UI Grid Modernized (Web Component)"
   empty-message="No rows match the current filters."
   row-height="48"
-  viewport-height="620"
   virtualization-threshold="25"
   enable-sorting
   enable-filtering

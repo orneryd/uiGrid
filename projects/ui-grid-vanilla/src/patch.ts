@@ -28,11 +28,7 @@ import {
   renderHeaderCell,
   renderPagination,
 } from './render';
-import {
-  bodyStaticMarkup,
-  bodyVirtualMarkup,
-  emptyDataMarkup,
-} from './templates';
+import { bodyStaticMarkup, bodyVirtualMarkup, emptyDataMarkup } from './templates';
 import type { UiGridStandaloneElement } from './ui-grid-standalone.element';
 import { bodyCellClass } from './utils/cell-class';
 import { asGroupItem, isRowItem } from './utils/display-items';
@@ -50,10 +46,7 @@ import {
  * its content. Used when the data changed but the row / column identity
  * didn't, so we can avoid a full render + scroll-position restore.
  */
-export function patchCells(
-  el: UiGridStandaloneElement,
-  changedRowIds?: ReadonlySet<string>,
-): void {
+export function patchCells(el: UiGridStandaloneElement, changedRowIds?: ReadonlySet<string>): void {
   const snapshot = el.snapshot;
   if (!snapshot) return;
   const root = el.shadowRoot;
@@ -164,10 +157,12 @@ export function renderPatch(
     gridFrame.setAttribute('aria-label', nextTitle);
   }
 
-  // Grid table wrapper styles (viewport height + sticky-top CSS var).
+  // Grid table wrapper — only emit the sticky-top CSS var. Height sizing is
+  // handed to the stylesheet's `height: 100%` chain.
+  void viewportHeight;
   const gridTable = root.querySelector<HTMLElement>('.grid-table');
   const stickyTop = el.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-  const nextTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
+  const nextTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
   if (gridTable && gridTable.getAttribute('style') !== nextTableStyle) {
     gridTable.setAttribute('style', nextTableStyle);
   }
@@ -615,8 +610,7 @@ export function patchBodyCell(
   const isPinned = controller.isPinned(column);
   const pinOffset = isPinned ? controller.pinnedOffset(column) : null;
   const stickyStyle = pinOffset ? `${pinOffset.side}:${pinOffset.offset};` : '';
-  const isFocused =
-    el.focusedCell?.rowId === rowId && el.focusedCell.columnName === columnName;
+  const isFocused = el.focusedCell?.rowId === rowId && el.focusedCell.columnName === columnName;
   const isPinnedLeftLast = controller.isPinnedLeftLast(column);
   const isPinnedRightFirst = controller.isPinnedRightFirst(column);
   const isOdd = displayIndex % 2 !== 0;
@@ -691,7 +685,14 @@ export function patchBodyCell(
   // or tree rows come and go. The guard below skips the DOM write when the
   // rendered string matches the current DOM — steady-state typing / paging /
   // data refresh inside the same row layout is a no-op.
-  const nextInner = renderCellShellContents(el, row, column, displayIndex, false, templateMarkupMap);
+  const nextInner = renderCellShellContents(
+    el,
+    row,
+    column,
+    displayIndex,
+    false,
+    templateMarkupMap,
+  );
   if (cellShell.innerHTML !== nextInner) {
     cellShell.innerHTML = nextInner;
   }

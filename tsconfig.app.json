@@ -9,9 +9,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts",
-    "projects/ui-grid/src/**/*.ts",
-    "projects/ui-grid-react/src/**/*.ts",
-    "projects/ui-grid-react/src/**/*.tsx"
+    "projects/ui-grid/src/**/*.ts"
   ],
   "exclude": [
     "src/**/*.spec.ts",

@@ -8,10 +8,7 @@ import {
   type GridRow,
   type GroupItem,
 } from '@ornery/ui-grid-core';
-import {
-  FrameworkSlotBridge,
-  type FrameworkRenderedSlotsConfig,
-} from './framework-slots';
+import { FrameworkSlotBridge, type FrameworkRenderedSlotsConfig } from './framework-slots';
 export type {
   FrameworkRenderedSlotsConfig,
   FrameworkCellSlot,
@@ -22,10 +19,7 @@ export type {
   FrameworkEmptyStateSlot,
   FrameworkSlotDelta,
 } from './framework-slots';
-import {
-  OBSERVED_GRID_ATTRIBUTES,
-  parseGridAttributeOptions,
-} from './attribute-bridge';
+import { OBSERVED_GRID_ATTRIBUTES, parseGridAttributeOptions } from './attribute-bridge';
 import {
   getTemplateMarkup as getTemplateMarkupFromLightDom,
   renderBodyCell,
@@ -87,12 +81,7 @@ import {
 } from './grid-controller';
 import emptyTemplate from './ui-grid-empty.html';
 import gridShellTemplate from './ui-grid-shell.html';
-import {
-  bodyStaticMarkup,
-  bodyVirtualMarkup,
-  emptyDataMarkup,
-  filterRowMarkup,
-} from './templates';
+import { bodyStaticMarkup, bodyVirtualMarkup, emptyDataMarkup, filterRowMarkup } from './templates';
 import { UIGridFilterCell } from './components/grid-filter-cell';
 import { UIGridGroupRow } from './components/grid-group-row';
 import { UIGridPagination } from './components/grid-pagination';
@@ -149,6 +138,18 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */ stickyHeightRelayoutQueued = false;
   /** @internal */ benchmarkAverage = '—';
   /** @internal */ skipNextRender = false;
+  /** @internal Auto-resize state — ports `ui.grid.autoResize`. When enabled
+   * (default: on; opt out with `enableAutoResize: false`), a ResizeObserver
+   * watches the host element and writes `autoViewportHeight` / `autoViewportWidth`
+   * on every size change, debounced 400ms. The viewport-height resolver
+   * prefers `options.viewportHeight` when explicitly set; otherwise it falls
+   * back to the measured host height so the grid fills its container. */
+  autoViewportHeight: number | null = null;
+  /** @internal */ autoViewportWidth: number | null = null;
+  /** @internal */ autoResizeObserver: ResizeObserver | null = null;
+  /** @internal */ autoResizeDebounceHandle: number | null = null;
+  /** @internal */ lastMeasuredHostHeight = 0;
+  /** @internal */ lastMeasuredHostWidth = 0;
 
   // Template-facing properties for ui-grid-shell.html
   gridTitle = 'Data grid';
@@ -319,7 +320,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   }
 
   get viewportHeight(): number {
-    return this.options.viewportHeight ?? 560;
+    return this.options.viewportHeight ?? this.autoViewportHeight ?? 0;
   }
   set viewportHeight(value: number) {
     this.activeOptions = { ...this.activeOptions, viewportHeight: value } as any;
@@ -866,9 +867,15 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     const bodyViewport = root?.querySelector<HTMLElement>('.grid-body-viewport');
+    // Prefer the measured DOM height; fall back to the configured/auto
+    // viewport only when the element hasn't been sized yet. Row size as the
+    // absolute minimum so we always render at least one row's worth of
+    // items even when the grid hasn't laid out yet.
+    const configuredHeight =
+      typeof snapshot.options.viewportHeight === 'number' ? snapshot.options.viewportHeight : null;
     const bodyViewportHeight = bodyViewport
       ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
-      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
+      : Math.max(snapshot.rowSize, configuredHeight ?? this.autoViewportHeight ?? snapshot.rowSize);
     const overscan = 4;
     const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     this.lastVirtualStartIndex = startIndex;
@@ -1007,13 +1014,35 @@ export class UiGridStandaloneElement extends HTMLElement {
     const paginationEnabled = controller.isPaginationEnabled();
     const showPagination = controller.shouldShowPaginationControls();
     const virtualizationEnabled = snapshot.pipeline.virtualizationEnabled;
-    const viewportHeight = options.viewportHeight ?? 560;
+    // Resolution order: explicit `options.viewportHeight` wins, then the
+    // ResizeObserver-measured host height. No hardcoded fallback — when
+    // neither is set, sizing is handed off to the stylesheet (`height: 100%`
+    // chain on `:host` / `.grid-frame` / `.grid-table`), so the grid fills
+    // whatever container the consumer drops it into without us writing a
+    // fixed pixel height.
+    const autoHeight = this.autoViewportHeight;
+    // Only the numeric form of `options.viewportHeight` participates in the
+    // virtualization math. A string (e.g. `'100%'`) is applied as raw CSS.
+    const configuredHeight =
+      typeof options.viewportHeight === 'number' ? options.viewportHeight : null;
+    const viewportHeight: number = options.viewportHeight ?? autoHeight ?? 0;
+    const numericViewportHeight = configuredHeight ?? autoHeight ?? 0;
     // Body viewport height: use the measured DOM height when available
     // (body viewport no longer includes header/filter chrome), otherwise
     // fall back to the configured viewportHeight minus header/filter.
+    // We only compute this for the virtualization math — if both are null
+    // the grid ends up at container height via CSS and this number is moot.
     const stickyChromeHeight = this.measuredHeaderStickyHeight + this.measuredFilterStickyHeight;
-    const bodyViewportHeight = Math.max(snapshot.rowSize, viewportHeight - stickyChromeHeight);
-    const hasViewportScroll = virtualizationEnabled || options.viewportHeight !== undefined;
+    const bodyViewportHeight =
+      numericViewportHeight > 0
+        ? Math.max(snapshot.rowSize, numericViewportHeight - stickyChromeHeight)
+        : snapshot.rowSize;
+    // The body becomes a scroll container whenever the grid has a bounded
+    // height — either the consumer set `viewportHeight` explicitly, the
+    // auto-resize observer has committed a measurement, or virtualization
+    // is on.
+    const hasViewportScroll =
+      virtualizationEnabled || options.viewportHeight !== undefined || autoHeight !== null;
 
     let startIndex = 0;
     let itemsToRender: readonly DisplayItem[] = snapshot.pipeline.displayItems;
@@ -1132,7 +1161,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     // strip. Falls back to the configured headerRowHeight on first paint
     // (before the header has measured), otherwise uses the measured height.
     const stickyTop = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
-    this.gridTableStyle = `${hasViewportScroll ? `height:${viewportHeight}px;` : ''}--ui-grid-header-sticky-top:${stickyTop}px;`;
+    // Never write an inline `height` here. The stylesheet's `height: 100%`
+    // chain sizes `.grid-table` to the element's bounded parent; consumers
+    // who want a fixed height set it on `ui-grid-element` directly.
+    void viewportHeight;
+    this.gridTableStyle = `--ui-grid-header-sticky-top:${stickyTop}px;`;
     this.bodyViewportStyle = hasViewportScroll ? 'overflow-y:auto;' : '';
     this.templateColumns = templateColumns;
     this.slotRegistry = slotRegistry;
@@ -1172,7 +1205,16 @@ export class UiGridStandaloneElement extends HTMLElement {
     virtualOffset: number,
     totalVirtualHeight: number,
   ): HTMLElement | null {
-    return reconcileBodyRoot(this, root, kind, options, labels, templateColumns, virtualOffset, totalVirtualHeight);
+    return reconcileBodyRoot(
+      this,
+      root,
+      kind,
+      options,
+      labels,
+      templateColumns,
+      virtualOffset,
+      totalVirtualHeight,
+    );
   }
 
   private reconcilePagination(
@@ -1433,9 +1475,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     const bodyViewport = this.shadowRoot?.querySelector<HTMLElement>('.grid-body-viewport');
+    const configuredHeight =
+      typeof snapshot.options.viewportHeight === 'number' ? snapshot.options.viewportHeight : null;
     const bodyViewportHeight = bodyViewport
       ? Math.max(snapshot.rowSize, bodyViewport.clientHeight)
-      : Math.max(snapshot.rowSize, (snapshot.options.viewportHeight ?? 560));
+      : Math.max(snapshot.rowSize, configuredHeight ?? this.autoViewportHeight ?? snapshot.rowSize);
     const overscan = 4;
     const startIndex = Math.max(0, Math.floor(this.scrollPosition / snapshot.rowSize) - overscan);
     const visibleCount = Math.ceil(bodyViewportHeight / snapshot.rowSize) + overscan * 2;

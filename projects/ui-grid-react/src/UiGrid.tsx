@@ -1,799 +1,673 @@
+/**
+ * React wrapper around `<ui-grid-element>` (the vanilla web component).
+ *
+ * This component mounts a single `<ui-grid-element>` in the DOM and bridges
+ * the React idioms consumers expect:
+ *
+ *   - Declarative props map to the element's `options` setter + individual
+ *     kebab-case HTML attributes.
+ *   - Every `CustomEvent` the element dispatches is re-emitted as an `onXxx`
+ *     prop (camelCase).
+ *   - JSX render-prop templates (`cellRenderers`, `headerRenderers`,
+ *     `filterRenderers`, `groupRowRenderer`, `expandableRenderer`,
+ *     `emptyRenderer`) project into the element's shadow DOM via the
+ *     framework-slot bridge: the element emits `<slot name="…">` placeholders,
+ *     the wrapper portals React nodes into matching `<div slot="…">`
+ *     elements in the element's light DOM, and slot projection composes them
+ *     back into the shadow tree.
+ *   - `onRegisterApi` is forwarded verbatim — consumers get the same
+ *     `UiGridApi` the vanilla element produces.
+ *
+ * The old React renderer (the `useGridState` hook + its React-native DOM
+ * scaffolding) has been removed. The wrapper now delegates 100% to the
+ * vanilla web component, so every feature that ships in the element is
+ * automatically available here.
+ */
+
 import React from 'react';
+import { createPortal } from 'react-dom';
+import {
+  defineStandaloneUiGridElement,
+  type FrameworkCellSlot,
+  type FrameworkEmptyStateSlot,
+  type FrameworkExpandableRowSlot,
+  type FrameworkFilterSlot,
+  type FrameworkGroupRowSlot,
+  type FrameworkHeaderSlot,
+  type FrameworkRenderedSlotsConfig,
+  type FrameworkSlotDelta,
+  type UiGridStandaloneElement,
+} from '@ornery/ui-grid-vanilla';
 import type {
-  GridOptions,
   GridCellTemplateContext,
   GridExpandableTemplateContext,
   GridHeaderTemplateContext,
+  GridOptions,
   UiGridApi,
-  GridColumnDef,
-  GridRow,
 } from '@ornery/ui-grid-core';
-import type { DisplayItem, RowItem } from '@ornery/ui-grid-core';
-import { useGridState } from './useGridState';
-import { useVirtualScroll } from './useVirtualScroll';
 
-export interface UiGridProps {
-  options: GridOptions;
-  onRegisterApi?: (api: UiGridApi) => void;
-  cellRenderer?: (context: GridCellTemplateContext) => React.ReactNode;
-  headerRenderer?: (context: GridHeaderTemplateContext) => React.ReactNode;
-  expandableRenderer?: (context: GridExpandableTemplateContext) => React.ReactNode;
-  className?: string;
+// Triple-slash directive so the `ui-grid-element` JSX declaration is picked
+// up by any file that imports `UiGrid`. See `./ui-grid-element.d.ts`.
+/// <reference path="./ui-grid-element.d.ts" />
+
+// The vanilla element is registered once per process. We kick off the
+// registration at module scope so the first mount doesn't pay a setup cost.
+void defineStandaloneUiGridElement();
+
+// ---------------------------------------------------------------------------
+// Prop types
+// ---------------------------------------------------------------------------
+
+/** Filter-cell context passed to `filterRenderers`. Consumers read the
+ * current filter value + call `gridApi.core.setFilter` to apply changes. */
+export interface UiGridFilterRendererContext {
+  columnName: string;
+  value: string;
+  placeholder: string;
+  disabled: boolean;
+  column: FrameworkFilterSlot['column'];
 }
 
-export function UiGrid({
-  options: rawOptions,
-  onRegisterApi,
-  cellRenderer,
-  headerRenderer,
-  expandableRenderer,
-  className,
-}: UiGridProps) {
-  // Normalize options: when `enableExpandable` is true but the consumer
-  // didn't supply an `expandableRowTemplate`, inject a dummy one so
-  // `canGridExpandRows` returns true and the expand toggle renders. The
-  // React wrapper always has an `expandableRenderer` hook available, so the
-  // template's `createEmbeddedView` implementation can stay a no-op — the
-  // actual expandable row content is rendered by the React tree below.
-  const options = React.useMemo<GridOptions>(() => {
-    if (rawOptions.enableExpandable === true && !rawOptions.expandableRowTemplate) {
-      return {
-        ...rawOptions,
-        expandableRowTemplate: { createEmbeddedView: () => undefined },
-      };
-    }
-    return rawOptions;
-  }, [rawOptions]);
-  const state = useGridState(options, onRegisterApi);
+/** Group-row context passed to `groupRowRenderer`. */
+export interface UiGridGroupRowRendererContext {
+  groupId: string;
+  field: string;
+  label: string;
+  count: number;
+  depth: number;
+  collapsed: boolean;
+}
 
-  const {
-    pipeline,
-    visibleColumns,
-    labels,
-    gridTemplateColumns,
-    gridContainerRef,
-    displayItems,
-    virtualizationEnabled,
-    rowSize,
-    editingValue,
-    autoViewportHeight,
-    sortingFeature,
-    filteringFeature,
-    groupingFeature,
-    paginationFeature,
-    cellEditFeature,
-    expandableFeature,
-    treeViewFeature,
-    columnMovingFeature,
-    paginationCurrentPage,
-    paginationTotalPages,
-    paginationSelectedPageSize,
-  } = state;
+/** Empty-state context passed to `emptyRenderer`. */
+export interface UiGridEmptyStateContext {
+  heading: string;
+  description: string;
+}
 
-  const headerGridRef = React.useRef<HTMLDivElement | null>(null);
-  const filterGridRef = React.useRef<HTMLDivElement | null>(null);
-  const headerStripRef = React.useRef<HTMLDivElement | null>(null);
-  const filterStripRef = React.useRef<HTMLDivElement | null>(null);
-  const bodyViewportRef = React.useRef<HTMLDivElement | null>(null);
-  const [headerStickyHeight, setHeaderStickyHeight] = React.useState(0);
-  const [filterStickyHeight, setFilterStickyHeight] = React.useState(0);
-  const stickyChromeHeight = headerStickyHeight + filterStickyHeight;
-  // Prefer the explicit viewportHeight, otherwise fall back to the container
-  // height measured by the autoresize observer so the grid fills its parent
-  // by default. The 560 fallback only applies before the first measurement.
-  const resolvedViewportHeight =
-    options.viewportHeight ?? (autoViewportHeight && autoViewportHeight > 0 ? autoViewportHeight : 560);
-  const bodyViewportHeight = Math.max(rowSize, resolvedViewportHeight - stickyChromeHeight);
+export interface UiGridProps {
+  /**
+   * Full `GridOptions` object. Any field set here wins over the
+   * corresponding individual prop below — use whichever style you prefer.
+   */
+  options?: GridOptions;
 
-  const virtualScroll = useVirtualScroll({
-    itemCount: displayItems.length,
-    itemSize: rowSize,
-    viewportHeight: bodyViewportHeight,
-    overscan: 3,
-  });
+  /** Called once when the grid's `UiGridApi` is ready. */
+  onRegisterApi?: (api: UiGridApi) => void;
 
-  const [openPinMenuColumn, setOpenPinMenuColumn] = React.useState<string | null>(null);
-  const [draggedColumnName, setDraggedColumnName] = React.useState<string | null>(null);
-  const [dropTargetColumnName, setDropTargetColumnName] = React.useState<string | null>(null);
-  const scrollContainerHeight = `${resolvedViewportHeight}px`;
+  /** Extra class(es) to add to the host container. */
+  className?: string;
+  /** Inline style passthrough for the host container. */
+  style?: React.CSSProperties;
 
-  function renderHeaderContent(column: GridColumnDef): React.ReactNode {
-    const value = state.headerLabel(column);
-    const context: GridHeaderTemplateContext = {
-      $implicit: value,
-      value,
-      column,
-    };
+  // ───────── Declarative attribute props (mirrors the vanilla surface) ─────────
 
-    if (headerRenderer) {
-      return headerRenderer(context) ?? value;
-    }
+  gridId?: string;
+  title?: string;
+  data?: GridOptions['data'];
+  columnDefs?: GridOptions['columnDefs'];
+  grouping?: GridOptions['grouping'];
+  rowHeight?: number;
+  headerRowHeight?: number;
+  viewportHeight?: number;
+  paginationPageSize?: number;
+  paginationPageSizes?: number[] | null;
+  paginationCurrentPage?: number;
+  totalItems?: number;
+  virtualizationThreshold?: number;
+  treeChildrenField?: string;
+  treeIndent?: number;
+  expandableRowHeight?: number;
+  expandableRowHeaderWidth?: number;
+  emptyMessage?: string;
+  infiniteScrollRowsFromEnd?: number;
 
-    if (column.headerRenderer) {
-      return column.headerRenderer(context);
-    }
+  enableSorting?: boolean;
+  enableFiltering?: boolean;
+  enableGrouping?: boolean;
+  enablePinning?: boolean;
+  enableColumnMoving?: boolean;
+  enableColumnResizing?: boolean;
+  enableCellEdit?: boolean;
+  enableCellEditOnFocus?: boolean;
+  enablePagination?: boolean;
+  enablePaginationControls?: boolean;
+  useExternalPagination?: boolean;
+  enableExpandable?: boolean;
+  enableTreeView?: boolean;
+  showTreeExpandNoChildren?: boolean;
+  treeRowHeaderAlwaysVisible?: boolean;
+  enableAutoResize?: boolean;
+  enableVirtualization?: boolean;
+  enableInfiniteScroll?: boolean;
+  infiniteScrollUp?: boolean;
+  infiniteScrollDown?: boolean;
 
-    return value;
-  }
+  // Selection ports.
+  enableRowSelection?: boolean;
+  multiSelect?: boolean;
+  noUnselect?: boolean;
+  modifierKeysToMultiSelect?: boolean;
+  enableRowHeaderSelection?: boolean;
+  enableFullRowSelection?: boolean;
+  enableFocusRowOnRowHeaderClick?: boolean;
+  enableSelectRowOnFocus?: boolean;
+  enableSelectAll?: boolean;
+  enableSelectionBatchEvent?: boolean;
+  enableFooterTotalSelected?: boolean;
+  selectionRowHeaderWidth?: number;
 
-  const eventPathIncludesClass = React.useCallback((event: Event, className: string): boolean => {
-    const eventPath =
-      typeof event.composedPath === 'function'
-        ? event.composedPath()
-        : event.target
-          ? [event.target]
-          : [];
+  // ───────── Template render-prop surface ─────────
 
-    return eventPath.some((target) => {
-      if (!target || typeof target !== 'object' || !('classList' in target)) {
-        return false;
-      }
+  /**
+   * Per-column cell renderers. Keys are column names. When a key matches a
+   * column, that column's body cells are projected through this renderer.
+   * Columns not in the map render via the usual vanilla path.
+   */
+  cellRenderers?: Record<string, (ctx: GridCellTemplateContext) => React.ReactNode>;
 
-      const classList = (target as { classList?: DOMTokenList }).classList;
-      return classList?.contains(className) ?? false;
-    });
-  }, []);
+  /**
+   * Fallback single renderer applied to every column that doesn't appear in
+   * `cellRenderers`. Useful when you want the same React rendering for all
+   * cells (e.g. wrap every value in a styled span).
+   */
+  cellRenderer?: (ctx: GridCellTemplateContext) => React.ReactNode;
 
-  const isPinMenuOpen = React.useCallback(
-    (column: GridColumnDef) => openPinMenuColumn === column.name,
-    [openPinMenuColumn],
+  /** Per-column header renderers. */
+  headerRenderers?: Record<string, (ctx: GridHeaderTemplateContext) => React.ReactNode>;
+
+  /** Fallback single renderer applied to every column that doesn't appear in
+   * `headerRenderers`. */
+  headerRenderer?: (ctx: GridHeaderTemplateContext) => React.ReactNode;
+
+  /**
+   * Per-column filter renderers. The consumer owns the input element and
+   * must call `gridApi.core.setFilter(columnName, value)` to apply changes.
+   */
+  filterRenderers?: Record<string, (ctx: UiGridFilterRendererContext) => React.ReactNode>;
+
+  /** Single renderer applied to every group row. */
+  groupRowRenderer?: (ctx: UiGridGroupRowRendererContext) => React.ReactNode;
+
+  /** Single renderer for expandable detail rows. */
+  expandableRenderer?: (ctx: GridExpandableTemplateContext) => React.ReactNode;
+
+  /** Empty-state panel renderer. */
+  emptyRenderer?: (ctx: UiGridEmptyStateContext) => React.ReactNode;
+
+  // ───────── Event props ─────────
+
+  onRowsVisibleChanged?: (event: CustomEvent) => void;
+  onRowsRendered?: (event: CustomEvent) => void;
+  onScrollBegin?: (event: CustomEvent) => void;
+  onScrollEnd?: (event: CustomEvent) => void;
+  onSortChanged?: (event: CustomEvent) => void;
+  onFilterChanged?: (event: CustomEvent) => void;
+  onGroupingChanged?: (event: CustomEvent) => void;
+  onColumnOrderChanged?: (event: CustomEvent) => void;
+  onColumnPinned?: (event: CustomEvent) => void;
+  onRowSelectionChanged?: (event: CustomEvent) => void;
+  onRowSelectionChangedBatch?: (event: CustomEvent) => void;
+  onRowFocusChanged?: (event: CustomEvent) => void;
+  onBeginCellEdit?: (event: CustomEvent) => void;
+  onAfterCellEdit?: (event: CustomEvent) => void;
+  onCancelCellEdit?: (event: CustomEvent) => void;
+  onPaginationChanged?: (event: CustomEvent) => void;
+  onNeedLoadMoreData?: (event: CustomEvent) => void;
+  onNeedLoadMoreDataTop?: (event: CustomEvent) => void;
+  onSaveRow?: (event: CustomEvent) => void;
+  onValidationFailed?: (event: CustomEvent) => void;
+  onLanguageChanged?: (event: CustomEvent) => void;
+  onRenderingComplete?: (event: CustomEvent) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Implementation
+// ---------------------------------------------------------------------------
+
+/** Map of camelCase event prop → lowercase custom-event name. */
+const EVENT_MAP: Record<string, string> = {
+  onRowsVisibleChanged: 'rowsVisibleChanged',
+  onRowsRendered: 'rowsRendered',
+  onScrollBegin: 'scrollBegin',
+  onScrollEnd: 'scrollEnd',
+  onSortChanged: 'sortChanged',
+  onFilterChanged: 'filterChanged',
+  onGroupingChanged: 'groupingChanged',
+  onColumnOrderChanged: 'columnOrderChanged',
+  onColumnPinned: 'columnPinned',
+  onRowSelectionChanged: 'rowSelectionChanged',
+  onRowSelectionChangedBatch: 'rowSelectionChangedBatch',
+  onRowFocusChanged: 'rowFocusChanged',
+  onBeginCellEdit: 'beginCellEdit',
+  onAfterCellEdit: 'afterCellEdit',
+  onCancelCellEdit: 'cancelCellEdit',
+  onPaginationChanged: 'paginationChanged',
+  onNeedLoadMoreData: 'needLoadMoreData',
+  onNeedLoadMoreDataTop: 'needLoadMoreDataTop',
+  onSaveRow: 'saveRow',
+  onValidationFailed: 'validationFailed',
+  onLanguageChanged: 'languageChanged',
+  onRenderingComplete: 'renderingComplete',
+};
+
+export function UiGrid(props: UiGridProps): React.ReactElement {
+  // The grid element is the rendered JSX node — no wrapper div. React attaches
+  // it via `ref`, and we mirror it into local state so the portal-render pass
+  // below re-runs once the element exists.
+  const [element, setElement] = React.useState<UiGridStandaloneElement | null>(null);
+  const elementCallbackRef = React.useCallback(
+    (node: UiGridStandaloneElement | null) => setElement(node),
+    [],
   );
 
-  const pinButtonLabel = React.useCallback(
-    (column: GridColumnDef) => (state.isPinned(column) ? labels.unpin : labels.pinColumn),
-    [labels, state],
+  // Track which slots are currently emitted by the element; each state key is
+  // the slot name, value is the descriptor we need to render through.
+  const [cellSlots, setCellSlots] = React.useState<Map<string, FrameworkCellSlot>>(() => new Map());
+  const [headerSlots, setHeaderSlots] = React.useState<Map<string, FrameworkHeaderSlot>>(
+    () => new Map(),
   );
-
-  const onPinTrigger = React.useCallback(
-    (column: GridColumnDef, event?: React.MouseEvent) => {
-      event?.stopPropagation();
-      if (state.isPinned(column)) {
-        setOpenPinMenuColumn(null);
-        state.gridApi.pinning.pinColumn(column.name, 'none');
-        return;
-      }
-
-      setOpenPinMenuColumn((current) => (current === column.name ? null : column.name));
-    },
-    [state],
+  const [filterSlots, setFilterSlots] = React.useState<Map<string, FrameworkFilterSlot>>(
+    () => new Map(),
   );
-
-  const choosePinDirection = React.useCallback(
-    (column: GridColumnDef, direction: 'left' | 'right', event?: React.MouseEvent) => {
-      event?.stopPropagation();
-      setOpenPinMenuColumn(null);
-      state.gridApi.pinning.pinColumn(column.name, direction);
-    },
-    [state],
+  const [groupRowSlots, setGroupRowSlots] = React.useState<Map<string, FrameworkGroupRowSlot>>(
+    () => new Map(),
   );
+  const [expandableSlots, setExpandableSlots] = React.useState<
+    Map<string, FrameworkExpandableRowSlot>
+  >(() => new Map());
+  const [emptyStateSlot, setEmptyStateSlot] = React.useState<FrameworkEmptyStateSlot | null>(null);
 
-  const handleHeaderDragStart = React.useCallback(
-    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
-      if (!columnMovingFeature) {
-        event.preventDefault();
-        return;
-      }
-
-      setDraggedColumnName(column.name);
-      setDropTargetColumnName(null);
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', column.name);
-    },
-    [columnMovingFeature],
-  );
-
-  const handleHeaderDragOver = React.useCallback(
-    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
-      if (!columnMovingFeature || !draggedColumnName || draggedColumnName === column.name) {
-        return;
-      }
-
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      setDropTargetColumnName(column.name);
-    },
-    [columnMovingFeature, draggedColumnName],
-  );
-
-  const handleHeaderDrop = React.useCallback(
-    (column: GridColumnDef, event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      if (!columnMovingFeature) {
-        return;
-      }
-
-      const sourceColumnName = draggedColumnName ?? event.dataTransfer.getData('text/plain');
-      setDraggedColumnName(null);
-      setDropTargetColumnName(null);
-
-      if (!sourceColumnName || sourceColumnName === column.name) {
-        return;
-      }
-
-      state.moveVisibleColumn(sourceColumnName, column.name);
-    },
-    [columnMovingFeature, draggedColumnName, state],
-  );
-
-  const handleHeaderDragEnd = React.useCallback(() => {
-    setDraggedColumnName(null);
-    setDropTargetColumnName(null);
-  }, []);
-
+  // ────── Slot-delta listeners on the element ──────
   React.useLayoutEffect(() => {
-    setHeaderStickyHeight(headerGridRef.current?.offsetHeight ?? 0);
-    setFilterStickyHeight(filterGridRef.current?.offsetHeight ?? 0);
-  }, [visibleColumns, filteringFeature, options.enableFiltering]);
+    if (!element) return;
 
-  React.useLayoutEffect(() => {
-    const headerElement = headerGridRef.current;
-    const filterElement = filterGridRef.current;
-    if (typeof ResizeObserver === 'undefined' || (!headerElement && !filterElement)) {
-      return;
-    }
+    const applyDelta = <T extends { slotName: string }>(
+      setter: React.Dispatch<React.SetStateAction<Map<string, T>>>,
+    ) =>
+      ((event: Event) => {
+        const detail = (event as CustomEvent<FrameworkSlotDelta<T>>).detail;
+        setter((prev) => {
+          const next = new Map(prev);
+          for (const slot of detail.removed) next.delete(slot.slotName);
+          for (const slot of detail.added) next.set(slot.slotName, slot);
+          return next;
+        });
+      }) as EventListener;
 
-    const observer = new ResizeObserver(() => {
-      setHeaderStickyHeight(headerGridRef.current?.offsetHeight ?? 0);
-      setFilterStickyHeight(filterGridRef.current?.offsetHeight ?? 0);
-    });
-
-    if (headerElement) {
-      observer.observe(headerElement);
-    }
-    if (filterElement) {
-      observer.observe(filterElement);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  React.useEffect(() => {
-    if (!openPinMenuColumn) {
-      return;
-    }
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (eventPathIncludesClass(event, 'pin-control')) {
-        return;
-      }
-
-      setOpenPinMenuColumn(null);
+    const cellHandler = applyDelta<FrameworkCellSlot>(setCellSlots);
+    const headerHandler = applyDelta<FrameworkHeaderSlot>(setHeaderSlots);
+    const filterHandler = applyDelta<FrameworkFilterSlot>(setFilterSlots);
+    const groupHandler = applyDelta<FrameworkGroupRowSlot>(setGroupRowSlots);
+    const expandableHandler = applyDelta<FrameworkExpandableRowSlot>(setExpandableSlots);
+    const emptyHandler: EventListener = (event) => {
+      const detail = (event as CustomEvent<FrameworkSlotDelta<FrameworkEmptyStateSlot>>).detail;
+      setEmptyStateSlot(detail.added[0] ?? null);
     };
 
-    const handleDocumentEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpenPinMenuColumn(null);
-      }
-    };
-
-    document.addEventListener('click', handleDocumentClick);
-    document.addEventListener('keydown', handleDocumentEscape);
+    element.addEventListener('cellSlotsChanged', cellHandler);
+    element.addEventListener('headerSlotsChanged', headerHandler);
+    element.addEventListener('filterSlotsChanged', filterHandler);
+    element.addEventListener('groupRowSlotsChanged', groupHandler);
+    element.addEventListener('expandableRowSlotsChanged', expandableHandler);
+    element.addEventListener('emptyStateSlotChanged', emptyHandler);
 
     return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('keydown', handleDocumentEscape);
+      element.removeEventListener('cellSlotsChanged', cellHandler);
+      element.removeEventListener('headerSlotsChanged', headerHandler);
+      element.removeEventListener('filterSlotsChanged', filterHandler);
+      element.removeEventListener('groupRowSlotsChanged', groupHandler);
+      element.removeEventListener('expandableRowSlotsChanged', expandableHandler);
+      element.removeEventListener('emptyStateSlotChanged', emptyHandler);
     };
-  }, [eventPathIncludesClass, openPinMenuColumn]);
+  }, [element]);
 
-  const itemsToRender = virtualizationEnabled
-    ? displayItems.slice(virtualScroll.visibleRange.start, virtualScroll.visibleRange.end)
-    : displayItems;
+  // ────── Sync `options` (declarative props → imperative setter) ──────
+  const mergedOptions = React.useMemo(
+    () => mergePropsIntoOptions(props),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    depsFromProps(props),
+  );
 
-  const syncHeaderHorizontalScroll = React.useCallback((scrollLeft: number) => {
-    const headerStrip = headerStripRef.current;
-    const filterStrip = filterStripRef.current;
-    if (headerStrip && headerStrip.scrollLeft !== scrollLeft) {
-      headerStrip.scrollLeft = scrollLeft;
+  React.useLayoutEffect(() => {
+    if (!element) return;
+    // Attach onRegisterApi via options so the element's init path wires it
+    // through to the controller's gridApi factory. `onRegisterApi` is typed
+    // as `(gridApi: unknown) => void` in core but we know the argument is a
+    // UiGridApi at runtime — cast the passthrough to bridge the types.
+    const nextOptions: GridOptions = props.onRegisterApi
+      ? ({
+          ...mergedOptions,
+          onRegisterApi: props.onRegisterApi as (api: unknown) => void,
+        } as GridOptions)
+      : mergedOptions;
+    element.options = nextOptions;
+  }, [element, mergedOptions, props.onRegisterApi]);
+
+  // ────── Declare which slots are framework-rendered ──────
+  // When a fallback `cellRenderer` / `headerRenderer` is provided, flag every
+  // column in the current columnDefs so the element emits slot placeholders
+  // for all of them. The per-column entries in `cellRenderers` still take
+  // precedence at render time.
+  const columnNames = React.useMemo(() => {
+    const columnDefs = props.columnDefs ?? props.options?.columnDefs ?? [];
+    return columnDefs.map((c) => c.name);
+  }, [props.columnDefs, props.options?.columnDefs]);
+
+  const slotsConfig = React.useMemo<FrameworkRenderedSlotsConfig>(() => {
+    const cellKeys = new Set<string>(props.cellRenderers ? Object.keys(props.cellRenderers) : []);
+    if (props.cellRenderer) for (const name of columnNames) cellKeys.add(name);
+
+    const headerKeys = new Set<string>(
+      props.headerRenderers ? Object.keys(props.headerRenderers) : [],
+    );
+    if (props.headerRenderer) for (const name of columnNames) headerKeys.add(name);
+
+    return {
+      cells: Array.from(cellKeys),
+      headers: Array.from(headerKeys),
+      filters: props.filterRenderers ? Object.keys(props.filterRenderers) : [],
+      groupRow: !!props.groupRowRenderer,
+      expandableRow: !!props.expandableRenderer,
+      emptyState: !!props.emptyRenderer,
+    };
+  }, [
+    keyList(props.cellRenderers),
+    keyList(props.headerRenderers),
+    keyList(props.filterRenderers),
+    props.cellRenderer,
+    props.headerRenderer,
+    props.groupRowRenderer,
+    props.expandableRenderer,
+    props.emptyRenderer,
+    columnNames.join(','),
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (!element) return;
+    element.setFrameworkRenderedSlots(slotsConfig);
+  }, [element, slotsConfig]);
+
+  // ────── Bridge DOM events → React event-prop callbacks ──────
+  React.useLayoutEffect(() => {
+    if (!element) return;
+    const active: Array<[string, EventListener]> = [];
+    for (const [propName, eventName] of Object.entries(EVENT_MAP)) {
+      const handler = (props as Record<string, unknown>)[propName] as
+        | ((event: CustomEvent) => void)
+        | undefined;
+      if (!handler) continue;
+      const listener: EventListener = (event) => handler(event as CustomEvent);
+      element.addEventListener(eventName, listener);
+      active.push([eventName, listener]);
     }
-    if (filterStrip && filterStrip.scrollLeft !== scrollLeft) {
-      filterStrip.scrollLeft = scrollLeft;
-    }
-  }, []);
+    return () => {
+      for (const [eventName, listener] of active) {
+        element.removeEventListener(eventName, listener);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [element, ...eventHandlerDeps(props)]);
 
-  const onBodyViewportScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const target = event.currentTarget;
-    const bodyScrollTop = Math.max(0, target.scrollTop);
-    virtualScroll.setScrollTop(bodyScrollTop);
-    syncHeaderHorizontalScroll(target.scrollLeft);
-    const startIndex = Math.floor(bodyScrollTop / rowSize);
-    state.onViewportScroll(startIndex);
+  // ────── Render the element + portals for every active framework slot ──────
+  // The `<ui-grid-element>` is rendered directly as a React child — no wrapper
+  // div. That means the element is a direct layout child of the consumer's
+  // parent container, so height / flex / grid inheritance works out of the
+  // box. Portals target the element itself (light DOM) and slot projection
+  // composes them into the shadow tree.
+  return (
+    <ui-grid-element ref={elementCallbackRef} className={props.className} style={props.style}>
+      {element ? (
+        <>
+          {Array.from(cellSlots.values()).map((slot) => {
+            const renderer = props.cellRenderers?.[slot.columnName] ?? props.cellRenderer;
+            if (!renderer) return null;
+            return (
+              <SlotPortal key={`cell:${slot.slotName}`} host={element} slot={slot.slotName}>
+                {renderer(slot.context)}
+              </SlotPortal>
+            );
+          })}
+          {Array.from(headerSlots.values()).map((slot) => {
+            const renderer = props.headerRenderers?.[slot.columnName] ?? props.headerRenderer;
+            if (!renderer) return null;
+            return (
+              <SlotPortal key={`hdr:${slot.slotName}`} host={element} slot={slot.slotName}>
+                {renderer(slot.context)}
+              </SlotPortal>
+            );
+          })}
+          {Array.from(filterSlots.values()).map((slot) => {
+            const renderer = props.filterRenderers?.[slot.columnName];
+            if (!renderer) return null;
+            return (
+              <SlotPortal key={`flt:${slot.slotName}`} host={element} slot={slot.slotName}>
+                {renderer({
+                  columnName: slot.columnName,
+                  value: slot.value,
+                  placeholder: slot.placeholder,
+                  disabled: slot.disabled,
+                  column: slot.column,
+                })}
+              </SlotPortal>
+            );
+          })}
+          {Array.from(groupRowSlots.values()).map((slot) => {
+            if (!props.groupRowRenderer) return null;
+            return (
+              <SlotPortal key={`grp:${slot.slotName}`} host={element} slot={slot.slotName}>
+                {props.groupRowRenderer({
+                  groupId: slot.groupId,
+                  field: slot.field,
+                  label: slot.label,
+                  count: slot.count,
+                  depth: slot.depth,
+                  collapsed: slot.collapsed,
+                })}
+              </SlotPortal>
+            );
+          })}
+          {Array.from(expandableSlots.values()).map((slot) => {
+            if (!props.expandableRenderer) return null;
+            return (
+              <SlotPortal key={`exp:${slot.slotName}`} host={element} slot={slot.slotName}>
+                {props.expandableRenderer(slot.context)}
+              </SlotPortal>
+            );
+          })}
+          {emptyStateSlot && props.emptyRenderer ? (
+            <SlotPortal key="empty" host={element} slot="empty">
+              {props.emptyRenderer({
+                heading: emptyStateSlot.heading,
+                description: emptyStateSlot.description,
+              })}
+            </SlotPortal>
+          ) : null}
+        </>
+      ) : null}
+    </ui-grid-element>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Render children into a `<div slot="…">` inside the host element's light
+ * DOM so shadow-DOM slot projection composes them into the grid.
+ */
+function SlotPortal({
+  host,
+  slot,
+  children,
+}: {
+  host: HTMLElement;
+  slot: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  // Create a stable `<div>` per portal so React can reconcile children into
+  // the same container across renders. The div is removed on unmount via the
+  // useLayoutEffect cleanup.
+  const divRef = React.useRef<HTMLDivElement | null>(null);
+  if (!divRef.current) {
+    const div = document.createElement('div');
+    div.setAttribute('slot', slot);
+    divRef.current = div;
+  }
+
+  React.useLayoutEffect(() => {
+    const div = divRef.current;
+    if (!div) return;
+    host.appendChild(div);
+    return () => {
+      if (div.parentNode === host) host.removeChild(div);
+    };
+  }, [host]);
+
+  return createPortal(children, divRef.current);
+}
+
+/**
+ * Merge the individual attribute-style props into a full `GridOptions`.
+ * `options` (if provided) wins, so consumers can use either style without
+ * surprise.
+ */
+function mergePropsIntoOptions(props: UiGridProps): GridOptions {
+  const base: GridOptions = {
+    id: props.gridId ?? '__ui-grid-pending__',
+    data: props.data ?? [],
+    columnDefs: props.columnDefs ?? [],
   };
 
-  const onStripWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    const viewport = bodyViewportRef.current;
-    if (!viewport) return;
-    event.preventDefault();
-    viewport.scrollLeft += event.deltaX;
-    viewport.scrollTop += event.deltaY;
-  }, []);
+  if (props.grouping !== undefined) base.grouping = props.grouping;
+  if (props.title !== undefined) base.title = props.title;
+  if (props.rowHeight !== undefined) base.rowHeight = props.rowHeight;
+  if (props.headerRowHeight !== undefined) base.headerRowHeight = props.headerRowHeight;
+  if (props.viewportHeight !== undefined) base.viewportHeight = props.viewportHeight;
+  if (props.paginationPageSize !== undefined) base.paginationPageSize = props.paginationPageSize;
+  if (props.paginationPageSizes !== undefined) base.paginationPageSizes = props.paginationPageSizes;
+  if (props.paginationCurrentPage !== undefined) base.paginationCurrentPage = props.paginationCurrentPage;
+  if (props.totalItems !== undefined) base.totalItems = props.totalItems;
+  if (props.virtualizationThreshold !== undefined) base.virtualizationThreshold = props.virtualizationThreshold;
+  if (props.treeChildrenField !== undefined) base.treeChildrenField = props.treeChildrenField;
+  if (props.treeIndent !== undefined) base.treeIndent = props.treeIndent;
+  if (props.expandableRowHeight !== undefined) base.expandableRowHeight = props.expandableRowHeight;
+  if (props.expandableRowHeaderWidth !== undefined) base.expandableRowHeaderWidth = props.expandableRowHeaderWidth;
+  if (props.emptyMessage !== undefined) base.emptyMessage = props.emptyMessage;
+  if (props.infiniteScrollRowsFromEnd !== undefined) base.infiniteScrollRowsFromEnd = props.infiniteScrollRowsFromEnd;
 
-  function renderDisplayItem(item: DisplayItem) {
-    if (groupingFeature && state.isGroupItem(item)) {
-      return (
-        <button
-          key={item.id}
-          type="button"
-          className="group-row ui-grid-row ui-grid-group-row"
-          data-part="group-row"
-          role="row"
-          aria-expanded={!item.collapsed}
-          style={{ gridColumn: '1 / -1', paddingInlineStart: `${item.depth * 1.25 + 1}rem` }}
-          onClick={() => state.toggleGroup(item)}
-        >
-          <strong>
-            {item.field}: {item.label}
-          </strong>
-          <span>
-            {item.count} {labels.groupRowsSuffix}
-          </span>
-          <svg
-            className="toggle-icon group-disclosure-icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            focusable={false}
-          >
-            <path d={item.collapsed ? 'M10 7l5 5-5 5z' : 'M7 10l5 5 5-5z'} />
-          </svg>
-          <span className="sr-only ui-grid-sr-only">{state.groupDisclosureLabel(item)}</span>
-        </button>
-      );
-    }
+  if (props.enableSorting !== undefined) base.enableSorting = props.enableSorting;
+  if (props.enableFiltering !== undefined) base.enableFiltering = props.enableFiltering;
+  if (props.enableGrouping !== undefined) base.enableGrouping = props.enableGrouping;
+  if (props.enablePinning !== undefined) base.enablePinning = props.enablePinning;
+  if (props.enableColumnMoving !== undefined) base.enableColumnMoving = props.enableColumnMoving;
+  if (props.enableColumnResizing !== undefined) base.enableColumnResizing = props.enableColumnResizing;
+  if (props.enableCellEdit !== undefined) base.enableCellEdit = props.enableCellEdit;
+  if (props.enableCellEditOnFocus !== undefined) base.enableCellEditOnFocus = props.enableCellEditOnFocus;
+  if (props.enablePagination !== undefined) base.enablePagination = props.enablePagination;
+  if (props.enablePaginationControls !== undefined) base.enablePaginationControls = props.enablePaginationControls;
+  if (props.useExternalPagination !== undefined) base.useExternalPagination = props.useExternalPagination;
+  if (props.enableExpandable !== undefined) base.enableExpandable = props.enableExpandable;
+  if (props.enableTreeView !== undefined) base.enableTreeView = props.enableTreeView;
+  if (props.showTreeExpandNoChildren !== undefined) base.showTreeExpandNoChildren = props.showTreeExpandNoChildren;
+  if (props.treeRowHeaderAlwaysVisible !== undefined) base.treeRowHeaderAlwaysVisible = props.treeRowHeaderAlwaysVisible;
+  if (props.enableAutoResize !== undefined) base.enableAutoResize = props.enableAutoResize;
+  if (props.enableVirtualization !== undefined) base.enableVirtualization = props.enableVirtualization;
+  if (props.enableInfiniteScroll !== undefined) base.enableInfiniteScroll = props.enableInfiniteScroll;
+  if (props.infiniteScrollUp !== undefined) base.infiniteScrollUp = props.infiniteScrollUp;
+  if (props.infiniteScrollDown !== undefined) base.infiniteScrollDown = props.infiniteScrollDown;
 
-    if (expandableFeature && state.isExpandableItem(item)) {
-      const ctx = state.expandedContext(item.row);
-      return (
-        <div
-          key={item.id}
-          className="expandable-row ui-grid-row ui-grid-expandable-row"
-          data-part="expandable-row"
-          style={{ gridColumn: '1 / -1', minHeight: `${item.row.expandedRowHeight}px` }}
-        >
-          {expandableRenderer?.(ctx)}
-        </div>
-      );
-    }
+  if (props.enableRowSelection !== undefined) base.enableRowSelection = props.enableRowSelection;
+  if (props.multiSelect !== undefined) base.multiSelect = props.multiSelect;
+  if (props.noUnselect !== undefined) base.noUnselect = props.noUnselect;
+  if (props.modifierKeysToMultiSelect !== undefined) base.modifierKeysToMultiSelect = props.modifierKeysToMultiSelect;
+  if (props.enableRowHeaderSelection !== undefined) base.enableRowHeaderSelection = props.enableRowHeaderSelection;
+  if (props.enableFullRowSelection !== undefined) base.enableFullRowSelection = props.enableFullRowSelection;
+  if (props.enableFocusRowOnRowHeaderClick !== undefined) base.enableFocusRowOnRowHeaderClick = props.enableFocusRowOnRowHeaderClick;
+  if (props.enableSelectRowOnFocus !== undefined) base.enableSelectRowOnFocus = props.enableSelectRowOnFocus;
+  if (props.enableSelectAll !== undefined) base.enableSelectAll = props.enableSelectAll;
+  if (props.enableSelectionBatchEvent !== undefined) base.enableSelectionBatchEvent = props.enableSelectionBatchEvent;
+  if (props.enableFooterTotalSelected !== undefined) base.enableFooterTotalSelected = props.enableFooterTotalSelected;
+  if (props.selectionRowHeaderWidth !== undefined) base.selectionRowHeaderWidth = props.selectionRowHeaderWidth;
 
-    if (item.kind !== 'row') return null;
-    const rowItem = item as RowItem;
-
-    return visibleColumns.map((column) => {
-      const pinned = state.isPinned(column);
-      const pinOffset = pinned ? state.pinnedOffset(column) : null;
-      return (
-        <div
-          key={`${rowItem.row.id}-${column.name}`}
-          className={`${cellClassName(rowItem, column)}${pinned ? ' is-pinned' : ''}`}
-          data-part="body-cell"
-          role="gridcell"
-          tabIndex={0}
-          data-row-id={rowItem.row.id}
-          data-col-name={column.name}
-          onFocus={() => state.focusCell(rowItem.row, column)}
-          onClick={() => state.focusCell(rowItem.row, column)}
-          onDoubleClick={(e) => state.handleCellDoubleClick(rowItem.row, column, e)}
-          onKeyDown={(e) => state.handleCellKeyDown(rowItem.row, column, e)}
-          style={{
-            position: pinned ? 'sticky' : undefined,
-            left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
-            right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-            zIndex: pinned ? 2 : undefined,
-          }}
-        >
-          <div
-            className="cell-shell"
-            style={{ paddingInlineStart: state.cellIndent(rowItem.row, column) }}
-          >
-            {treeViewFeature && state.showTreeToggle(rowItem.row, column) && (
-              <button
-                type="button"
-                className="row-toggle row-toggle-tree"
-                data-part="tree-toggle"
-                aria-label={state.treeToggleLabel(rowItem.row)}
-                aria-expanded={state.isTreeRowExpanded(rowItem.row)}
-                onClick={(e) => state.toggleTreeRow(rowItem.row, e)}
-              >
-                <svg
-                  className="toggle-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  focusable={false}
-                >
-                  <path
-                    d={state.isTreeRowExpanded(rowItem.row) ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'}
-                  />
-                </svg>
-              </button>
-            )}
-            {expandableFeature && state.showExpandToggle(rowItem.row, column) && (
-              <button
-                type="button"
-                className="row-toggle row-toggle-expand"
-                data-part="expand-toggle"
-                aria-label={state.expandToggleLabel(rowItem.row)}
-                aria-expanded={rowItem.row.expanded}
-                onClick={(e) => state.toggleRowExpansion(rowItem.row, e)}
-              >
-                <svg
-                  className="toggle-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  focusable={false}
-                >
-                  <path d={rowItem.row.expanded ? 'M7 10l5 5 5-5z' : 'M10 7l5 5-5 5z'} />
-                </svg>
-              </button>
-            )}
-            <span className="cell-value">
-              {cellEditFeature && state.isEditingCell(rowItem.row, column) ? (
-                <input
-                  className="cell-editor"
-                  data-row-id={rowItem.row.id}
-                  data-col-name={column.name}
-                  aria-label={state.headerLabel(column)}
-                  type={state.editorInputType(column)}
-                  defaultValue={editingValue}
-                  onChange={(e) => state.updateEditingValue(e.target.value)}
-                  onKeyDown={(e) => state.handleEditorKeyDown(e)}
-                  onBlur={(e) => state.handleEditorBlur(e)}
-                />
-              ) : cellRenderer ? (
-                (cellRenderer(state.cellContext(rowItem.row, column)) ??
-                state.displayValue(rowItem.row, column))
-              ) : (
-                state.displayValue(rowItem.row, column)
-              )}
-            </span>
-          </div>
-        </div>
-      );
-    });
+  // `options` wins — full-options style is the escape hatch for anything
+  // the individual props don't cover.
+  if (props.options) {
+    return { ...base, ...props.options };
   }
+  return base;
+}
 
-  function cellClassName(item: RowItem, column: GridColumnDef): string {
-    const classes = ['body-cell', 'ui-grid-cell'];
-    if (state.isOddStripedRow(item)) classes.push('body-cell-odd');
-    if (column.align === 'center') classes.push('align-center');
-    if (column.align === 'end') classes.push('align-end');
-    if (state.isFocusedCell(item.row, column)) classes.push('cell-focused');
-    if (state.isFocusedRow(item.row)) classes.push('row-focused');
-    if (cellEditFeature && state.isEditingCell(item.row, column)) classes.push('cell-editing');
-    return classes.join(' ');
-  }
+/** Build the dependency array `useMemo` needs so the merged options rebuild
+ * when any declarative prop changes. */
+function depsFromProps(props: UiGridProps): React.DependencyList {
+  return [
+    props.options,
+    props.gridId,
+    props.title,
+    props.data,
+    props.columnDefs,
+    props.grouping,
+    props.rowHeight,
+    props.headerRowHeight,
+    props.viewportHeight,
+    props.paginationPageSize,
+    props.paginationPageSizes,
+    props.paginationCurrentPage,
+    props.totalItems,
+    props.virtualizationThreshold,
+    props.treeChildrenField,
+    props.treeIndent,
+    props.expandableRowHeight,
+    props.expandableRowHeaderWidth,
+    props.emptyMessage,
+    props.infiniteScrollRowsFromEnd,
+    props.enableSorting,
+    props.enableFiltering,
+    props.enableGrouping,
+    props.enablePinning,
+    props.enableColumnMoving,
+    props.enableColumnResizing,
+    props.enableCellEdit,
+    props.enableCellEditOnFocus,
+    props.enablePagination,
+    props.enablePaginationControls,
+    props.useExternalPagination,
+    props.enableExpandable,
+    props.enableTreeView,
+    props.showTreeExpandNoChildren,
+    props.treeRowHeaderAlwaysVisible,
+    props.enableAutoResize,
+    props.enableVirtualization,
+    props.enableInfiniteScroll,
+    props.infiniteScrollUp,
+    props.infiniteScrollDown,
+    props.enableRowSelection,
+    props.multiSelect,
+    props.noUnselect,
+    props.modifierKeysToMultiSelect,
+    props.enableRowHeaderSelection,
+    props.enableFullRowSelection,
+    props.enableFocusRowOnRowHeaderClick,
+    props.enableSelectRowOnFocus,
+    props.enableSelectAll,
+    props.enableSelectionBatchEvent,
+    props.enableFooterTotalSelected,
+    props.selectionRowHeaderWidth,
+  ];
+}
 
-  function renderSortIcon(column: GridColumnDef) {
-    const direction = state.sortDirection(column);
-    switch (direction) {
-      case 'asc':
-        return (
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-            <path d="M12 5l-6 6h4v8h4v-8h4z" />
-          </svg>
-        );
-      case 'desc':
-        return (
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-            <path d="M12 19l6-6h-4V5h-4v8H6z" />
-          </svg>
-        );
-      default:
-        return (
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-            <path d="M7 6h10v2H7V6Zm0 5h7v2H7v-2Zm0 5h4v2H7v-2Z" />
-          </svg>
-        );
-    }
-  }
-
-  return (
-    <div className={`ui-grid-host ${className ?? ''}`} ref={gridContainerRef}>
-      <section
-        className="grid-frame ui-grid"
-        data-part="grid-frame"
-        role="grid"
-        aria-label={options.title ?? 'Data grid'}
-      >
-        <div
-          className="grid-table ui-grid-contents-wrapper"
-          data-part="grid-table"
-          style={
-            virtualizationEnabled ? { height: scrollContainerHeight } : undefined
-          }
-        >
-          <div className="grid-header-strip" ref={headerStripRef} onWheel={onStripWheel}>
-          <div
-            className="header-grid ui-grid-header ui-grid-header-canvas"
-            data-part="header"
-            role="row"
-            ref={headerGridRef}
-            style={{ gridTemplateColumns }}
-          >
-            {visibleColumns.map((column) => {
-              const pinned = state.isPinned(column);
-              const pinOffset = pinned ? state.pinnedOffset(column) : null;
-              const pinMenuOpen = isPinMenuOpen(column);
-              return (
-                <div
-                  key={column.name}
-                  className={`header-cell ui-grid-header-cell${sortingFeature && state.sortDirection(column) !== 'none' ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}${pinMenuOpen ? ' is-pin-menu-open' : ''}${draggedColumnName === column.name ? ' is-dragging' : ''}${dropTargetColumnName === column.name ? ' is-drag-target' : ''}`}
-                  data-part="header-cell"
-                  data-col-name={column.name}
-                  aria-sort={sortingFeature ? (state.sortAriaSort(column) as any) : undefined}
-                  draggable={columnMovingFeature}
-                  onDragStart={(event) => handleHeaderDragStart(column, event)}
-                  onDragOver={(event) => handleHeaderDragOver(column, event)}
-                  onDrop={(event) => handleHeaderDrop(column, event)}
-                  onDragEnd={handleHeaderDragEnd}
-                  onDragLeave={() => {
-                    if (dropTargetColumnName === column.name) {
-                      setDropTargetColumnName(null);
-                    }
-                  }}
-                  style={{
-                    position: pinned ? 'sticky' : undefined,
-                    left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
-                    right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-                    zIndex: pinMenuOpen ? 8 : pinned ? 2 : undefined,
-                  }}
-                >
-                  <span className="header-label">{renderHeaderContent(column)}</span>
-
-                  <div className="header-actions">
-                    {sortingFeature && (
-                      <button
-                        type="button"
-                        className={`header-action${!state.isColumnSortable(column) ? ' header-action-disabled' : ''}`}
-                        disabled={!state.isColumnSortable(column)}
-                        aria-label={state.sortButtonLabel(column)}
-                        title={state.sortButtonLabel(column)}
-                        onClick={() => state.toggleSort(column)}
-                      >
-                        {renderSortIcon(column)}
-                        <span className="sr-only ui-grid-sr-only">
-                          {state.sortButtonLabel(column)}
-                        </span>
-                      </button>
-                    )}
-
-                    {groupingFeature &&
-                      state.isGroupingEnabled() &&
-                      column.enableGrouping !== false && (
-                        <button
-                          type="button"
-                          className={`chip-action${state.isGrouped(column) ? ' chip-action-active' : ''}`}
-                          data-part="group-toggle"
-                          aria-label={state.groupingButtonLabel(column)}
-                          title={state.groupingButtonLabel(column)}
-                          onClick={(e) => state.toggleGrouping(column, e)}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                            <path d="M4 6h8v4H4V6Zm0 8h8v4H4v-4Zm10-8h6v4h-6V6Zm0 8h6v4h-6v-4Z" />
-                          </svg>
-                          <span className="sr-only ui-grid-sr-only">
-                            {state.groupingButtonLabel(column)}
-                          </span>
-                        </button>
-                      )}
-
-                    {state.pinningFeature &&
-                      state.isPinningEnabled() &&
-                      state.isColumnPinnable(column) && (
-                        <div
-                          className={`pin-control${pinMenuOpen ? ' pin-control-open' : ''}`}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className={`chip-action pin-trigger${pinned || pinMenuOpen ? ' chip-action-active' : ''}`}
-                            data-part="pin-toggle"
-                            aria-label={pinButtonLabel(column)}
-                            title={pinButtonLabel(column)}
-                            aria-haspopup={pinned ? undefined : 'menu'}
-                            aria-expanded={pinned ? undefined : pinMenuOpen}
-                            onClick={(event) => onPinTrigger(column, event)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
-                            </svg>
-                            <span className="sr-only ui-grid-sr-only">{pinButtonLabel(column)}</span>
-                          </button>
-
-                          <div
-                            className="pin-menu"
-                            data-part="pin-menu"
-                            role="menu"
-                            aria-label="Pin options"
-                            aria-hidden={!pinMenuOpen}
-                          >
-                            <button
-                              type="button"
-                              className="pin-menu-action"
-                              data-part="pin-left-action"
-                              role="menuitem"
-                              aria-label={labels.pinLeft}
-                              title={labels.pinLeft}
-                              tabIndex={pinMenuOpen ? 0 : -1}
-                              onClick={(event) => choosePinDirection(column, 'left', event)}
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                                <path d="M10 6 4 12l6 6v-4h10v-4H10V6z" />
-                              </svg>
-                              <span className="sr-only ui-grid-sr-only">{labels.pinLeft}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="pin-menu-action"
-                              data-part="pin-right-action"
-                              role="menuitem"
-                              aria-label={labels.pinRight}
-                              title={labels.pinRight}
-                              tabIndex={pinMenuOpen ? 0 : -1}
-                              onClick={(event) => choosePinDirection(column, 'right', event)}
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                                <path d="M14 6v4H4v4h10v4l6-6-6-6z" />
-                              </svg>
-                              <span className="sr-only ui-grid-sr-only">{labels.pinRight}</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                  </div>
-
-                  {state.canResizeColumns() && (
-                    <button
-                      type="button"
-                      className="column-resizer"
-                      data-col-name={column.name}
-                      aria-label={`Resize ${state.headerLabel(column)} column`}
-                      title="Drag to resize, double-click to auto fit"
-                      onMouseDown={(event) => state.handleHeaderResizeMouseDown(column, event)}
-                      onDoubleClick={(event) => state.autoSizeColumn(column, event)}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          </div>
-
-          {filteringFeature && state.isFilteringEnabled() && (
-            <div className="grid-filter-strip" ref={filterStripRef} onWheel={onStripWheel}>
-            <div
-              className="filter-grid ui-grid-header"
-              data-part="filters"
-              ref={filterGridRef}
-              style={{
-                gridTemplateColumns,
-                ['--ui-grid-header-sticky-top' as string]: `${headerStickyHeight}px`,
-              }}
-            >
-              {visibleColumns.map((column) => {
-                const pinned = state.isPinned(column);
-                const pinOffset = pinned ? state.pinnedOffset(column) : null;
-                return (
-                  <label
-                    key={column.name}
-                    className={`filter-cell ui-grid-filter-container${pinned ? ' is-pinned' : ''}`}
-                    data-part="filter-cell"
-                    style={{
-                      position: pinned ? 'sticky' : undefined,
-                      left: pinOffset?.side === 'left' ? pinOffset.offset : undefined,
-                      right: pinOffset?.side === 'right' ? pinOffset.offset : undefined,
-                      zIndex: pinned ? 2 : undefined,
-                    }}
-                  >
-                    <span className="sr-only ui-grid-sr-only">
-                      {labels.filterColumn} {state.headerLabel(column)}
-                    </span>
-                    <input
-                      className="ui-grid-filter-input"
-                      type="text"
-                      defaultValue={state.filterValue(column.name)}
-                      placeholder={state.filterPlaceholder(column)}
-                      disabled={state.isFilterInputDisabled(column)}
-                      onChange={(e) => state.updateFilter(column.name, e.target.value)}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-            </div>
-          )}
-
-          <div
-            className="grid-body-viewport"
-            ref={bodyViewportRef}
-            style={virtualizationEnabled ? { overflowY: 'auto' } : undefined}
-            onScroll={onBodyViewportScroll}
-          >
-          {displayItems.length > 0 ? (
-            virtualizationEnabled ? (
-              <div className="grid-virtual-spacer" style={{ height: `${virtualScroll.totalHeight}px` }}>
-                <div
-                  className="body-grid ui-grid-canvas grid-virtual-body"
-                  data-part="body"
-                  role="rowgroup"
-                  style={{
-                    gridTemplateColumns,
-                    position: 'absolute',
-                    top: `${virtualScroll.offsetY}px`,
-                    left: 0,
-                  }}
-                >
-                  {itemsToRender.map(renderDisplayItem)}
-                </div>
-              </div>
-            ) : (
-              <div className="body-grid ui-grid-canvas" data-part="body" role="rowgroup" style={{ gridTemplateColumns }}>
-                {displayItems.map(renderDisplayItem)}
-              </div>
-            )
-          ) : (
-            <div className="empty-state ui-grid-no-row-overlay" data-part="empty-state">
-              <strong>{options.emptyMessage ?? labels.emptyHeading}</strong>
-              <p>{labels.emptyDescription}</p>
-            </div>
-          )}
-          </div>
-        </div>
-
-        {paginationFeature && state.showPaginationControls() && (
-          <footer
-            className="pagination-bar ui-grid-pagination"
-            data-part="pagination"
-            role="navigation"
-            aria-label={labels.paginationPage}
-          >
-            <p>{state.paginationSummary()}</p>
-            <div className="pagination-controls">
-              <button
-                type="button"
-                className="action action-secondary pagination-button"
-                aria-label={labels.paginationPrevious}
-                disabled={paginationCurrentPage <= 1}
-                onClick={() => state.previousPage()}
-              >
-                <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                </svg>
-                <span className="sr-only">{labels.paginationPrevious}</span>
-              </button>
-              <span>
-                {labels.paginationPage} {paginationCurrentPage} {labels.paginationOf} {paginationTotalPages}
-              </span>
-              <button
-                type="button"
-                className="action action-secondary pagination-button"
-                aria-label={labels.paginationNext}
-                disabled={paginationCurrentPage >= paginationTotalPages}
-                onClick={() => state.nextPage()}
-              >
-                <svg className="pagination-icon" viewBox="0 0 24 24" aria-hidden="true" focusable={false}>
-                  <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-                </svg>
-                <span className="sr-only">{labels.paginationNext}</span>
-              </button>
-              {state.pageSizeOptions().length > 0 && (
-                <label className="pagination-size">
-                  <span className="sr-only">{labels.paginationRows}</span>
-                  <select
-                    aria-label={labels.paginationRows}
-                    value={paginationSelectedPageSize}
-                    onChange={(e) => state.onPageSizeChange(e.target.value)}
-                  >
-                    {state.pageSizeOptions().map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-          </footer>
-        )}
-      </section>
-    </div>
+/** Dependency list for the event-wiring effect — re-binds when any event
+ * prop's identity changes. */
+function eventHandlerDeps(props: UiGridProps): React.DependencyList {
+  return Object.keys(EVENT_MAP).map(
+    (key) => (props as Record<string, unknown>)[key],
   );
+}
+
+/** Stable key list for Record-valued props, so useMemo doesn't thrash on
+ * every render when the consumer inlines their renderer map. */
+function keyList(record: Record<string, unknown> | undefined): string {
+  if (!record) return '';
+  return Object.keys(record).sort().join(',');
 }

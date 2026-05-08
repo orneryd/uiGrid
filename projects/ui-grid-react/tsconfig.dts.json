@@ -7,7 +7,8 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "paths": {
-      "@ornery/ui-grid-core": ["../ui-grid-core/dist/index.d.ts"]
+      "@ornery/ui-grid-core": ["../ui-grid-core/dist/index.d.ts"],
+      "@ornery/ui-grid-vanilla": ["../ui-grid-vanilla/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

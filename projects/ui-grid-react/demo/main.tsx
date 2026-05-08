@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UiGrid } from '../src/index';
-import type { GridBenchmarkResult, GridOptions, UiGridApi } from '../src/index';
+import type { GridOptions, UiGridApi } from '../src/index';
 import { FILTER_CONDITIONS } from '@ornery/ui-grid-core';
 import '../src/ui-grid.css';
 import './demo.css';
@@ -10,15 +10,27 @@ const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'] as const;
 const companies = ['Northwind', 'Blue Harbor', 'Forge Group', 'Larkspur', 'Atlas'] as const;
 const owners = ['Casey Tran', 'Jordan Silva', 'Priya Rao', 'Evan Brooks', 'Mina Patel'] as const;
 
-function createDemoData(count = 100_000) {
+type Row = {
+  id: string;
+  name: string;
+  company: (typeof companies)[number];
+  revenue: number;
+  status: (typeof statuses)[number];
+  renewalDate: string;
+  account: { owner: (typeof owners)[number] };
+  notes: string;
+};
+
+function createDemoData(count = 100_000): Row[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `row-${i + 1}`,
     name: `Customer ${i + 1}`,
-    company: companies[i % companies.length],
+    company: companies[i % companies.length]!,
     revenue: 40000 + i * 1350,
-    status: statuses[i % statuses.length],
+    status: statuses[i % statuses.length]!,
     renewalDate: `2026-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}`,
-    account: { owner: owners[i % owners.length] },
+    account: { owner: owners[i % owners.length]! },
+    notes: `Notes for customer ${i + 1} — account managed by ${owners[i % owners.length]}.`,
   }));
 }
 
@@ -28,102 +40,265 @@ const currencyFormat = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
 
-function App() {
-  const [gridApi, setGridApi] = useState<UiGridApi | null>(null);
-  const [visibleRowCount, setVisibleRowCount] = useState(0);
-  const [benchmarkResult, setBenchmarkResult] = useState<GridBenchmarkResult | null>(null);
-  const data = useMemo(() => createDemoData(), []);
+// ---------------------------------------------------------------------------
+// Renderer components — each one is a pure React component so it benefits
+// from hooks / context / memoization the same as any other React subtree.
+// ---------------------------------------------------------------------------
 
-  const options = useMemo<GridOptions>(
-    () => ({
-      id: 'react-demo-grid',
-      title: 'UI Grid React Demo',
-      emptyMessage: 'No rows match the current filters.',
-      rowHeight: 48,
-      viewportHeight: 620,
-      enableSorting: true,
-      enableFiltering: true,
-      enableGrouping: true,
-      enableColumnMoving: true,
-      enableColumnResizing: true,
-      enableVirtualization: true,
-      enableCellEditOnFocus: true,
-      virtualizationThreshold: 25,
-      grouping: { groupBy: ['status'] },
-      benchmark: { iterations: 40 },
-      rowIdentity: (row) => String(row['id']),
-      onRegisterApi: (api) => setGridApi(api as UiGridApi),
-      columnDefs: [
-        {
-          name: 'name',
-          displayName: 'Customer',
-          width: 'minmax(14rem, 1.2fr)',
-          enableCellEdit: true,
-        },
-        { name: 'company', width: 'minmax(12rem, 1fr)', enableCellEdit: true },
-        {
-          name: 'revenue',
-          type: 'number',
-          align: 'end',
-          width: 'minmax(10rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.greaterThan },
-          formatter: (value) => currencyFormat.format(Number(value ?? 0)),
-        },
-        {
-          name: 'status',
-          width: 'minmax(8rem, 0.7fr)',
-          filter: { condition: FILTER_CONDITIONS.exact },
-        },
-        {
-          name: 'renewalDate',
-          type: 'date',
-          displayName: 'Renewal',
-          width: 'minmax(11rem, 0.8fr)',
-          formatter: (value) => new Date(String(value)).toLocaleDateString('en-US'),
-        },
-        {
-          name: 'owner',
-          field: 'account.owner',
-          displayName: 'Account Owner',
-          width: 'minmax(11rem, 0.8fr)',
-          enableCellEdit: true,
-        },
-      ],
-      data,
-    }),
-    [data],
+function StatusBadge({ value }: { value: string }): React.ReactElement {
+  const palette: Record<string, { bg: string; color: string }> = {
+    Active: { bg: 'rgba(22, 163, 74, 0.2)', color: '#166534' },
+    Expansion: { bg: 'rgba(37, 99, 235, 0.2)', color: '#1d4ed8' },
+    Enterprise: { bg: 'rgba(15, 118, 110, 0.2)', color: '#115e59' },
+    Pilot: { bg: 'rgba(234, 88, 12, 0.2)', color: '#c2410c' },
+  };
+  const tone = palette[value] ?? { bg: 'rgba(100, 116, 139, 0.2)', color: '#334155' };
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '0.15rem 0.6rem',
+        borderRadius: 999,
+        fontSize: '0.82rem',
+        fontWeight: 600,
+        background: tone.bg,
+        color: tone.color,
+      }}
+    >
+      {value}
+    </span>
+  );
+}
+
+function RevenueCell({ value }: { value: number }): React.ReactElement {
+  const high = value >= 80000;
+  return (
+    <span
+      style={{
+        fontVariantNumeric: 'tabular-nums',
+        fontWeight: high ? 700 : 500,
+        color: high ? '#16a34a' : 'inherit',
+      }}
+    >
+      {currencyFormat.format(value)}
+    </span>
+  );
+}
+
+function HeaderWithIcon({ label, icon }: { label: string; icon: string }): React.ReactElement {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+      <span aria-hidden="true" style={{ fontSize: '1.1rem' }}>
+        {icon}
+      </span>
+      <strong style={{ letterSpacing: '0.02em' }}>{label}</strong>
+    </span>
+  );
+}
+
+function ExpandableDetail({ row }: { row: Row }): React.ReactElement {
+  return (
+    <div
+      style={{
+        padding: '1rem 1.25rem',
+        background: 'rgba(15, 118, 110, 0.08)',
+        borderLeft: '4px solid #0f766e',
+      }}
+    >
+      <h4 style={{ margin: '0 0 0.35rem', fontSize: '0.95rem' }}>
+        {row.name} · {row.company}
+      </h4>
+      <p style={{ margin: '0 0 0.35rem', fontSize: '0.88rem', color: '#475569' }}>{row.notes}</p>
+      <dl
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          gap: '0.25rem 0.75rem',
+          margin: 0,
+          fontSize: '0.85rem',
+        }}
+      >
+        <dt style={{ fontWeight: 600 }}>Renewal</dt>
+        <dd style={{ margin: 0 }}>{new Date(row.renewalDate).toLocaleDateString('en-US')}</dd>
+        <dt style={{ fontWeight: 600 }}>Account owner</dt>
+        <dd style={{ margin: 0 }}>{row.account.owner}</dd>
+        <dt style={{ fontWeight: 600 }}>Revenue</dt>
+        <dd style={{ margin: 0 }}>{currencyFormat.format(row.revenue)}</dd>
+      </dl>
+    </div>
+  );
+}
+
+function CustomGroupRow({
+  label,
+  count,
+  field,
+  collapsed,
+}: {
+  label: string;
+  count: number;
+  field: string;
+  collapsed: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '0.75rem',
+        alignItems: 'center',
+        padding: '0.6rem 1rem',
+        background: 'linear-gradient(90deg, rgba(15, 118, 110, 0.12), transparent)',
+        fontWeight: 600,
+      }}
+    >
+      <span style={{ fontSize: '0.78rem', color: '#0f766e', letterSpacing: '0.08em' }}>
+        {field.toUpperCase()}
+      </span>
+      <strong>{label}</strong>
+      <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: '#475569' }}>
+        {count} rows
+      </span>
+      <span aria-hidden="true" style={{ fontSize: '1rem' }}>
+        {collapsed ? '▶' : '▼'}
+      </span>
+    </div>
+  );
+}
+
+function CustomFilter({
+  placeholder,
+  value,
+  disabled,
+  onChange,
+}: {
+  placeholder: string;
+  value: string;
+  disabled: boolean;
+  onChange: (next: string) => void;
+}): React.ReactElement {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.35rem',
+        width: '100%',
+        padding: '0.3rem 0.55rem',
+        background: 'rgba(15, 23, 42, 0.04)',
+        borderRadius: 999,
+        border: '1px solid rgba(15, 23, 42, 0.1)',
+      }}
+    >
+      <span aria-hidden="true" style={{ opacity: 0.5 }}>
+        🔎
+      </span>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          border: 'none',
+          background: 'transparent',
+          outline: 'none',
+          font: 'inherit',
+          color: 'inherit',
+        }}
+      />
+    </div>
+  );
+}
+
+function EmptyState({
+  heading,
+  description,
+}: {
+  heading: string;
+  description: string;
+}): React.ReactElement {
+  return (
+    <div
+      style={{
+        padding: '2rem 1.5rem',
+        display: 'grid',
+        gap: '0.5rem',
+        justifyItems: 'center',
+        textAlign: 'center',
+      }}
+    >
+      <span aria-hidden="true" style={{ fontSize: '2.5rem' }}>
+        🌤️
+      </span>
+      <strong style={{ fontSize: '1.05rem' }}>{heading}</strong>
+      <p style={{ margin: 0, color: '#475569' }}>{description}</p>
+      <small style={{ color: '#64748b' }}>
+        — rendered by a React component via the emptyRenderer prop
+      </small>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+
+function App(): React.ReactElement {
+  const [gridApi, setGridApi] = useState<UiGridApi | null>(null);
+  const [filterOut, setFilterOut] = useState(false);
+
+  const data = useMemo(() => createDemoData(40), []);
+  const visibleData = useMemo(
+    () => (filterOut ? data.filter(() => false) : data),
+    [data, filterOut],
   );
 
-  useEffect(() => {
-    if (!gridApi) {
-      return;
-    }
-
-    setVisibleRowCount(gridApi.core.getVisibleRows().length);
-
-    const disposeVisibleRows = gridApi.core.on.rowsVisibleChanged((rows) => {
-      setVisibleRowCount(rows.length);
-    });
-    const disposeBenchmark = gridApi.core.on.benchmarkComplete((result) => {
-      setBenchmarkResult(result);
-    });
-
-    return () => {
-      disposeVisibleRows();
-      disposeBenchmark();
-    };
-  }, [gridApi]);
+  const columnDefs = useMemo<GridOptions['columnDefs']>(
+    () => [
+      { name: 'name', displayName: 'Customer', width: 'minmax(12rem, 1.2fr)' },
+      { name: 'company', width: 'minmax(11rem, 1fr)' },
+      {
+        name: 'revenue',
+        type: 'number',
+        align: 'end',
+        width: 'minmax(10rem, 0.8fr)',
+        filter: { condition: FILTER_CONDITIONS.greaterThan },
+      },
+      {
+        name: 'status',
+        width: 'minmax(9rem, 0.7fr)',
+        filter: { condition: FILTER_CONDITIONS.exact },
+      },
+      {
+        name: 'renewalDate',
+        type: 'date',
+        displayName: 'Renewal',
+        width: 'minmax(10rem, 0.8fr)',
+      },
+      {
+        name: 'owner',
+        field: 'account.owner',
+        displayName: 'Owner',
+        width: 'minmax(11rem, 0.9fr)',
+      },
+    ],
+    [],
+  );
 
   return (
     <section className="react-demo-shell">
       <header className="react-demo-shell__header">
         <div>
-          <p className="react-demo-shell__eyebrow">React package demo</p>
-          <h2>{options.title ?? 'UI Grid'}</h2>
+          <p className="react-demo-shell__eyebrow">React wrapper demo</p>
+          <h2>Framework-rendered templates</h2>
           <p>
-            Familiar <code>gridOptions</code> and <code>onRegisterApi</code>, rebuilt with React
-            hooks, virtualization, grouping, sorting, filtering, column ordering, and Excel-style
-            column resizing with drag handles plus double-click auto fit.
+            Every template slot the grid exposes — <strong>cells</strong>, <strong>headers</strong>,
+            <strong> filters</strong>, <strong>group rows</strong>,{' '}
+            <strong>expandable detail</strong>, and the <strong>empty state</strong> — is rendered
+            by a React component in this demo, projected into the grid's shadow DOM via the
+            framework-slot bridge.
           </p>
         </div>
 
@@ -138,44 +313,102 @@ function App() {
           <button
             type="button"
             className="react-demo-shell__button react-demo-shell__button-secondary"
-            onClick={() => gridApi?.core.exportCsv()}
+            onClick={() => setFilterOut((prev) => !prev)}
           >
-            Export CSV
+            {filterOut ? 'Restore rows' : 'Empty the grid'}
           </button>
           <div className="react-demo-shell__stats">
-            <span>{visibleRowCount}</span>
-            <small>visible rows</small>
+            <span>{visibleData.length}</span>
+            <small>rows</small>
           </div>
         </div>
       </header>
 
-      <section className="react-demo-shell__metrics" aria-label="React grid metrics">
+      <section className="react-demo-shell__metrics" aria-label="Template coverage">
         <article>
-          <strong>{options.enableVirtualization ? 'On' : 'Off'}</strong>
-          <span>virtualization</span>
+          <strong>6</strong>
+          <span>template slot kinds</span>
         </article>
         <article>
-          <strong>{options.grouping?.groupBy?.length ?? 0}</strong>
-          <span>group columns</span>
+          <strong>Portals</strong>
+          <span>React into shadow DOM</span>
         </article>
         <article>
-          <strong>{benchmarkResult?.averageMs?.toFixed(2) || '—'}</strong>
-          <span>benchmark avg</span>
+          <strong>Zero</strong>
+          <span>framework-specific grid code</span>
         </article>
       </section>
 
-      <div className="react-demo-shell__toolbar">
-        <div>
-          <strong>{visibleRowCount}</strong>
-          <span>of {data.length} rows</span>
-        </div>
-        <p>
-          <code>gridOptions</code> compatibility layer: sorting, filtering, grouping, column moving,
-          column resizing, templating, and virtualized rendering.
-        </p>
-      </div>
-
-      <UiGrid options={options} onRegisterApi={options.onRegisterApi} />
+      <UiGrid
+        gridId="react-wrapper-demo"
+        title="React wrapper demo"
+        rowHeight={48}
+        enableSorting
+        enableFiltering
+        enableGrouping
+        enableExpandable
+        enablePinning
+        enableColumnMoving
+        enableColumnResizing
+        enableVirtualization
+        virtualizationThreshold={25}
+        grouping={{ groupBy: ['status'] }}
+        expandableRowHeight={220}
+        data={visibleData}
+        columnDefs={columnDefs}
+        onRegisterApi={(api) => setGridApi(api)}
+        cellRenderers={{
+          // Per-column JSX renderers: keep the default for most columns,
+          // customize `status` (badge) and `revenue` (green/bold for high values).
+          status: (ctx) => <StatusBadge value={String(ctx.value ?? '')} />,
+          revenue: (ctx) => <RevenueCell value={Number(ctx.value ?? 0)} />,
+          name: (ctx) => (
+            <a
+              href={`#/customer/${ctx.row['id']}`}
+              style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}
+            >
+              {String(ctx.value ?? '')}
+            </a>
+          ),
+        }}
+        headerRenderers={{
+          // Custom headers with emoji icons.
+          name: (ctx) => <HeaderWithIcon label={ctx.value} icon="🧑" />,
+          revenue: (ctx) => <HeaderWithIcon label={ctx.value} icon="💰" />,
+          status: (ctx) => <HeaderWithIcon label={ctx.value} icon="🏷️" />,
+          renewalDate: (ctx) => <HeaderWithIcon label={ctx.value} icon="📅" />,
+        }}
+        filterRenderers={{
+          // Custom filter chrome — the consumer owns the input. The wrapper
+          // passes the current filter value + placeholder + disabled flag in.
+          name: (ctx) => (
+            <CustomFilter
+              placeholder={ctx.placeholder}
+              value={ctx.value}
+              disabled={ctx.disabled}
+              onChange={(next) => gridApi?.core.setFilter(ctx.columnName, next)}
+            />
+          ),
+          company: (ctx) => (
+            <CustomFilter
+              placeholder={ctx.placeholder}
+              value={ctx.value}
+              disabled={ctx.disabled}
+              onChange={(next) => gridApi?.core.setFilter(ctx.columnName, next)}
+            />
+          ),
+        }}
+        groupRowRenderer={(ctx) => (
+          <CustomGroupRow
+            label={ctx.label}
+            count={ctx.count}
+            field={ctx.field}
+            collapsed={ctx.collapsed}
+          />
+        )}
+        expandableRenderer={(ctx) => <ExpandableDetail row={ctx.row as Row} />}
+        emptyRenderer={(ctx) => <EmptyState heading={ctx.heading} description={ctx.description} />}
+      />
     </section>
   );
 }

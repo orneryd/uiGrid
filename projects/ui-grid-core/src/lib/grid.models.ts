@@ -359,7 +359,9 @@ export interface GridOptions {
   /** Exporter — field-for-field parity with the old `ui.grid.exporter` options.
    * See `GridExporterOptions` in grid.core.export.ts for full docs. */
   exporterCsvColumnSeparator?: string;
-  exporterCsvFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterCsvFilename?:
+    | string
+    | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
   exporterHeaderFilterUseName?: boolean;
   exporterHeaderFilter?: (displayName: string, column: GridColumnDef) => string;
   exporterHeaderTemplate?: string;
@@ -375,11 +377,18 @@ export interface GridOptions {
   exporterOlderExcelCompatibility?: boolean;
   exporterIsExcelCompatible?: boolean;
   exporterAllDataFn?: () => readonly GridRow[] | Promise<readonly GridRow[]>;
-  exporterExcelFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
-  exporterExcelSheetName?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterExcelFilename?:
+    | string
+    | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterExcelSheetName?:
+    | string
+    | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
   exporterExcelHeader?: unknown;
   exporterColumnScaleFactor?: number;
-  exporterExcelCustomFormatters?: (context: { workbook?: unknown; docDefinition: { styles: Record<string, unknown> } }) => {
+  exporterExcelCustomFormatters?: (context: {
+    workbook?: unknown;
+    docDefinition: { styles: Record<string, unknown> };
+  }) => {
     styles: Record<string, unknown>;
   };
   exporterCsvLinkElement?: HTMLElement | null;
@@ -396,7 +405,9 @@ export interface GridOptions {
    * the full shape. All are pdfMake-format (pageSize/orientation strings,
    * style objects, etc.) so the resulting doc definition plugs straight
    * into `pdfMake.createPdf(...)`. */
-  exporterPdfFilename?: string | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
+  exporterPdfFilename?:
+    | string
+    | ((rowType: 'all' | 'visible' | 'selected', colType: 'all' | 'visible') => string);
   exporterPdfOrientation?: string;
   exporterPdfPageSize?: string;
   exporterPdfMaxGridWidth?: number;
