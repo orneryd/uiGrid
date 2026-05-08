@@ -26,31 +26,9 @@
   position: sticky;
   z-index: var(--ui-grid-header-z-index);
   background: var(--ui-grid-surface);
-  // Make the strip a real scroll container so `position: sticky` on pinned
-  // header / filter cells works — without a scroll ancestor, sticky is a
-  // no-op and the pinned cells get pushed off with the rest of the grid.
-  //
-  // We do NOT want the user to scroll the strip directly (that would desync
-  // it from the body); instead the element imperatively mirrors the body
-  // viewport's scrollLeft onto the strip via JS. `overflow-x: scroll` keeps
-  // the container "scrollable" for sticky positioning purposes, and a
-  // wheel/touch handler blocks user scroll gestures and forwards them to
-  // the body viewport.
-  overflow-x: scroll;
-  overflow-y: hidden;
-  // Hide the scrollbar visually.
-  scrollbar-width: none;
-  // Belt-and-suspenders: touch-action: pan-y prevents the browser from
-  // hijacking horizontal touch gestures inside the strip; the wheel
-  // handler in element.ts handles mouse-wheel redirection.
-  touch-action: pan-y;
-  // Kill the horizontal rubber-band bounce at the ends — the strip's
-  // scrollLeft is driven by JS and overshoot just causes visible jitter.
-  overscroll-behavior-x: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  // overflow: hidden like the old grid — strips are never user-scrollable.
+  // JS mirrors body viewport scrollLeft onto them via syncHeaderHorizontalScroll.
+  overflow: hidden;
 }
 
 .grid-header-strip {

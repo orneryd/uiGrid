@@ -1,7 +1,7 @@
 {
   "name": "@ornery/ui-grid",
   "version": "0.1.10",
-  "description": "Angular data-grid component and web component bundle",
+  "description": "Angular data-grid component wrapping the vanilla web component",
   "private": false,
   "sideEffects": false,
   "publishConfig": {
@@ -9,14 +9,12 @@
   },
   "dependencies": {
     "@ornery/ui-grid-core": "0.1.10",
+    "@ornery/ui-grid-vanilla": "0.1.10",
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
-    "@angular/cdk": "^21.2.8",
     "@angular/common": "^21.2.0",
     "@angular/core": "^21.2.0",
-    "@angular/elements": "^21.2.10",
-    "@angular/platform-browser": "^21.2.0",
     "rxjs": "~7.8.0"
   }
 }

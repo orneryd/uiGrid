@@ -24,8 +24,8 @@ import {
   GridSavedState,
   UiGridApi,
   UiGridComponent,
-  defineUiGridElement,
 } from '@ornery/ui-grid';
+import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
 import { GridBrowserHarnessComponent } from '../../grid-browser-harness.component';
 import { CodeBlockComponent } from '../shared/code-block.component';
 import { createDemoData } from '../shared/demo-data';
@@ -258,7 +258,7 @@ restoreState(): void {
 }`;
   protected readonly angularElementSnippet = [
     `import { CUSTOM_ELEMENTS_SCHEMA, Component, computed } from '@angular/core';`,
-    `import { defineUiGridElement } from '@ornery/ui-grid';`,
+    `import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';`,
     '',
     `@Component({`,
     `  selector: 'app-accounts-grid-element-demo',`,
@@ -266,7 +266,7 @@ restoreState(): void {
     `  template: \``,
     `<ui-grid-element`,
     `  grid-id="ui-grid-modern-element"`,
-    `  title="UI Grid Modernized (Angular Element)"`,
+    `  title="UI Grid Modernized (Vanilla Web Component)"`,
     `  enable-sorting`,
     `  enable-filtering`,
     `  enable-grouping`,
@@ -287,15 +287,15 @@ restoreState(): void {
     `  readonly dataJson = computed(() => JSON.stringify(createDemoData()));`,
     '',
     `  constructor() {`,
-    `    void defineUiGridElement();`,
+    `    void defineStandaloneUiGridElement();`,
     `  }`,
     `}`,
   ].join('\n');
-  protected readonly angularElementDifferenceSnippet = `This tab uses the Angular-backed custom element from @ornery/ui-grid.
+  protected readonly angularElementDifferenceSnippet = `This tab uses the vanilla web component from @ornery/ui-grid-vanilla.
 
-- Same Angular rendering/runtime under the hood, exposed as <ui-grid-element>
+- Framework-free rendering via the vanilla <ui-grid-element>
 - Declarative attributes for markup-first setup
-- Use the separate /web-components page for the framework-free vanilla build from @ornery/ui-grid-vanilla`;
+- Same element used on the /web-components page`;
   protected readonly options = computed<GridOptions>(() => ({
     id: 'ui-grid-modern',
     title: 'UI Grid Modernized',
@@ -366,7 +366,7 @@ restoreState(): void {
     id: 'ui-grid-modern-element',
     title: 'UI Grid Modernized (Angular Element)',
     description:
-      'The same Angular package rendered through @angular/elements and configured with declarative HTML attributes.',
+      'The vanilla web component from @ornery/ui-grid-vanilla configured with declarative HTML attributes.',
     emptyMessage: 'No rows match the current filters.',
     rowHeight: 48,
     dataJson: this.elementPrimaryDataJson(),
@@ -581,9 +581,9 @@ restoreState(): void {
         return;
       }
 
-      // Use a distinct tag name to avoid colliding with the vanilla 'ui-grid-element'
-      // registration on the web-components demo page (both live in the same SPA).
-      await defineUiGridElement('ui-grid-element-ng');
+      // Both the Angular wrapper and the web-components page use the same
+      // vanilla element, so share the single 'ui-grid-element' registration.
+      await defineStandaloneUiGridElement('ui-grid-element');
     });
 
     inject(DestroyRef).onDestroy(() => {

@@ -1,7 +1,7 @@
-import { defineUiGridRustElement } from '@ornery/ui-grid';
+import { defineStandaloneUiGridElement } from '@ornery/ui-grid-vanilla';
 
 async function bootstrapElement(): Promise<void> {
-  await defineUiGridRustElement();
+  await defineStandaloneUiGridElement();
 }
 
 void bootstrapElement();

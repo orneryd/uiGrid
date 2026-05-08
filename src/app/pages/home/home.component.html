@@ -195,7 +195,7 @@
           </p>
         </div>
 
-        <ui-grid-element-ng
+        <ui-grid-element
           class="angular-element-grid"
           [attr.grid-id]="elementPrimaryConfig().id"
           [attr.title]="elementPrimaryConfig().title"
@@ -212,7 +212,7 @@
           enable-column-resizing
           enable-virtualization
           enable-cell-edit-on-focus>
-        </ui-grid-element-ng>
+        </ui-grid-element>
       </section>
     </section>
 
@@ -257,7 +257,7 @@
           </div>
         </header>
 
-        <ui-grid-element-ng
+        <ui-grid-element
           #scenarioGrid
           class="angular-element-grid angular-element-grid--scenario"
           [attr.grid-id]="elementScenarioConfig().id"
@@ -281,7 +281,7 @@
           [attr.enable-expandable]="elementScenarioConfig().enableExpandable ? '' : null"
           [attr.enable-tree-view]="elementScenarioConfig().enableTreeView ? '' : null"
           [attr.show-tree-expand-no-children]="elementScenarioConfig().showTreeExpandNoChildren ? '' : null">
-        </ui-grid-element-ng>
+        </ui-grid-element>
       </section>
     </section>
   }

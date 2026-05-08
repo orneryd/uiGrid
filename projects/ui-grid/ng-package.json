@@ -4,5 +4,5 @@
   "lib": {
     "entryFile": "src/public-api.ts"
   },
-  "allowedNonPeerDependencies": ["@ornery/ui-grid-core", "tslib"]
+  "allowedNonPeerDependencies": ["@ornery/ui-grid-core", "@ornery/ui-grid-vanilla", "tslib"]
 }

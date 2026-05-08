@@ -770,14 +770,9 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     'scroll',
     (event) => {
       const target = event.target as HTMLElement | null;
-      // The header/filter strips are scroll containers too, but their
-      // scrollLeft is driven purely by `syncHeaderHorizontalScroll` — any
-      // scroll event on them is either our own sync (ignore) or the user
-      // dragging a hidden scrollbar (also ignore; wheel handler already
-      // routes wheel deltas to the body).
-      if (!target?.classList.contains('grid-body-viewport') || el.suppressScrollEvent) {
-        return;
-      }
+      if (!target || el.suppressScrollEvent) return;
+
+      if (!target.classList.contains('grid-body-viewport')) return;
 
       el.lastScrollActivityAt = Date.now();
       el.scrollPosition = target.scrollTop;
