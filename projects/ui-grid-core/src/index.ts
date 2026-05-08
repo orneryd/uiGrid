@@ -4,6 +4,7 @@ export * from './lib/grid.core';
 export * from './lib/grid.features';
 export * from './lib/grid.models';
 export * from './lib/grid.utils';
+export * from './lib/grid.core.template-interpolate';
 export * from './lib/row-searcher';
 export * from './lib/row-sorter';
 export * from './lib/ui-grid.adapter-shim';
