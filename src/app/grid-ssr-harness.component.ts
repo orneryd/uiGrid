@@ -29,6 +29,7 @@ export class GridSsrHarnessComponent {
     data: createSsrHarnessRows(),
     rowIdentity: (row) => String(row['id']),
     rowHeight: SSR_HARNESS_ROW_HEIGHT,
+    minRowsToShow: SSR_HARNESS_VISIBLE_ROW_COUNT,
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: false,

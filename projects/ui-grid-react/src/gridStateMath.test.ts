@@ -43,9 +43,9 @@ describe('gridStateMath', () => {
   });
 
   it('computes viewport height and viewport rows', () => {
-    expect(computeViewportHeightPx(undefined, undefined)).toBe('560px');
+    expect(computeViewportHeightPx(undefined, undefined)).toBe('440px');
     expect(computeViewportHeightPx(620, 480)).toBe('620px');
-    expect(computeViewportRows(undefined, undefined)).toBe(13);
+    expect(computeViewportRows(undefined, undefined)).toBe(10);
     expect(computeViewportRows(220, 44)).toBe(5);
   });
 });

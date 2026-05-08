@@ -153,7 +153,7 @@ describe('runGridCellValidators', () => {
 
   it('throws when colDef.name is missing', async () => {
     const registryInstance = createGridValidatorRegistry(DEFAULT_GRID_LABELS);
-    const column = { validators: { required: true } } as GridColumnDef;
+    const column = { validators: { required: true } } as unknown as GridColumnDef;
     await expect(
       runGridCellValidators({}, column, 'a', 'b', registryInstance),
     ).rejects.toThrow(/colDef\.name is required/);

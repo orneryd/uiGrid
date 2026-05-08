@@ -136,6 +136,7 @@ describe('buildGridImporterObjectsFromCsv', () => {
 describe('buildGridImporterObjectsFromJson', () => {
   it('merges each parsed entry onto a fresh new-object', () => {
     class Seed {
+      [key: string]: unknown;
       seed = true;
     }
     const parsed = [{ id: 1 }, { id: 2 }];

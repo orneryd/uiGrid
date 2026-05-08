@@ -149,6 +149,8 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */ stickyHeightRelayoutQueued = false;
   /** @internal */ benchmarkAverage = '—';
   /** @internal */ skipNextRender = false;
+  /** @internal */ autoResizeObserver: ResizeObserver | null = null;
+  /** @internal */ autoResizeDebounceHandle: number | null = null;
 
   // Template-facing properties for the grid shell template
   gridTitle = 'Data grid';
@@ -671,6 +673,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.ensureShadowRoot();
     this.bindEvents();
     this.observeTemplateSlots();
+    this.setupAutoResize();
 
     if (this.activeOptions) {
       this.ensureController(this.buildEffectiveOptions(this.activeOptions));
@@ -684,6 +687,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.unsubscribe = null;
     this.templateObserver?.disconnect();
     this.templateObserver = null;
+    this.teardownAutoResize();
     if (this.scrollFrame !== null) {
       cancelAnimationFrame(this.scrollFrame);
       this.scrollFrame = null;
@@ -982,13 +986,56 @@ export class UiGridStandaloneElement extends HTMLElement {
     const minRows = options.minRowsToShow ?? 10;
     const headerHeight = this.measuredHeaderStickyHeight || options.headerRowHeight || 50;
     const filterHeight = this.measuredFilterStickyHeight;
-    const minHeight = headerHeight + filterHeight + (minRows * rowHeight);
+    const paginationHeight = this.measuredPaginationHeight();
+    const minHeight = headerHeight + filterHeight + paginationHeight + (minRows * rowHeight);
 
     if (this.clientHeight < minHeight) {
       this.style.height = `${minHeight}px`;
       this.inAutoAdjust = true;
       this.render();
       this.inAutoAdjust = false;
+    }
+  }
+
+  private measuredPaginationHeight(): number {
+    const paginationEl = this.shadowRoot?.querySelector<HTMLElement>('ui-grid-pagination');
+    return paginationEl?.offsetHeight ?? 0;
+  }
+
+  /** @internal */
+  setupAutoResize(): void {
+    if (this.autoResizeObserver) return;
+    if (typeof ResizeObserver === 'undefined') return;
+
+    this.autoResizeObserver = new ResizeObserver((entries) => {
+      const options = this.snapshot?.options;
+      if (options?.enableAutoResize === false) return;
+
+      const entry = entries[0];
+      if (!entry) return;
+
+      if (this.autoResizeDebounceHandle !== null) {
+        cancelAnimationFrame(this.autoResizeDebounceHandle);
+      }
+      this.autoResizeDebounceHandle = requestAnimationFrame(() => {
+        this.autoResizeDebounceHandle = null;
+        if (!this.snapshot) return;
+        this.render();
+      });
+    });
+
+    this.autoResizeObserver.observe(this);
+  }
+
+  /** @internal */
+  teardownAutoResize(): void {
+    if (this.autoResizeObserver) {
+      this.autoResizeObserver.disconnect();
+      this.autoResizeObserver = null;
+    }
+    if (this.autoResizeDebounceHandle !== null) {
+      cancelAnimationFrame(this.autoResizeDebounceHandle);
+      this.autoResizeDebounceHandle = null;
     }
   }
 

@@ -22,8 +22,8 @@ import { GridColumnDef, GridLabels, GridRecord } from './grid.models';
 export type GridValidatorFn = (
   oldValue: unknown,
   newValue: unknown,
-  rowEntity: GridRecord,
-  colDef: GridColumnDef,
+  rowEntity?: GridRecord,
+  colDef?: GridColumnDef,
 ) => boolean | Promise<boolean>;
 
 /** Factory that builds a `GridValidatorFn` for the given argument. Old
