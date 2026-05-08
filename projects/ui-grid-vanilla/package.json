@@ -19,6 +19,7 @@
     "@ornery/ui-grid-core": "0.1.10"
   },
   "devDependencies": {
+    "happy-dom": "^20.9.0",
     "jsdom": "^26.0.0",
     "sass": "^1.77.0",
     "tsup": "^8.0.0",
