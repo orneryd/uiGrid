@@ -7,7 +7,7 @@
     "build": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng build",
     "build:rust:wasm": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target bundler --out-dir ../../dist/ui-grid-wasm --release",
     "build:rust:web": "PATH=\"$HOME/.cargo/bin:$PATH\" wasm-pack build crates/ui-grid-wasm --target web --out-dir ../../dist/ui-grid-wasm-web --release",
-    "build:pages": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
+    "build:pages": "npm run build:rust:wasm && npm run build --prefix projects/ui-grid-react && npm run build --prefix projects/ui-grid-vanilla && ng build --configuration production --base-href /uiGrid/ --deploy-url /uiGrid/",
     "build:core": "npm run build --prefix projects/ui-grid-core",
     "build:library": "npm run build:core && npm run build:rust:wasm && ng build uiGridPackage",
     "build:library:preset": "npm run build:rust:wasm && node scripts/build-library-preset.mjs",
