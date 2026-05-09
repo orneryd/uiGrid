@@ -32,7 +32,12 @@ import * as tsState from './grid.core.state';
 import * as tsTree from './grid.core.tree';
 import * as tsViewmodel from './grid.core.viewmodel';
 import { getUiGridWasmBinaryPath, getUiGridWasmModulePath } from './ui-grid.wasm-path';
-import { GridRow, type GridColumnDef, type GridOptions } from './grid.models';
+import {
+  GridRow,
+  type GridCellPosition,
+  type GridColumnDef,
+  type GridOptions,
+} from './grid.models';
 
 export type {
   BuildGridPipelineContext,
@@ -202,9 +207,7 @@ type ResolveGridRowIdInput = {
   options: Parameters<typeof tsIdentity.resolveGridRowId>[0];
   row: Parameters<typeof tsIdentity.resolveGridRowId>[1];
 };
-type MaybeRequestInfiniteScrollDataInput = Parameters<
-  typeof tsInfiniteScroll.maybeRequestInfiniteScrollData
->[0];
+type MaybeRequestInfiniteScrollDataInput = Parameters<typeof tsInfiniteScroll.maybeRequestInfiniteScrollData>[0];
 type InfiniteScrollLoadInput = {
   state: Parameters<typeof tsInfiniteScroll.completeInfiniteScrollDataLoad>[0];
   scrollUp: Parameters<typeof tsInfiniteScroll.completeInfiniteScrollDataLoad>[1];
@@ -296,212 +299,90 @@ type RowLabelsInput = {
 type UiGridWasmCoreModule = {
   default(input?: string | URL | Request): Promise<unknown>;
   calculate_virtual_window_js(request: CalculateVirtualWindowRequest): CalculateVirtualWindowResult;
-  get_effective_page_size_js(
-    input: GetEffectivePageSizeInput,
-  ): ReturnType<typeof tsPagination.getEffectivePageSize>;
-  get_total_pages_value_js(
-    input: GetTotalPagesValueInput,
-  ): ReturnType<typeof tsPagination.getTotalPagesValue>;
-  get_current_page_value_js(
-    input: GetCurrentPageValueInput,
-  ): ReturnType<typeof tsPagination.getCurrentPageValue>;
-  get_first_row_index_value_js(
-    input: GetFirstRowIndexValueInput,
-  ): ReturnType<typeof tsPagination.getFirstRowIndexValue>;
-  get_last_row_index_value_js(
-    input: GetLastRowIndexValueInput,
-  ): ReturnType<typeof tsPagination.getLastRowIndexValue>;
-  paginate_grid_rows_js(
-    input: PaginateGridRowsInput,
-  ): ReturnType<typeof tsPagination.paginateGridRows>;
-  is_virtualization_enabled_js(
-    input: IsVirtualizationEnabledInput,
-  ): ReturnType<typeof tsPagination.isVirtualizationEnabled>;
+  get_effective_page_size_js(input: GetEffectivePageSizeInput): ReturnType<typeof tsPagination.getEffectivePageSize>;
+  get_total_pages_value_js(input: GetTotalPagesValueInput): ReturnType<typeof tsPagination.getTotalPagesValue>;
+  get_current_page_value_js(input: GetCurrentPageValueInput): ReturnType<typeof tsPagination.getCurrentPageValue>;
+  get_first_row_index_value_js(input: GetFirstRowIndexValueInput): ReturnType<typeof tsPagination.getFirstRowIndexValue>;
+  get_last_row_index_value_js(input: GetLastRowIndexValueInput): ReturnType<typeof tsPagination.getLastRowIndexValue>;
+  paginate_grid_rows_js(input: PaginateGridRowsInput): ReturnType<typeof tsPagination.paginateGridRows>;
+  is_virtualization_enabled_js(input: IsVirtualizationEnabledInput): ReturnType<typeof tsPagination.isVirtualizationEnabled>;
   seek_grid_page_js(input: SeekGridPageInput): ReturnType<typeof tsPagination.seekGridPage>;
-  resolve_grid_page_size_js(
-    pageSize: Parameters<typeof tsPagination.resolveGridPageSize>[0],
-  ): ReturnType<typeof tsPagination.resolveGridPageSize>;
-  build_grid_saved_state_js(
-    context: BuildGridSavedStateContext,
-  ): ReturnType<typeof tsState.buildGridSavedState>;
+  resolve_grid_page_size_js(pageSize: Parameters<typeof tsPagination.resolveGridPageSize>[0]): ReturnType<typeof tsPagination.resolveGridPageSize>;
+  build_grid_saved_state_js(context: BuildGridSavedStateContext): ReturnType<typeof tsState.buildGridSavedState>;
   normalize_grid_saved_state_js(state: NormalizeGridSavedStateInput): NormalizeGridSavedStateResult;
   sanitize_download_filename_js(value: string): ReturnType<typeof tsState.sanitizeDownloadFilename>;
   normalize_boolean_map_js(input: { value: NormalizeBooleanMapInput }): NormalizeBooleanMapResult;
   is_safe_state_key_js(value: string): ReturnType<typeof tsState.isSafeStateKey>;
-  find_grid_row_by_id_js(
-    input: FindGridRowByIdInput,
-  ): ReturnType<typeof tsIdentity.findGridRowById>;
-  build_grid_sort_state_js(
-    input: BuildGridSortStateInput,
-  ): ReturnType<typeof tsIdentity.buildGridSortState>;
-  resolve_grid_row_id_js(
-    input: ResolveGridRowIdInput,
-  ): ReturnType<typeof tsIdentity.resolveGridRowId>;
-  maybe_request_infinite_scroll_data_js(
-    input: MaybeRequestInfiniteScrollDataInput,
-  ): ReturnType<typeof tsInfiniteScroll.maybeRequestInfiniteScrollData>;
-  complete_infinite_scroll_data_load_js(
-    input: InfiniteScrollLoadInput,
-  ): ReturnType<typeof tsInfiniteScroll.completeInfiniteScrollDataLoad>;
-  reset_infinite_scroll_state_js(
-    input: InfiniteScrollDirectionsInput,
-  ): ReturnType<typeof tsInfiniteScroll.resetInfiniteScrollState>;
-  save_infinite_scroll_percentage_js(
-    input: InfiniteScrollVisibleRowsInput,
-  ): ReturnType<typeof tsInfiniteScroll.saveInfiniteScrollPercentage>;
-  set_infinite_scroll_directions_state_js(
-    input: InfiniteScrollDirectionsInput,
-  ): ReturnType<typeof tsInfiniteScroll.setInfiniteScrollDirectionsState>;
+  find_grid_row_by_id_js(input: FindGridRowByIdInput): ReturnType<typeof tsIdentity.findGridRowById>;
+  build_grid_sort_state_js(input: BuildGridSortStateInput): ReturnType<typeof tsIdentity.buildGridSortState>;
+  resolve_grid_row_id_js(input: ResolveGridRowIdInput): ReturnType<typeof tsIdentity.resolveGridRowId>;
+  maybe_request_infinite_scroll_data_js(input: MaybeRequestInfiniteScrollDataInput): ReturnType<typeof tsInfiniteScroll.maybeRequestInfiniteScrollData>;
+  complete_infinite_scroll_data_load_js(input: InfiniteScrollLoadInput): ReturnType<typeof tsInfiniteScroll.completeInfiniteScrollDataLoad>;
+  reset_infinite_scroll_state_js(input: InfiniteScrollDirectionsInput): ReturnType<typeof tsInfiniteScroll.resetInfiniteScrollState>;
+  save_infinite_scroll_percentage_js(input: InfiniteScrollVisibleRowsInput): ReturnType<typeof tsInfiniteScroll.saveInfiniteScrollPercentage>;
+  set_infinite_scroll_directions_state_js(input: InfiniteScrollDirectionsInput): ReturnType<typeof tsInfiniteScroll.setInfiniteScrollDirectionsState>;
   clear_grid_filter_reasons_js(row: GridRow): WasmRowFilterState;
   matches_grid_row_filters_js(input: MatchesGridRowFiltersInput): MatchesGridRowFiltersResult;
   sort_grid_rows_js(input: SortGridRowsInput): SortGridRowsResult;
   build_grid_rows_js(input: BuildGridRowsInput): BuildGridRowsResult;
-  toggle_grid_row_expanded_js(
-    input: ExpandedRowsRowIdInput,
-  ): ReturnType<typeof tsRowState.toggleGridRowExpanded>;
-  expand_all_grid_rows_js(
-    rows: Parameters<typeof tsRowState.expandAllGridRows>[0],
-  ): ReturnType<typeof tsRowState.expandAllGridRows>;
-  are_all_grid_rows_expanded_js(
-    input: RowsExpandedRowsInput,
-  ): ReturnType<typeof tsRowState.areAllGridRowsExpanded>;
-  set_grid_tree_row_expanded_js(
-    input: ExpandedTreeRowsRowIdExpandedInput,
-  ): ReturnType<typeof tsRowState.setGridTreeRowExpanded>;
-  toggle_grid_tree_row_expanded_js(
-    input: ExpandedRowsRowIdInput,
-  ): ReturnType<typeof tsRowState.toggleGridTreeRowExpanded>;
-  expand_all_grid_tree_rows_js(
-    rows: Parameters<typeof tsRowState.expandAllGridTreeRows>[0],
-  ): ReturnType<typeof tsRowState.expandAllGridTreeRows>;
-  get_grid_tree_row_children_js(
-    input: FindGridRowByIdInput,
-  ): ReturnType<typeof tsRowState.getGridTreeRowChildren>;
-  add_grid_row_invisible_reason_js(
-    input: HiddenRowReasonInput,
-  ): ReturnType<typeof tsRowState.addGridRowInvisibleReason>;
-  clear_grid_row_invisible_reason_js(
-    input: HiddenRowReasonInput,
-  ): ReturnType<typeof tsRowState.clearGridRowInvisibleReason>;
+  toggle_grid_row_expanded_js(input: ExpandedRowsRowIdInput): ReturnType<typeof tsRowState.toggleGridRowExpanded>;
+  expand_all_grid_rows_js(rows: Parameters<typeof tsRowState.expandAllGridRows>[0]): ReturnType<typeof tsRowState.expandAllGridRows>;
+  are_all_grid_rows_expanded_js(input: RowsExpandedRowsInput): ReturnType<typeof tsRowState.areAllGridRowsExpanded>;
+  set_grid_tree_row_expanded_js(input: ExpandedTreeRowsRowIdExpandedInput): ReturnType<typeof tsRowState.setGridTreeRowExpanded>;
+  toggle_grid_tree_row_expanded_js(input: ExpandedRowsRowIdInput): ReturnType<typeof tsRowState.toggleGridTreeRowExpanded>;
+  expand_all_grid_tree_rows_js(rows: Parameters<typeof tsRowState.expandAllGridTreeRows>[0]): ReturnType<typeof tsRowState.expandAllGridTreeRows>;
+  get_grid_tree_row_children_js(input: FindGridRowByIdInput): ReturnType<typeof tsRowState.getGridTreeRowChildren>;
+  add_grid_row_invisible_reason_js(input: HiddenRowReasonInput): ReturnType<typeof tsRowState.addGridRowInvisibleReason>;
+  clear_grid_row_invisible_reason_js(input: HiddenRowReasonInput): ReturnType<typeof tsRowState.clearGridRowInvisibleReason>;
   is_pinning_enabled_js(options: GridOptions): ReturnType<typeof tsPinning.isPinningEnabled>;
   is_column_pinnable_js(input: OptionsColumnInput): ReturnType<typeof tsPinning.isColumnPinnable>;
-  get_column_pin_direction_js(
-    input: PinnedColumnsColumnInput,
-  ): ReturnType<typeof tsPinning.getColumnPinDirection>;
+  get_column_pin_direction_js(input: PinnedColumnsColumnInput): ReturnType<typeof tsPinning.getColumnPinDirection>;
   pin_column_state_js(input: PinColumnStateInput): ReturnType<typeof tsPinning.pinColumnState>;
-  build_initial_pinned_state_js(
-    columns: Parameters<typeof tsPinning.buildInitialPinnedState>[0],
-  ): ReturnType<typeof tsPinning.buildInitialPinnedState>;
-  compute_pinned_offset_js(
-    input: VisibleColumnsPinnedColumnsColumnInput,
-  ): ReturnType<typeof tsPinning.computePinnedOffset>;
-  pinning_button_label_js(
-    input: PinnedColumnsColumnLabelsInput,
-  ): ReturnType<typeof tsPinning.pinningButtonLabel>;
-  is_grid_cell_position_js(
-    input: CellPositionMatchInput,
-  ): ReturnType<typeof tsEdit.isGridCellPosition>;
-  begin_grid_edit_session_js(
-    input: BeginEditSessionInput,
-  ): ReturnType<typeof tsEdit.beginGridEditSession>;
-  should_grid_edit_on_focus_js(
-    input: OptionsColumnInput,
-  ): ReturnType<typeof tsEdit.shouldGridEditOnFocus>;
-  build_grid_focus_cell_result_js(
-    input: BuildGridFocusCellResultInput,
-  ): ReturnType<typeof tsEdit.buildGridFocusCellResult>;
+  build_initial_pinned_state_js(columns: Parameters<typeof tsPinning.buildInitialPinnedState>[0]): ReturnType<typeof tsPinning.buildInitialPinnedState>;
+  compute_pinned_offset_js(input: VisibleColumnsPinnedColumnsColumnInput): ReturnType<typeof tsPinning.computePinnedOffset>;
+  pinning_button_label_js(input: PinnedColumnsColumnLabelsInput): ReturnType<typeof tsPinning.pinningButtonLabel>;
+  is_grid_cell_position_js(input: CellPositionMatchInput): ReturnType<typeof tsEdit.isGridCellPosition>;
+  begin_grid_edit_session_js(input: BeginEditSessionInput): ReturnType<typeof tsEdit.beginGridEditSession>;
+  should_grid_edit_on_focus_js(input: OptionsColumnInput): ReturnType<typeof tsEdit.shouldGridEditOnFocus>;
+  build_grid_focus_cell_result_js(input: BuildGridFocusCellResultInput): ReturnType<typeof tsEdit.buildGridFocusCellResult>;
   clear_grid_edit_session_js(): ReturnType<typeof tsEdit.clearGridEditSession>;
   find_next_grid_cell_js(input: FindNextGridCellInput): ReturnType<typeof tsEdit.findNextGridCell>;
-  stringify_grid_editor_value_js(
-    value: unknown,
-  ): ReturnType<typeof tsEdit.stringifyGridEditorValue>;
-  parse_grid_edited_value_js(
-    input: ParseGridEditedValueInput,
-  ): ReturnType<typeof tsEdit.parseGridEditedValue>;
-  is_printable_grid_key_js(
-    input: PrintableGridKeyInput,
-  ): ReturnType<typeof tsEdit.isPrintableGridKey>;
-  resolve_grid_labels_js(
-    input: ResolveGridLabelsInput,
-  ): ReturnType<typeof tsViewmodel.resolveGridLabels>;
+  stringify_grid_editor_value_js(value: unknown): ReturnType<typeof tsEdit.stringifyGridEditorValue>;
+  parse_grid_edited_value_js(input: ParseGridEditedValueInput): ReturnType<typeof tsEdit.parseGridEditedValue>;
+  is_printable_grid_key_js(input: PrintableGridKeyInput): ReturnType<typeof tsEdit.isPrintableGridKey>;
+  resolve_grid_labels_js(input: ResolveGridLabelsInput): ReturnType<typeof tsViewmodel.resolveGridLabels>;
   is_grid_tree_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridTreeEnabled>;
-  is_grid_grouping_enabled_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.isGridGroupingEnabled>;
+  is_grid_grouping_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridGroupingEnabled>;
   can_grid_expand_rows_js(options: GridOptions): ReturnType<typeof tsViewmodel.canGridExpandRows>;
-  is_grid_pagination_enabled_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.isGridPaginationEnabled>;
-  should_show_grid_pagination_controls_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.shouldShowGridPaginationControls>;
-  is_grid_infinite_scroll_enabled_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.isGridInfiniteScrollEnabled>;
-  is_grid_sorting_enabled_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.isGridSortingEnabled>;
-  is_grid_filtering_enabled_js(
-    options: GridOptions,
-  ): ReturnType<typeof tsViewmodel.isGridFilteringEnabled>;
+  is_grid_pagination_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridPaginationEnabled>;
+  should_show_grid_pagination_controls_js(options: GridOptions): ReturnType<typeof tsViewmodel.shouldShowGridPaginationControls>;
+  is_grid_infinite_scroll_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridInfiniteScrollEnabled>;
+  is_grid_sorting_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridSortingEnabled>;
+  is_grid_filtering_enabled_js(options: GridOptions): ReturnType<typeof tsViewmodel.isGridFilteringEnabled>;
   can_grid_move_columns_js(options: GridOptions): ReturnType<typeof tsViewmodel.canGridMoveColumns>;
-  is_grid_primary_column_js(
-    input: PrimaryColumnInput,
-  ): ReturnType<typeof tsViewmodel.isGridPrimaryColumn>;
-  is_grid_column_sortable_js(
-    input: OptionsColumnInput,
-  ): ReturnType<typeof tsViewmodel.isGridColumnSortable>;
-  is_grid_column_filterable_js(
-    input: OptionsColumnInput,
-  ): ReturnType<typeof tsViewmodel.isGridColumnFilterable>;
-  should_show_grid_tree_toggle_js(
-    input: CellIndentInput,
-  ): ReturnType<typeof tsViewmodel.shouldShowGridTreeToggle>;
+  is_grid_primary_column_js(input: PrimaryColumnInput): ReturnType<typeof tsViewmodel.isGridPrimaryColumn>;
+  is_grid_column_sortable_js(input: OptionsColumnInput): ReturnType<typeof tsViewmodel.isGridColumnSortable>;
+  is_grid_column_filterable_js(input: OptionsColumnInput): ReturnType<typeof tsViewmodel.isGridColumnFilterable>;
+  should_show_grid_tree_toggle_js(input: CellIndentInput): ReturnType<typeof tsViewmodel.shouldShowGridTreeToggle>;
   should_show_grid_expand_toggle_js(input: {
     options: Parameters<typeof tsViewmodel.shouldShowGridExpandToggle>[0];
     visibleColumns: Parameters<typeof tsViewmodel.shouldShowGridExpandToggle>[1];
     column: Parameters<typeof tsViewmodel.shouldShowGridExpandToggle>[2];
   }): ReturnType<typeof tsViewmodel.shouldShowGridExpandToggle>;
-  grid_sort_button_label_js(
-    input: SortDirectionLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridSortButtonLabel>;
-  grid_sort_aria_sort_js(
-    direction: Parameters<typeof tsViewmodel.gridSortAriaSort>[0],
-  ): ReturnType<typeof tsViewmodel.gridSortAriaSort>;
-  grid_grouping_button_label_js(
-    input: GroupedLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridGroupingButtonLabel>;
-  grid_filter_placeholder_js(
-    input: FilterableLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridFilterPlaceholder>;
-  grid_group_disclosure_label_js(
-    input: CollapsedLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridGroupDisclosureLabel>;
-  grid_editor_input_type_js(
-    column: Parameters<typeof tsViewmodel.gridEditorInputType>[0],
-  ): ReturnType<typeof tsViewmodel.gridEditorInputType>;
-  grid_column_width_js(
-    column: Parameters<typeof tsViewmodel.gridColumnWidth>[0],
-  ): ReturnType<typeof tsViewmodel.gridColumnWidth>;
+  grid_sort_button_label_js(input: SortDirectionLabelsInput): ReturnType<typeof tsViewmodel.gridSortButtonLabel>;
+  grid_sort_aria_sort_js(direction: Parameters<typeof tsViewmodel.gridSortAriaSort>[0]): ReturnType<typeof tsViewmodel.gridSortAriaSort>;
+  grid_grouping_button_label_js(input: GroupedLabelsInput): ReturnType<typeof tsViewmodel.gridGroupingButtonLabel>;
+  grid_filter_placeholder_js(input: FilterableLabelsInput): ReturnType<typeof tsViewmodel.gridFilterPlaceholder>;
+  grid_group_disclosure_label_js(input: CollapsedLabelsInput): ReturnType<typeof tsViewmodel.gridGroupDisclosureLabel>;
+  grid_editor_input_type_js(column: Parameters<typeof tsViewmodel.gridEditorInputType>[0]): ReturnType<typeof tsViewmodel.gridEditorInputType>;
+  grid_column_width_js(column: Parameters<typeof tsViewmodel.gridColumnWidth>[0]): ReturnType<typeof tsViewmodel.gridColumnWidth>;
   grid_cell_indent_js(input: CellIndentInput): ReturnType<typeof tsViewmodel.gridCellIndent>;
-  grid_tree_toggle_label_js(
-    input: ExpandedLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridTreeToggleLabel>;
-  grid_expand_toggle_label_js(
-    input: ExpandedLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridExpandToggleLabel>;
-  is_grid_column_grouped_js(
-    input: GroupByColumnsColumnInput,
-  ): ReturnType<typeof tsViewmodel.isGridColumnGrouped>;
-  is_grid_tree_row_expanded_js(
-    input: ExpandedTreeRowsRowInput,
-  ): ReturnType<typeof tsViewmodel.isGridTreeRowExpanded>;
-  grid_tree_toggle_label_for_row_js(
-    input: ExpandedTreeRowsRowLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridTreeToggleLabelForRow>;
-  grid_expand_toggle_label_for_row_js(
-    input: RowLabelsInput,
-  ): ReturnType<typeof tsViewmodel.gridExpandToggleLabelForRow>;
+  grid_tree_toggle_label_js(input: ExpandedLabelsInput): ReturnType<typeof tsViewmodel.gridTreeToggleLabel>;
+  grid_expand_toggle_label_js(input: ExpandedLabelsInput): ReturnType<typeof tsViewmodel.gridExpandToggleLabel>;
+  is_grid_column_grouped_js(input: GroupByColumnsColumnInput): ReturnType<typeof tsViewmodel.isGridColumnGrouped>;
+  is_grid_tree_row_expanded_js(input: ExpandedTreeRowsRowInput): ReturnType<typeof tsViewmodel.isGridTreeRowExpanded>;
+  grid_tree_toggle_label_for_row_js(input: ExpandedTreeRowsRowLabelsInput): ReturnType<typeof tsViewmodel.gridTreeToggleLabelForRow>;
+  grid_expand_toggle_label_for_row_js(input: RowLabelsInput): ReturnType<typeof tsViewmodel.gridExpandToggleLabelForRow>;
   is_tree_enabled_js(options: IsTreeEnabledOptions): ReturnType<typeof tsTree.isTreeEnabled>;
   filter_and_flatten_grid_tree_rows_js(
     input: FilterAndFlattenGridTreeRowsInput,
@@ -509,20 +390,6 @@ type UiGridWasmCoreModule = {
   build_grid_display_items_js(input: BuildGridDisplayItemsInput): BuildGridDisplayItemsResult;
   header_label_js(input: HeaderLabelInput): ReturnType<typeof tsExport.headerLabel>;
   export_csv_rows_js(columns: ExportCsvRowsColumns, rows: ExportCsvRowsRows): ExportCsvRowsResult;
-  build_grid_header_context_js(input: {
-    column: Parameters<typeof tsExport.buildGridHeaderContext>[0];
-  }): ReturnType<typeof tsExport.buildGridHeaderContext>;
-  format_grid_header_display_value_js(input: {
-    $implicit: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['$implicit'];
-    value: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['value'];
-    column: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['column'];
-  }): ReturnType<typeof tsExport.formatGridHeaderDisplayValue>;
-  resolve_exporter_filename_js(input: {
-    filename: string | undefined;
-    fallback: Parameters<typeof tsExport.resolveExporterFilename>[1];
-    rowType: Parameters<typeof tsExport.resolveExporterFilename>[2];
-    colType: Parameters<typeof tsExport.resolveExporterFilename>[3];
-  }): ReturnType<typeof tsExport.resolveExporterFilename>;
 };
 
 export interface WasmSerializationAuditOptions {
@@ -746,8 +613,8 @@ function emitWasmSerializationAudit(
   extra: Record<string, unknown> = {},
 ): void {
   const shouldWarn =
-    result.issues.length > 0 ||
-    result.estimatedBytes >= wasmSerializationAuditOptions.sizeThresholdBytes;
+    result.issues.length > 0
+    || result.estimatedBytes >= wasmSerializationAuditOptions.sizeThresholdBytes;
 
   if (!shouldWarn) {
     return;
@@ -756,9 +623,7 @@ function emitWasmSerializationAudit(
   const signature = JSON.stringify({
     methodName,
     estimatedBytesBucket: Math.floor(result.estimatedBytes / 1024),
-    issues: result.issues.map(
-      (issue) => `${issue.path}:${issue.kind}:${issue.constructorName ?? ''}`,
-    ),
+    issues: result.issues.map((issue) => `${issue.path}:${issue.kind}:${issue.constructorName ?? ''}`),
   });
 
   if (wasmSerializationAuditOptions.warnOnce && warnedWasmAuditKeys.has(signature)) {
@@ -834,9 +699,7 @@ function hasUnsupportedFilterCondition(column: GridColumnDef): boolean {
 }
 
 function shouldFallbackFiltering(columns: readonly GridColumnDef[]): boolean {
-  return columns.some(
-    (column) => hasColumnCallbacks(column) || hasUnsupportedFilterCondition(column),
-  );
+  return columns.some((column) => hasColumnCallbacks(column) || hasUnsupportedFilterCondition(column));
 }
 
 function requiresTemplateFallback(options: GridOptions): boolean {
@@ -870,29 +733,6 @@ function normalizeOptionsForWasm(options: GridOptions): GridOptions {
   };
 }
 
-/**
- * Variant of `normalizeOptionsForWasm` for code paths that *do* need the
- * `data` array and the live `rowIdentity` callback to reach the wasm shim.
- * The wasm side resolves the callback through `Function::call2` (see
- * `collect_row_identity_overrides` in `crates/ui-grid-wasm/src/lib.rs`) so
- * the JSON-serde layer never touches the callback. Returning the actual
- * options object preserves identity-preserving fields that would otherwise
- * be stripped by `normalizeOptionsForWasm`.
- */
-function normalizeOptionsForWasmWithIdentity(options: GridOptions): GridOptions {
-  return {
-    ...options,
-    columnDefs: options.columnDefs.map((column) => normalizeColumnForWasm(column)),
-    labels: tsViewmodel.resolveGridLabels(options.labels),
-    hasExpandableRowTemplate: Boolean(options.expandableRowTemplate),
-    onRegisterApi: undefined,
-    expandableRowTemplate: undefined,
-    cellEditableCondition: undefined,
-    // Keep `data` AND `rowIdentity` — the wasm shim reads both off the live
-    // JsValue so the bridge must not strip them.
-  };
-}
-
 function shouldFallbackPipeline(context: BuildGridPipelineContext): boolean {
   return shouldFallbackFiltering(context.columns);
 }
@@ -906,6 +746,27 @@ function shouldFallbackSorting(columns: readonly GridColumnDef[]): boolean {
     (column) =>
       typeof column.valueGetter === 'function' || typeof column.sortingAlgorithm === 'function',
   );
+}
+
+function shouldFallbackResolveRowId(
+  options: GridOptions,
+  row: Parameters<typeof tsIdentity.resolveGridRowId>[1],
+): boolean {
+  return typeof options.rowIdentity === 'function' && typeof row === 'object' && row !== null && !('entity' in row);
+}
+
+function findRowAndColumn(
+  rows: readonly GridRow[],
+  columns: readonly GridColumnDef[],
+  position: GridCellPosition | null,
+): { row: GridRow; column: GridColumnDef } | null {
+  if (!position) {
+    return null;
+  }
+
+  const row = rows.find((candidate) => candidate.id === position.rowId);
+  const column = columns.find((candidate) => candidate.name === position.columnName);
+  return row && column ? { row, column } : null;
 }
 
 function syncGridRowFilterState(row: GridRow, nextState: WasmRowFilterState): void {
@@ -922,35 +783,11 @@ export const buildGridCellContext: typeof tsDisplay.buildGridCellContext = (...a
 export const formatGridCellDisplayValue: typeof tsDisplay.formatGridCellDisplayValue = (...args) =>
   tsDisplay.formatGridCellDisplayValue(...args);
 
-export const buildGridHeaderContext: typeof tsExport.buildGridHeaderContext = (column) =>
-  withWasm(
-    (wasm) =>
-      wasm.build_grid_header_context_js({ column: normalizeColumnForWasm(column) }) as ReturnType<
-        typeof tsExport.buildGridHeaderContext
-      >,
-    () => tsExport.buildGridHeaderContext(column),
-  );
+export const buildGridHeaderContext: typeof tsExport.buildGridHeaderContext = (...args) =>
+  tsExport.buildGridHeaderContext(...args);
 
-export const formatGridHeaderDisplayValue: typeof tsExport.formatGridHeaderDisplayValue = (
-  context,
-) => {
-  // Function-typed `headerRenderer` runs host-side — closures don't
-  // survive the wasm boundary. Static / undefined cases delegate to the
-  // wasm shim for parity coverage; if the wasm runtime isn't loaded
-  // the TS impl is the fallback.
-  if (typeof context.column.headerRenderer === 'function') {
-    return context.column.headerRenderer(context);
-  }
-  return withWasm(
-    (wasm) =>
-      wasm.format_grid_header_display_value_js({
-        $implicit: context.$implicit,
-        value: context.value,
-        column: normalizeColumnForWasm(context.column),
-      }),
-    () => tsExport.formatGridHeaderDisplayValue(context),
-  );
-};
+export const formatGridHeaderDisplayValue: typeof tsExport.formatGridHeaderDisplayValue =
+  (...args) => tsExport.formatGridHeaderDisplayValue(...args);
 
 export const buildGridPipeline: typeof tsPipeline.buildGridPipeline = (context) =>
   tsPipeline.buildGridPipeline(context);
@@ -976,7 +813,8 @@ export const shouldShowGridPaginationControls: typeof tsViewmodel.shouldShowGrid
   (options) => tsViewmodel.shouldShowGridPaginationControls(options);
 export const isGridInfiniteScrollEnabled: typeof tsViewmodel.isGridInfiniteScrollEnabled = (
   options,
-) => tsViewmodel.isGridInfiniteScrollEnabled(options);
+) =>
+  tsViewmodel.isGridInfiniteScrollEnabled(options);
 export const isGridSortingEnabled: typeof tsViewmodel.isGridSortingEnabled = (options) =>
   tsViewmodel.isGridSortingEnabled(options);
 export const isGridFilteringEnabled: typeof tsViewmodel.isGridFilteringEnabled = (options) =>
@@ -996,18 +834,21 @@ export const isGridColumnSortable: typeof tsViewmodel.isGridColumnSortable = (op
 export const isGridColumnFilterable: typeof tsViewmodel.isGridColumnFilterable = (
   options,
   column,
-) => tsViewmodel.isGridColumnFilterable(options, column);
+) =>
+  tsViewmodel.isGridColumnFilterable(options, column);
 export const shouldShowGridTreeToggle: typeof tsViewmodel.shouldShowGridTreeToggle = (
   options,
   visibleColumns,
   row,
   column,
-) => tsViewmodel.shouldShowGridTreeToggle(options, visibleColumns, row, column);
+) =>
+  tsViewmodel.shouldShowGridTreeToggle(options, visibleColumns, row, column);
 export const shouldShowGridExpandToggle: typeof tsViewmodel.shouldShowGridExpandToggle = (
   options,
   visibleColumns,
   column,
-) => tsViewmodel.shouldShowGridExpandToggle(options, visibleColumns, column);
+) =>
+  tsViewmodel.shouldShowGridExpandToggle(options, visibleColumns, column);
 export const gridSortButtonLabel: typeof tsViewmodel.gridSortButtonLabel = (direction, labels) =>
   tsViewmodel.gridSortButtonLabel(direction, labels);
 export const gridSortAriaSort: typeof tsViewmodel.gridSortAriaSort = (direction) =>
@@ -1018,15 +859,18 @@ export const gridSortAriaSort: typeof tsViewmodel.gridSortAriaSort = (direction)
 export const gridGroupingButtonLabel: typeof tsViewmodel.gridGroupingButtonLabel = (
   isGrouped,
   labels,
-) => tsViewmodel.gridGroupingButtonLabel(isGrouped, labels);
+) =>
+  tsViewmodel.gridGroupingButtonLabel(isGrouped, labels);
 export const gridFilterPlaceholder: typeof tsViewmodel.gridFilterPlaceholder = (
   isFilterable,
   labels,
-) => tsViewmodel.gridFilterPlaceholder(isFilterable, labels);
+) =>
+  tsViewmodel.gridFilterPlaceholder(isFilterable, labels);
 export const gridGroupDisclosureLabel: typeof tsViewmodel.gridGroupDisclosureLabel = (
   collapsed,
   labels,
-) => tsViewmodel.gridGroupDisclosureLabel(collapsed, labels);
+) =>
+  tsViewmodel.gridGroupDisclosureLabel(collapsed, labels);
 export const gridEditorInputType: typeof tsViewmodel.gridEditorInputType = (column) =>
   withWasm(
     (wasm) => wasm.grid_editor_input_type_js(column),
@@ -1042,7 +886,8 @@ export const gridCellIndent: typeof tsViewmodel.gridCellIndent = (
   visibleColumns,
   row,
   column,
-) => tsViewmodel.gridCellIndent(options, visibleColumns, row, column);
+) =>
+  tsViewmodel.gridCellIndent(options, visibleColumns, row, column);
 export const gridTreeToggleLabel: typeof tsViewmodel.gridTreeToggleLabel = (expanded, labels) =>
   withWasm(
     (wasm) => wasm.grid_tree_toggle_label_js({ expanded, labels }),
@@ -1056,20 +901,24 @@ export const gridExpandToggleLabel: typeof tsViewmodel.gridExpandToggleLabel = (
 export const isGridColumnGrouped: typeof tsViewmodel.isGridColumnGrouped = (
   groupByColumns,
   column,
-) => tsViewmodel.isGridColumnGrouped(groupByColumns, column);
+) =>
+  tsViewmodel.isGridColumnGrouped(groupByColumns, column);
 export const isGridTreeRowExpanded: typeof tsViewmodel.isGridTreeRowExpanded = (
   expandedTreeRows,
   row,
-) => tsViewmodel.isGridTreeRowExpanded(expandedTreeRows, row);
+) =>
+  tsViewmodel.isGridTreeRowExpanded(expandedTreeRows, row);
 export const gridTreeToggleLabelForRow: typeof tsViewmodel.gridTreeToggleLabelForRow = (
   expandedTreeRows,
   row,
   labels,
-) => tsViewmodel.gridTreeToggleLabelForRow(expandedTreeRows, row, labels);
+) =>
+  tsViewmodel.gridTreeToggleLabelForRow(expandedTreeRows, row, labels);
 export const gridExpandToggleLabelForRow: typeof tsViewmodel.gridExpandToggleLabelForRow = (
   row,
   labels,
-) => tsViewmodel.gridExpandToggleLabelForRow(row, labels);
+) =>
+  tsViewmodel.gridExpandToggleLabelForRow(row, labels);
 
 export const isPinningEnabled: typeof tsPinning.isPinningEnabled = (options) =>
   tsPinning.isPinningEnabled(options);
@@ -1113,7 +962,10 @@ export const pinningButtonLabel: typeof tsPinning.pinningButtonLabel = (
   );
 
 export const isGridCellPosition: typeof tsEdit.isGridCellPosition = (position, rowId, columnName) =>
-  tsEdit.isGridCellPosition(position, rowId, columnName);
+  withWasm(
+    (wasm) => wasm.is_grid_cell_position_js({ position, rowId, columnName }),
+    () => tsEdit.isGridCellPosition(position, rowId, columnName),
+  );
 export const beginGridEditSession: typeof tsEdit.beginGridEditSession = (
   rowId,
   columnName,
@@ -1124,7 +976,10 @@ export const beginGridEditSession: typeof tsEdit.beginGridEditSession = (
     () => tsEdit.beginGridEditSession(rowId, columnName, editingValue),
   );
 export const shouldGridEditOnFocus: typeof tsEdit.shouldGridEditOnFocus = (options, column) =>
-  tsEdit.shouldGridEditOnFocus(options, column);
+  withWasm(
+    (wasm) => wasm.should_grid_edit_on_focus_js({ options: normalizeOptionsForWasm(options), column }),
+    () => tsEdit.shouldGridEditOnFocus(options, column),
+  );
 export const isPrintableGridKey: typeof tsEdit.isPrintableGridKey = (
   key,
   ctrlKey,
@@ -1138,14 +993,26 @@ export const isPrintableGridKey: typeof tsEdit.isPrintableGridKey = (
 export const isGridNavigationKey: typeof tsEdit.isGridNavigationKey = (key) =>
   tsEdit.isGridNavigationKey(key);
 export const buildGridFocusCellResult: typeof tsEdit.buildGridFocusCellResult = (context) =>
-  tsEdit.buildGridFocusCellResult(context);
+  withWasm(
+    (wasm) => wasm.build_grid_focus_cell_result_js(context),
+    () => tsEdit.buildGridFocusCellResult(context),
+  );
 export const clearGridEditSession: typeof tsEdit.clearGridEditSession = () =>
   withWasm(
     (wasm) => wasm.clear_grid_edit_session_js(),
     () => tsEdit.clearGridEditSession(),
   );
 export const findNextGridCell: typeof tsEdit.findNextGridCell = (context) =>
-  tsEdit.findNextGridCell(context);
+  withWasm(
+    (wasm) => {
+      if (context.isCellAllowed) {
+        return tsEdit.findNextGridCell(context);
+      }
+
+      return wasm.find_next_grid_cell_js(context);
+    },
+    () => tsEdit.findNextGridCell(context),
+  );
 export const stringifyGridEditorValue: typeof tsEdit.stringifyGridEditorValue = (value) =>
   withWasm(
     (wasm) => wasm.stringify_grid_editor_value_js(value),
@@ -1228,30 +1095,35 @@ export const getEffectivePageSize: typeof tsPagination.getEffectivePageSize = (
   options,
   pageSize,
   totalItems,
-) => tsPagination.getEffectivePageSize(options, pageSize, totalItems);
+) =>
+  tsPagination.getEffectivePageSize(options, pageSize, totalItems);
 export const getTotalPagesValue: typeof tsPagination.getTotalPagesValue = (
   options,
   totalItems,
   pageSize,
-) => tsPagination.getTotalPagesValue(options, totalItems, pageSize);
+) =>
+  tsPagination.getTotalPagesValue(options, totalItems, pageSize);
 export const getCurrentPageValue: typeof tsPagination.getCurrentPageValue = (
   options,
   currentPage,
   totalItems,
   pageSize,
-) => tsPagination.getCurrentPageValue(options, currentPage, totalItems, pageSize);
+) =>
+  tsPagination.getCurrentPageValue(options, currentPage, totalItems, pageSize);
 export const getFirstRowIndexValue: typeof tsPagination.getFirstRowIndexValue = (
   options,
   currentPage,
   totalItems,
   pageSize,
-) => tsPagination.getFirstRowIndexValue(options, currentPage, totalItems, pageSize);
+) =>
+  tsPagination.getFirstRowIndexValue(options, currentPage, totalItems, pageSize);
 export const getLastRowIndexValue: typeof tsPagination.getLastRowIndexValue = (
   options,
   currentPage,
   totalItems,
   pageSize,
-) => tsPagination.getLastRowIndexValue(options, currentPage, totalItems, pageSize);
+) =>
+  tsPagination.getLastRowIndexValue(options, currentPage, totalItems, pageSize);
 export const paginateGridRows: typeof tsPagination.paginateGridRows = (
   rows,
   options,
@@ -1325,7 +1197,10 @@ export const isSafeStateKey: typeof tsState.isSafeStateKey = (value) =>
   );
 
 export const findGridRowById: typeof tsIdentity.findGridRowById = (rows, rowId) =>
-  tsIdentity.findGridRowById(rows, rowId);
+  withWasm(
+    (wasm) => wasm.find_grid_row_by_id_js({ rows, rowId }),
+    () => tsIdentity.findGridRowById(rows, rowId),
+  );
 export const buildGridSortState: typeof tsIdentity.buildGridSortState = (columnName, direction) =>
   withWasm(
     (wasm) => wasm.build_grid_sort_state_js({ columnName, direction: direction ?? null }),
@@ -1333,11 +1208,16 @@ export const buildGridSortState: typeof tsIdentity.buildGridSortState = (columnN
   );
 export const resolveGridRowId: typeof tsIdentity.resolveGridRowId = (options, row) =>
   withWasm(
-    // The wasm shim plucks `options.rowIdentity` off the live JsValue before
-    // serde-deserializing, then invokes the callback through `Function.call2`
-    // when the row is a bare GridRecord. See `resolve_grid_row_id_js` in
-    // crates/ui-grid-wasm.
-    (wasm) => wasm.resolve_grid_row_id_js({ options, row }),
+    (wasm) => {
+      if (shouldFallbackResolveRowId(options, row)) {
+        return tsIdentity.resolveGridRowId(options, row);
+      }
+
+      return wasm.resolve_grid_row_id_js({
+        options: normalizeOptionsForWasm(options),
+        row,
+      });
+    },
     () => tsIdentity.resolveGridRowId(options, row),
   );
 
@@ -1440,10 +1320,7 @@ export const buildGridRows: typeof tsTree.buildGridRows = (
     : withWasm(
         (wasm) =>
           wasm.build_grid_rows_js({
-            // The wasm shim invokes options.rowIdentity through
-            // Function.call2 — we MUST keep `data` and `rowIdentity` live
-            // on the JsValue, not stripped by normalizeOptionsForWasm.
-            options: normalizeOptionsForWasmWithIdentity(options),
+            options: normalizeOptionsForWasm(options),
             rowSize,
             hiddenRowReasons,
             expandedRows,
@@ -1539,30 +1416,7 @@ export const headerLabel: typeof tsExport.headerLabel = (column) =>
 export const buildGridCsv = tsExport.buildGridCsv;
 export const resolveGridExporterOptions = tsExport.resolveGridExporterOptions;
 export const filterExporterColumns = tsExport.filterExporterColumns;
-export const resolveExporterFilename: typeof tsExport.resolveExporterFilename = (
-  filename,
-  fallback,
-  rowType,
-  colType,
-) => {
-  // Function-valued filenames are evaluated host-side and never cross
-  // the wasm boundary (closures don't survive the bridge). Static and
-  // undefined cases delegate to the wasm shim for parity coverage; if
-  // the wasm runtime isn't loaded the TS impl is the fallback.
-  if (typeof filename === 'function') {
-    return filename(rowType, colType);
-  }
-  return withWasm(
-    (wasm) =>
-      wasm.resolve_exporter_filename_js({
-        filename: typeof filename === 'string' ? filename : undefined,
-        fallback,
-        rowType,
-        colType,
-      }),
-    () => tsExport.resolveExporterFilename(filename, fallback, rowType, colType),
-  );
-};
+export const resolveExporterFilename = tsExport.resolveExporterFilename;
 export const GRID_EXPORTER_CONSTANTS = tsExport.GRID_EXPORTER_CONSTANTS;
 export const buildGridPdfDocDefinition = tsExport.buildGridPdfDocDefinition;
 export const calculateGridPdfColumnWidths = tsExport.calculateGridPdfColumnWidths;
@@ -1609,8 +1463,14 @@ export type {
 // modules because menu shape + gating is distinct from the feature logic.
 export const buildGridImporterMenuItems = tsImporterMenu.buildGridImporterMenuItems;
 export const buildGridRowEditMenuItems = tsRowEditMenu.buildGridRowEditMenuItems;
-export type { GridImporterMenuActions, GridImporterMenuLabels } from './grid.core.importer-menu';
-export type { GridRowEditMenuActions, GridRowEditMenuLabels } from './grid.core.row-edit-menu';
+export type {
+  GridImporterMenuActions,
+  GridImporterMenuLabels,
+} from './grid.core.importer-menu';
+export type {
+  GridRowEditMenuActions,
+  GridRowEditMenuLabels,
+} from './grid.core.row-edit-menu';
 export type { GridMenuItem } from './grid.core.menu';
 
 // i18n service — singleton + class export. Ports `ui.grid.i18n.i18nService`.
