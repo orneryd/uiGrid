@@ -79,7 +79,7 @@ That means explicit JS property values win over declarative attributes when both
 | `grouping`                   | `{ groupBy?: string[]; startCollapsed?: boolean }` | —          | Grouping configuration                     |
 | `enableColumnMoving`         | `boolean`                                          | false      | Enable drag-and-drop column reorder        |
 | `enablePinning`              | `boolean`                                          | —          | Enable column pinning (freeze left/right)  |
-| `enableVirtualization`       | `boolean`                                          | auto       | CDK virtual scroll (auto at 40+ rows)      |
+| `enableVirtualization`       | `boolean`                                          | auto       | virtual scroll (auto at 40+ rows)      |
 | `virtualizationThreshold`    | `number`                                           | 40         | Row count that triggers virtualization     |
 | `enablePagination`           | `boolean`                                          | false      | Enable pagination                          |
 | `enablePaginationControls`   | `boolean`                                          | true       | Show pagination UI                         |

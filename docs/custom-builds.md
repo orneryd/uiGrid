@@ -14,7 +14,7 @@ Ship only the features you use. The build script generates compile-time boolean 
 | `expandable` | `FEATURE_EXPANDABLE` | Expandable detail rows |
 | `tree-view` | `FEATURE_TREE_VIEW` | Tree row rendering and tree pipeline |
 | `infinite-scroll` | `FEATURE_INFINITE_SCROLL` | Infinite scroll state machine |
-| `column-moving` | `FEATURE_COLUMN_MOVING` | CDK drag-and-drop on headers |
+| `column-moving` | `FEATURE_COLUMN_MOVING` | drag-and-drop on headers |
 | `csv-export` | `FEATURE_CSV_EXPORT` | CSV export and toolbar button |
 | `save-state` | `FEATURE_SAVE_STATE` | Save/restore state serialization |
 | `auto-resize` | `FEATURE_AUTO_RESIZE` | ResizeObserver integration |

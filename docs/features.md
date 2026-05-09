@@ -14,9 +14,9 @@ Every feature is included free and open source. No enterprise tier, no license k
 | Cell Editing | `enableCellEdit` | `false` | Inline spreadsheet-style editing with keyboard nav |
 | Pagination | `enablePagination` | `false` | Client-side or external pagination |
 | Infinite Scroll | `infiniteScrollRowsFromEnd` | — | Bi-directional infinite scroll with loading state |
-| Column Moving | `enableColumnMoving` | `false` | Drag-and-drop column reordering via CDK |
+| Column Moving | `enableColumnMoving` | `false` | Drag-and-drop column reordering |
 | CSV Export | `gridApi.core.exportCsv()` | — | Export visible rows with formula-injection protection |
-| Virtual Scrolling | `enableVirtualization` | auto | CDK virtual scroll, auto-enabled at 40+ rows |
+| Virtual Scrolling | `enableVirtualization` | auto | virtual scroll, auto-enabled at 40+ rows |
 | Save/Restore State | `gridApi.saveState` | — | Serialize sort, filter, grouping, pagination, expansion state |
 | Auto Resize | `enableAutoResize` | `false` | ResizeObserver-driven viewport height recalculation |
 | Custom Templates | `cellTemplate` | — | Angular ng-template for fully custom cell rendering |

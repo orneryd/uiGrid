@@ -8,7 +8,7 @@ Get up and running with `@ornery/ui-grid` in under five minutes.
 npm install @ornery/ui-grid
 ```
 
-**Peer dependencies:** `@angular/core`, `@angular/common`, `@angular/cdk`, `@angular/elements`, `rxjs`, `tslib`.
+**Peer dependencies:** `@angular/core`, `@angular/common`, `rxjs`, `tslib`.
 
 ## Minimal Angular Setup
 

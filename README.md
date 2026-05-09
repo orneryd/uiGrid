@@ -254,13 +254,13 @@ The LVGL demo currently exercises the native C grid shell with sorting, grouping
 - **Pagination** — client-side or external pagination with configurable page sizes
 - **Infinite Scroll** — bi-directional infinite scrolling with loading state management, `needLoadMoreData`/`needLoadMoreDataTop` events, full public API
 - **Column Pinning** — freeze columns left or right with CSS `position: sticky`, programmatic API, save/restore state
-- **Column Moving** — drag-and-drop column reordering (Angular CDK, native HTML drag in React and vanilla)
+- **Column Moving** — HTML5 native drag-and-drop column reordering
 - **CSV Export** — download visible/selected/all rows with formula-injection protection, full option matrix (separator, header filter, field callbacks, BOM compatibility)
 - **Excel Export** — ExcelBuilder-compatible sheet data with native numeric/boolean types preserved, configurable filename/sheet/header/custom formatters
 - **PDF Export** — pdfMake-ready document definition with orientation/page size/styles/header/footer/custom formatter, auto-download when pdfMake is available
 - **CSV/JSON Import** — file picker or programmatic import, full CSV parser (quoted values, escaped quotes, CRLF), header-to-column mapping, integrates with row-edit for dirty marking
 - **Export/Import Menu** — `buildGridExporterMenuItems()` with per-format and per-scope flags, i18n-driven menu labels
-- **Virtual Scrolling** — CDK virtual scroll viewport, auto-enabled at 40+ rows
+- **Virtual Scrolling** — virtual scroll viewport, auto-enabled at 40+ rows
 - **Save/Restore State** — serialize and restore sort, filters, grouping, collapsed groups, pinning, column order, column widths, pagination, selection, focused cell, tree/expandable expansion, and scroll position (per-field opt-in flags)
 - **Native Rust and C Grids** — shared Rust core with native Rust/egui and native C/LVGL adapters driven by the same projection and command contract
 - **Auto Resize** — ResizeObserver-driven viewport height recalculation
@@ -385,7 +385,6 @@ cmake --build target/ui-grid-lvgl -j4
 | Dependency  | Version |
 | ----------- | ------- |
 | Angular     | 21.2    |
-| Angular CDK | 21.2    |
 | TypeScript  | 5.9     |
 | RxJS        | 7.8     |
 | Node        | 22.20   |
