@@ -48,6 +48,10 @@ fn compare_basic(left: &Value, right: &Value) -> Ordering {
         return ordering;
     }
 
+    if left == right {
+        return Ordering::Equal;
+    }
+
     let left_text = left.to_string();
     let right_text = right.to_string();
     left_text.cmp(&right_text)
@@ -86,10 +90,9 @@ fn compare_alpha(left: &Value, right: &Value) -> Ordering {
         return ordering;
     }
 
-    left.as_str()
-        .unwrap_or_default()
+    stringify_value(left)
         .to_lowercase()
-        .cmp(&right.as_str().unwrap_or_default().to_lowercase())
+        .cmp(&stringify_value(right).to_lowercase())
 }
 
 fn compare_date(left: &Value, right: &Value) -> Ordering {
@@ -117,6 +120,19 @@ fn compare_boolean(left: &Value, right: &Value) -> Ordering {
     }
 }
 
+fn stringify_value(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn looks_like_number_string(value: &str) -> bool {
+    regex::Regex::new(r"^[$£€]?\s*-?[\d,.]+$")
+        .expect("valid number-string regex")
+        .is_match(value)
+}
+
 pub fn guess_sort_kind(column: &GridColumnDef, rows: &[GridRecord]) -> SortKind {
     if column.r#type == GridColumnType::Number {
         return SortKind::Number;
@@ -136,7 +152,7 @@ pub fn guess_sort_kind(column: &GridColumnDef, rows: &[GridRecord]) -> SortKind 
     match first_non_null {
         Some(Value::Number(_)) => SortKind::Number,
         Some(Value::Bool(_)) => SortKind::Boolean,
-        Some(Value::String(value)) if value.trim_start().starts_with('$') => SortKind::NumberString,
+        Some(Value::String(value)) if looks_like_number_string(&value) => SortKind::NumberString,
         Some(Value::String(_)) => SortKind::Alpha,
         Some(_) => SortKind::Basic,
         None => SortKind::Basic,
@@ -151,5 +167,103 @@ pub fn compare_values(kind: SortKind, left: &Value, right: &Value) -> Ordering {
         SortKind::Alpha => compare_alpha(left, right),
         SortKind::Date => compare_date(left, right),
         SortKind::Boolean => compare_boolean(left, right),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn column(name: &str) -> GridColumnDef {
+        GridColumnDef {
+            name: name.to_string(),
+            ..GridColumnDef::default()
+        }
+    }
+
+    #[test]
+    fn guess_sort_kind_matches_supported_value_shapes() {
+        assert_eq!(
+            guess_sort_kind(&column("revenue"), &[json!({ "revenue": 300 })]),
+            SortKind::Number
+        );
+        assert_eq!(
+            guess_sort_kind(&column("active"), &[json!({ "active": true })]),
+            SortKind::Boolean
+        );
+        assert_eq!(
+            guess_sort_kind(
+                &column("revenueLabel"),
+                &[json!({ "revenueLabel": "€2,400" })]
+            ),
+            SortKind::NumberString
+        );
+        assert_eq!(
+            guess_sort_kind(&column("name"), &[json!({ "name": "Alpha" })]),
+            SortKind::Alpha
+        );
+    }
+
+    #[test]
+    fn compare_number_strings_orders_invalid_values_last() {
+        assert_eq!(
+            compare_values(
+                SortKind::NumberString,
+                &Value::String("$120.50".to_string()),
+                &Value::String("n/a".to_string()),
+            ),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_values(
+                SortKind::NumberString,
+                &Value::String("n/a".to_string()),
+                &Value::String("still n/a".to_string()),
+            ),
+            Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn compare_basic_and_boolean_match_ts_null_and_equality_rules() {
+        let shared = json!({ "rank": 1 });
+        assert_eq!(
+            compare_values(SortKind::Basic, &shared, &shared),
+            Ordering::Equal
+        );
+        assert_eq!(
+            compare_values(SortKind::Basic, &Value::Null, &json!({ "rank": 2 })),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_values(SortKind::Basic, &shared, &Value::Null),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_values(SortKind::Boolean, &Value::Bool(false), &Value::Bool(false)),
+            Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn compare_date_handles_iso_strings_chronologically() {
+        assert_eq!(
+            compare_values(
+                SortKind::Date,
+                &Value::String("2026-01-01T00:00:00.000Z".to_string()),
+                &Value::String("2026-03-01T00:00:00.000Z".to_string()),
+            ),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_values(
+                SortKind::Date,
+                &Value::String("2026-01-01T00:00:00.000Z".to_string()),
+                &Value::String("2026-01-01T00:00:00.000Z".to_string()),
+            ),
+            Ordering::Equal
+        );
     }
 }

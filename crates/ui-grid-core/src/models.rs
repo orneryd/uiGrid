@@ -86,6 +86,12 @@ pub struct GridColumnDef {
     #[serde(default = "default_true")]
     pub enable_pinning: bool,
     #[serde(default)]
+    pub validators: Option<serde_json::Map<String, Value>>,
+    #[serde(default)]
+    pub exporter_suppress_export: bool,
+    #[serde(default)]
+    pub exporter_pdf_align: Option<String>,
+    #[serde(default)]
     pub width: Option<String>,
     #[serde(default)]
     pub align: Option<String>,
@@ -113,6 +119,9 @@ impl Default for GridColumnDef {
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
+            validators: None,
+            exporter_suppress_export: false,
+            exporter_pdf_align: None,
             width: None,
             align: None,
             sort: None,
@@ -229,6 +238,28 @@ pub struct GridLabels {
     pub pin_left: String,
     pub pin_right: String,
     pub unpin: String,
+    pub exporter_all_as_csv: String,
+    pub exporter_visible_as_csv: String,
+    pub exporter_selected_as_csv: String,
+    pub exporter_all_as_pdf: String,
+    pub exporter_visible_as_pdf: String,
+    pub exporter_selected_as_pdf: String,
+    pub exporter_all_as_excel: String,
+    pub exporter_visible_as_excel: String,
+    pub exporter_selected_as_excel: String,
+    pub importer_title: String,
+    pub importer_file_label: String,
+    pub importer_invalid_json: String,
+    pub importer_json_not_array: String,
+    pub importer_invalid_csv: String,
+    pub importer_no_objects: String,
+    pub importer_no_headers: String,
+    pub validate_error: String,
+    pub validate_required: String,
+    pub validate_min_length: String,
+    pub validate_max_length: String,
+    pub row_edit_flush_all: String,
+    pub row_edit_retry_errors: String,
 }
 
 impl Default for GridLabels {
@@ -263,6 +294,30 @@ impl Default for GridLabels {
             pin_left: "Pin left".to_string(),
             pin_right: "Pin right".to_string(),
             unpin: "Unpin".to_string(),
+            exporter_all_as_csv: "Export all data as csv".to_string(),
+            exporter_visible_as_csv: "Export visible data as csv".to_string(),
+            exporter_selected_as_csv: "Export selected data as csv".to_string(),
+            exporter_all_as_pdf: "Export all data as pdf".to_string(),
+            exporter_visible_as_pdf: "Export visible data as pdf".to_string(),
+            exporter_selected_as_pdf: "Export selected data as pdf".to_string(),
+            exporter_all_as_excel: "Export all data as excel".to_string(),
+            exporter_visible_as_excel: "Export visible data as excel".to_string(),
+            exporter_selected_as_excel: "Export selected data as excel".to_string(),
+            importer_title: "Import".to_string(),
+            importer_file_label: "File".to_string(),
+            importer_invalid_json: "File could not be processed as JSON".to_string(),
+            importer_json_not_array: "Import failed, file is not an array".to_string(),
+            importer_invalid_csv: "File could not be processed as CSV".to_string(),
+            importer_no_objects: "Objects could not be derived from the imported file".to_string(),
+            importer_no_headers: "Column names could not be derived".to_string(),
+            validate_error: "Error:".to_string(),
+            validate_required: "Field required".to_string(),
+            validate_min_length: "Value must be longer than or equal to THRESHOLD characters"
+                .to_string(),
+            validate_max_length: "Value must be shorter than or equal to THRESHOLD characters"
+                .to_string(),
+            row_edit_flush_all: "Save changes".to_string(),
+            row_edit_retry_errors: "Retry errored rows".to_string(),
         }
     }
 }
@@ -357,6 +412,104 @@ pub struct GridOptions {
     #[serde(default)]
     pub enable_pinning: bool,
     #[serde(default)]
+    pub enable_row_selection: Option<bool>,
+    #[serde(default)]
+    pub multi_select: Option<bool>,
+    #[serde(default)]
+    pub no_unselect: Option<bool>,
+    #[serde(default)]
+    pub modifier_keys_to_multi_select: Option<bool>,
+    #[serde(default)]
+    pub enable_row_header_selection: Option<bool>,
+    #[serde(default)]
+    pub enable_full_row_selection: Option<bool>,
+    #[serde(default)]
+    pub enable_focus_row_on_row_header_click: Option<bool>,
+    #[serde(default)]
+    pub enable_select_row_on_focus: Option<bool>,
+    #[serde(default)]
+    pub enable_select_all: Option<bool>,
+    #[serde(default)]
+    pub enable_selection_batch_event: Option<bool>,
+    #[serde(default)]
+    pub selection_row_header_width: Option<usize>,
+    #[serde(default)]
+    pub enable_footer_total_selected: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_item_order: Option<usize>,
+    #[serde(default)]
+    pub exporter_menu_csv: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_pdf: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_excel: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_all_data: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_visible_data: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_selected_data: Option<bool>,
+    #[serde(default)]
+    pub exporter_csv_column_separator: Option<String>,
+    #[serde(default)]
+    pub exporter_csv_filename: Option<String>,
+    #[serde(default)]
+    pub exporter_header_filter_use_name: Option<bool>,
+    #[serde(default)]
+    pub exporter_header_template: Option<String>,
+    #[serde(default)]
+    pub exporter_show_header: Option<bool>,
+    #[serde(default)]
+    pub exporter_suppress_columns: Option<Vec<String>>,
+    #[serde(default)]
+    pub exporter_older_excel_compatibility: Option<bool>,
+    #[serde(default)]
+    pub exporter_is_excel_compatible: Option<bool>,
+    #[serde(default)]
+    pub exporter_excel_filename: Option<String>,
+    #[serde(default)]
+    pub exporter_excel_sheet_name: Option<String>,
+    #[serde(default)]
+    pub exporter_excel_header: Option<Value>,
+    #[serde(default)]
+    pub exporter_column_scale_factor: Option<usize>,
+    #[serde(default)]
+    pub exporter_suppress_menu: Option<bool>,
+    #[serde(default)]
+    pub exporter_menu_label: Option<String>,
+    #[serde(default)]
+    pub exporter_pdf_filename: Option<String>,
+    #[serde(default)]
+    pub exporter_pdf_orientation: Option<String>,
+    #[serde(default)]
+    pub exporter_pdf_page_size: Option<String>,
+    #[serde(default)]
+    pub exporter_pdf_max_grid_width: Option<usize>,
+    #[serde(default)]
+    pub exporter_pdf_default_style: Option<Value>,
+    #[serde(default)]
+    pub exporter_pdf_table_style: Option<Value>,
+    #[serde(default)]
+    pub exporter_pdf_table_header_style: Option<Value>,
+    #[serde(default)]
+    pub exporter_pdf_layout: Option<Value>,
+    #[serde(default)]
+    pub exporter_pdf_header: Option<Value>,
+    #[serde(default)]
+    pub exporter_pdf_footer: Option<Value>,
+    #[serde(default)]
+    pub enable_importer: Option<bool>,
+    #[serde(default)]
+    pub importer_show_menu: Option<bool>,
+    #[serde(default)]
+    pub importer_menu_item_order: Option<usize>,
+    #[serde(default)]
+    pub row_edit_menu_item_order: Option<usize>,
+    #[serde(default)]
+    pub row_edit_menu_flush_dirty_rows: Option<bool>,
+    #[serde(default)]
+    pub row_edit_menu_cancel_dirty_rows: Option<bool>,
+    #[serde(default)]
     pub row_id_field: Option<String>,
 }
 
@@ -400,6 +553,55 @@ impl Default for GridOptions {
             viewport_height: None,
             grouping: None,
             enable_pinning: false,
+            enable_row_selection: None,
+            multi_select: None,
+            no_unselect: None,
+            modifier_keys_to_multi_select: None,
+            enable_row_header_selection: None,
+            enable_full_row_selection: None,
+            enable_focus_row_on_row_header_click: None,
+            enable_select_row_on_focus: None,
+            enable_select_all: None,
+            enable_selection_batch_event: None,
+            selection_row_header_width: None,
+            enable_footer_total_selected: None,
+            exporter_menu_item_order: None,
+            exporter_menu_csv: None,
+            exporter_menu_pdf: None,
+            exporter_menu_excel: None,
+            exporter_menu_all_data: None,
+            exporter_menu_visible_data: None,
+            exporter_menu_selected_data: None,
+            exporter_csv_column_separator: None,
+            exporter_csv_filename: None,
+            exporter_header_filter_use_name: None,
+            exporter_header_template: None,
+            exporter_show_header: None,
+            exporter_suppress_columns: None,
+            exporter_older_excel_compatibility: None,
+            exporter_is_excel_compatible: None,
+            exporter_excel_filename: None,
+            exporter_excel_sheet_name: None,
+            exporter_excel_header: None,
+            exporter_column_scale_factor: None,
+            exporter_suppress_menu: None,
+            exporter_menu_label: None,
+            exporter_pdf_filename: None,
+            exporter_pdf_orientation: None,
+            exporter_pdf_page_size: None,
+            exporter_pdf_max_grid_width: None,
+            exporter_pdf_default_style: None,
+            exporter_pdf_table_style: None,
+            exporter_pdf_table_header_style: None,
+            exporter_pdf_layout: None,
+            exporter_pdf_header: None,
+            exporter_pdf_footer: None,
+            enable_importer: None,
+            importer_show_menu: None,
+            importer_menu_item_order: None,
+            row_edit_menu_item_order: None,
+            row_edit_menu_flush_dirty_rows: None,
+            row_edit_menu_cancel_dirty_rows: None,
             row_id_field: Some("id".to_string()),
         }
     }
@@ -463,6 +665,10 @@ pub struct GridRow {
     #[serde(default)]
     pub is_selected: bool,
     #[serde(default)]
+    pub is_focused: bool,
+    #[serde(default = "default_true")]
+    pub enable_selection: bool,
+    #[serde(default)]
     pub tree_level: usize,
     #[serde(default)]
     pub parent_id: Option<String>,
@@ -474,6 +680,14 @@ pub struct GridRow {
     pub expanded: bool,
     #[serde(default)]
     pub expanded_row_height: usize,
+    #[serde(default)]
+    pub is_dirty: bool,
+    #[serde(default)]
+    pub is_error: bool,
+    #[serde(default)]
+    pub is_saving: bool,
+    #[serde(default = "default_true")]
+    pub exporter_enable_exporting: bool,
 }
 
 impl GridRow {
@@ -486,12 +700,18 @@ impl GridRow {
             invisible_reasons: Vec::new(),
             visible: true,
             is_selected: false,
+            is_focused: false,
+            enable_selection: true,
             tree_level: 0,
             parent_id: None,
             has_children: false,
             child_count: 0,
             expanded: false,
             expanded_row_height: 0,
+            is_dirty: false,
+            is_error: false,
+            is_saving: false,
+            exporter_enable_exporting: true,
         }
     }
 
@@ -510,6 +730,26 @@ impl GridRow {
     pub fn clear_this_row_invisible(&mut self, reason: &str) {
         self.invisible_reasons.retain(|existing| existing != reason);
         self.visible = self.invisible_reasons.is_empty();
+    }
+
+    pub fn set_selected(&mut self, selected: bool) {
+        self.is_selected = selected;
+    }
+
+    pub fn set_focused(&mut self, focused: bool) {
+        self.is_focused = focused;
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.is_dirty = dirty;
+    }
+
+    pub fn set_error(&mut self, error: bool) {
+        self.is_error = error;
+    }
+
+    pub fn set_saving(&mut self, saving: bool) {
+        self.is_saving = saving;
     }
 }
 

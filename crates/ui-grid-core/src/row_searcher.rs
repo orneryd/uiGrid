@@ -42,8 +42,15 @@ fn strip_term(filter: &GridFilterDescriptor) -> Option<Value> {
     })
 }
 
+fn value_to_string(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        other => other.to_string(),
+    }
+}
+
 fn build_literal_pattern(term: &Value) -> String {
-    escape_reg_exp(term.as_str().unwrap_or_default())
+    escape_reg_exp(&value_to_string(term))
 }
 
 fn build_wildcard_pattern(term: &str) -> Option<String> {
@@ -67,19 +74,18 @@ fn guess_condition(filter: &GridFilterDescriptor) -> ParsedCondition {
         return ParsedCondition::Comparator(FilterCondition::Contains);
     };
 
-    if term.contains('*')
-        && let Some(pattern) = build_wildcard_pattern(&term)
-    {
-        return ParsedCondition::Regex(regex_from_pattern(
-            &format!("^{pattern}$"),
-            filter.flags.case_sensitive,
-        ));
+    if term.contains('*') {
+        if let Some(pattern) = build_wildcard_pattern(&term) {
+            return ParsedCondition::Regex(regex_from_pattern(
+                &format!("^{pattern}$"),
+                filter.flags.case_sensitive,
+            ));
+        }
+
+        return ParsedCondition::Comparator(FilterCondition::Contains);
     }
 
-    ParsedCondition::Regex(regex_from_pattern(
-        &escape_reg_exp(&term),
-        filter.flags.case_sensitive,
-    ))
+    ParsedCondition::Comparator(FilterCondition::Contains)
 }
 
 pub fn setup_filters(filters: &[GridFilterDescriptor]) -> Vec<ParsedFilter> {
@@ -161,33 +167,58 @@ pub fn run_column_filter(row: &GridRecord, column: &GridColumnDef, filter: &Pars
                     != value_to_string(filter.term.as_ref().unwrap_or(&Value::Null))
             }
             FilterCondition::GreaterThan => {
-                compare_numeric_or_string(&value, filter.term.as_ref()) > 0
+                compare_filter_values(&value, filter.term.as_ref(), filter.date) > 0
             }
             FilterCondition::GreaterThanOrEqual => {
-                compare_numeric_or_string(&value, filter.term.as_ref()) >= 0
+                compare_filter_values(&value, filter.term.as_ref(), filter.date) >= 0
             }
             FilterCondition::LessThan => {
-                compare_numeric_or_string(&value, filter.term.as_ref()) < 0
+                compare_filter_values(&value, filter.term.as_ref(), filter.date) < 0
             }
             FilterCondition::LessThanOrEqual => {
-                compare_numeric_or_string(&value, filter.term.as_ref()) <= 0
+                compare_filter_values(&value, filter.term.as_ref(), filter.date) <= 0
             }
             _ => true,
         },
     }
 }
 
-fn value_to_string(value: &Value) -> String {
+fn coerce_numeric_term(value: &Value, term: &Value) -> Option<Value> {
+    if !value.is_number() {
+        return None;
+    }
+
+    let Value::String(raw_term) = term else {
+        return None;
+    };
+
+    let numeric = raw_term.replace(r#"\."#, ".").replace(r#"\-"#, "-");
+    numeric.parse::<f64>().ok().map(|parsed| {
+        Value::Number(serde_json::Number::from_f64(parsed).expect("finite numeric filter term"))
+    })
+}
+
+fn normalize_date_value(value: &Value) -> Value {
     match value {
-        Value::String(value) => value.clone(),
-        other => other.to_string(),
+        Value::String(value) => Value::String(value.replace('\\', "")),
+        other => other.clone(),
     }
 }
 
-fn compare_numeric_or_string(value: &Value, term: Option<&Value>) -> i8 {
-    let term = term.unwrap_or(&Value::Null);
+fn compare_filter_values(value: &Value, term: Option<&Value>, date: bool) -> i8 {
+    let mut left = value.clone();
+    let mut right = term.cloned().unwrap_or(Value::Null);
 
-    if let (Some(left), Some(right)) = (value.as_f64(), term.as_f64()) {
+    if let Some(coerced) = coerce_numeric_term(&left, &right) {
+        right = coerced;
+    }
+
+    if date {
+        left = normalize_date_value(&left);
+        right = normalize_date_value(&right);
+    }
+
+    if let (Some(left), Some(right)) = (left.as_f64(), right.as_f64()) {
         return match left.partial_cmp(&right) {
             Some(std::cmp::Ordering::Less) => -1,
             Some(std::cmp::Ordering::Equal) => 0,
@@ -196,9 +227,104 @@ fn compare_numeric_or_string(value: &Value, term: Option<&Value>) -> i8 {
         };
     }
 
-    match value_to_string(value).cmp(&value_to_string(term)) {
+    match value_to_string(&left).cmp(&value_to_string(&right)) {
         std::cmp::Ordering::Less => -1,
         std::cmp::Ordering::Equal => 0,
         std::cmp::Ordering::Greater => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn column(name: &str) -> GridColumnDef {
+        GridColumnDef {
+            name: name.to_string(),
+            ..GridColumnDef::default()
+        }
+    }
+
+    #[test]
+    fn setup_filters_uses_literal_contains_for_oversized_wildcards() {
+        let filters = setup_filters(&[GridFilterDescriptor {
+            term: Some(Value::String("a*a*a*a*a*a*a*a*a*a*".to_string())),
+            ..GridFilterDescriptor::default()
+        }]);
+
+        assert!(matches!(
+            filters[0].condition,
+            ParsedCondition::Comparator(FilterCondition::Contains)
+        ));
+        assert!(run_column_filter(
+            &json!({ "status": "a*a*a*a*a*a*a*a*a*a*" }),
+            &column("status"),
+            &filters[0],
+        ));
+    }
+
+    #[test]
+    fn numeric_string_terms_are_coerced_for_numeric_comparisons() {
+        let filters = setup_filters(&[GridFilterDescriptor {
+            term: Some(Value::String("200".to_string())),
+            condition: Some(FilterCondition::GreaterThan),
+            ..GridFilterDescriptor::default()
+        }]);
+
+        assert!(run_column_filter(
+            &json!({ "revenue": 250 }),
+            &column("revenue"),
+            &filters[0],
+        ));
+        assert!(!run_column_filter(
+            &json!({ "revenue": 150 }),
+            &column("revenue"),
+            &filters[0],
+        ));
+    }
+
+    #[test]
+    fn date_flag_compares_normalized_string_values() {
+        let filters = setup_filters(&[GridFilterDescriptor {
+            term: Some(Value::String("2026-02-01".to_string())),
+            condition: Some(FilterCondition::GreaterThanOrEqual),
+            raw_term: true,
+            flags: crate::models::GridFilterFlags {
+                case_sensitive: false,
+                date: true,
+            },
+            ..GridFilterDescriptor::default()
+        }]);
+
+        assert!(run_column_filter(
+            &json!({ "renewalDate": "2026-03-01" }),
+            &column("renewalDate"),
+            &filters[0],
+        ));
+        assert!(!run_column_filter(
+            &json!({ "renewalDate": "2026-01-01" }),
+            &column("renewalDate"),
+            &filters[0],
+        ));
+    }
+
+    #[test]
+    fn get_term_trims_strings_but_preserves_non_strings() {
+        assert_eq!(
+            get_term(&GridFilterDescriptor {
+                term: Some(Value::String("  Active  ".to_string())),
+                ..GridFilterDescriptor::default()
+            }),
+            Some(Value::String("Active".to_string()))
+        );
+        assert_eq!(
+            get_term(&GridFilterDescriptor {
+                term: Some(Value::Number(42.into())),
+                ..GridFilterDescriptor::default()
+            }),
+            Some(Value::Number(42.into()))
+        );
     }
 }

@@ -30,9 +30,6 @@
   "private": true,
   "packageManager": "npm@11.11.1",
   "dependencies": {
-    "@ornery/ui-grid-core": "file:projects/ui-grid-core",
-    "@ornery/ui-grid-react": "file:projects/ui-grid-react",
-    "@ornery/ui-grid-vanilla": "file:projects/ui-grid-vanilla",
     "@angular/common": "^21.2.0",
     "@angular/compiler": "^21.2.0",
     "@angular/core": "^21.2.0",
@@ -40,6 +37,9 @@
     "@angular/platform-browser": "^21.2.0",
     "@angular/platform-server": "^21.2.10",
     "@angular/router": "^21.2.0",
+    "@ornery/ui-grid-core": "file:projects/ui-grid-core",
+    "@ornery/ui-grid-react": "file:projects/ui-grid-react",
+    "@ornery/ui-grid-vanilla": "file:projects/ui-grid-vanilla",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -48,6 +48,7 @@
     "@angular/cli": "^21.2.8",
     "@angular/compiler-cli": "^21.2.0",
     "@testing-library/react": "^16.0.0",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^4.1.5",
