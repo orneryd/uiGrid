@@ -97,7 +97,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-react:
-    needs: [resolve-release, publish-core]
+    needs: [resolve-release, publish-core, publish-vanilla]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -139,6 +139,22 @@ jobs:
           done
 
           echo "@ornery/ui-grid-core@$VERSION was not available on npm in time" >&2
+          exit 1
+
+      - name: Verify vanilla version is published
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          for attempt in $(seq 1 20); do
+            if npm view "@ornery/ui-grid-vanilla@$VERSION" version >/dev/null 2>&1; then
+              echo "Found @ornery/ui-grid-vanilla@$VERSION on npm"
+              exit 0
+            fi
+
+            echo "Waiting for @ornery/ui-grid-vanilla@$VERSION to appear on npm (attempt $attempt/20)"
+            sleep 15
+          done
+
+          echo "@ornery/ui-grid-vanilla@$VERSION was not available on npm in time" >&2
           exit 1
 
       - name: Build the React package
@@ -251,7 +267,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-angular:
-    needs: [resolve-release, publish-core]
+    needs: [resolve-release, publish-core, publish-vanilla]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -293,6 +309,22 @@ jobs:
           done
 
           echo "@ornery/ui-grid-core@$VERSION was not available on npm in time" >&2
+          exit 1
+
+      - name: Verify vanilla version is published
+        run: |
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          for attempt in $(seq 1 20); do
+            if npm view "@ornery/ui-grid-vanilla@$VERSION" version >/dev/null 2>&1; then
+              echo "Found @ornery/ui-grid-vanilla@$VERSION on npm"
+              exit 0
+            fi
+
+            echo "Waiting for @ornery/ui-grid-vanilla@$VERSION to appear on npm (attempt $attempt/20)"
+            sleep 15
+          done
+
+          echo "@ornery/ui-grid-vanilla@$VERSION was not available on npm in time" >&2
           exit 1
 
       - name: Build the Angular library

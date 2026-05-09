@@ -188,4 +188,36 @@ describe('vanilla grid row-edit', () => {
     api.rowEdit.setRowsClean([row]);
     expect(api.rowEdit.getDirtyRows().length).toBe(0);
   });
+
+  it('does not begin editing on a column with enableCellEdit: false even when the grid is globally enabled', async () => {
+    const options = baseOptions({
+      columnDefs: [
+        { name: 'name', displayName: 'Name' }, // inherits global enableCellEdit: true
+        { name: 'status', displayName: 'Status', enableCellEdit: false },
+      ],
+    });
+    const { grid } = await mountGrid(options);
+    const controller = (grid as unknown as { controller: {
+      beginCellEdit: (rowId: string, columnName: string) => void;
+      editingCell: { rowId: string; columnName: string } | null;
+      isCellEditable: (row: unknown, column: unknown) => boolean;
+      findRowByIdPublic: (rowId: string) => unknown;
+      getOptions: () => GridOptions;
+    } }).controller;
+
+    // Sanity: name column inherits global true, status column opts out.
+    const nameCol = options.columnDefs.find((c) => c.name === 'name')!;
+    const statusCol = options.columnDefs.find((c) => c.name === 'status')!;
+    const row = controller.findRowByIdPublic('r1');
+    expect(controller.isCellEditable(row, nameCol)).toBe(true);
+    expect(controller.isCellEditable(row, statusCol)).toBe(false);
+
+    // Attempting to begin an edit on the opt-out column is a no-op.
+    controller.beginCellEdit('r1', 'status');
+    expect(controller.editingCell).toBeNull();
+
+    // The editable column does open an edit session.
+    controller.beginCellEdit('r1', 'name');
+    expect(controller.editingCell).toEqual({ rowId: 'r1', columnName: 'name' });
+  });
 });

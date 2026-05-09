@@ -37,6 +37,7 @@ function sampleOptions(): GridOptions {
     // Selection defaults to on in the old grid; nav tests assert against
     // the two declared columns, so we explicitly opt out here.
     enableRowSelection: false,
+    enableCellEdit: true,
     data: [
       { id: 'r1', name: 'Alpha', status: 'Active' },
       { id: 'r2', name: 'Beta', status: 'Pilot' },
@@ -428,12 +429,14 @@ describe('vanilla grid keyboard navigation', () => {
     editorInput.value = 'Alpha Prime';
     editorInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     pressKey(editorInput, 'Enter');
-    await waitFor(() =>
-      shadow.querySelector(
-        '.body-cell[data-row="r2"][data-column="name"]',
+    // resumeEdit re-opens the editor on the next editable cell — focus
+    // lands on the editor input, not the cell shell.
+    const nextEditor = await waitFor(() =>
+      shadow.querySelector<HTMLInputElement>(
+        'ui-grid-cell-editor[data-row="r2"][data-column="name"] input',
       ),
     );
-    expect(shadow.activeElement).toBe(cellIn(shadow, 'r2', 'name'));
+    expect(shadow.activeElement).toBe(nextEditor);
     expect(cellIn(shadow, 'r1', 'name').textContent).toContain('Alpha Prime');
   });
 
@@ -458,7 +461,9 @@ describe('vanilla grid keyboard navigation', () => {
     // Pressing Tab dispatches keydown; the commit path removes the editor,
     // which fires blur synchronously. Both handlers call commitCellEdit.
     expect(() => pressKey(editorInput, 'Tab')).not.toThrow();
-    await waitFor(() => (shadow.activeElement === cellIn(shadow, 'r1', 'status') ? {} : null));
+    await waitFor(() =>
+      shadow.querySelector('ui-grid-cell-editor[data-row="r1"][data-column="status"] input'),
+    );
     expect(cellIn(shadow, 'r1', 'name').textContent).toContain('edited');
   });
 
@@ -476,8 +481,13 @@ describe('vanilla grid keyboard navigation', () => {
     editorInput.value = 'Alpha2';
     editorInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     pressKey(editorInput, 'Tab');
-    await waitFor(() => shadow.activeElement === cellIn(shadow, 'r1', 'status') ? {} : null);
-    expect(shadow.activeElement).toBe(cellIn(shadow, 'r1', 'status'));
+    // resumeEdit lands on the next editable cell's editor input.
+    const nextEditor = await waitFor(() =>
+      shadow.querySelector<HTMLInputElement>(
+        'ui-grid-cell-editor[data-row="r1"][data-column="status"] input',
+      ),
+    );
+    expect(shadow.activeElement).toBe(nextEditor);
     expect(cellIn(shadow, 'r1', 'name').textContent).toContain('Alpha2');
   });
 

@@ -951,6 +951,9 @@ export class VanillaGridController {
     if (!gridRow || !column) {
       return;
     }
+    if (!this.isCellEditable(gridRow, column)) {
+      return;
+    }
 
     beginGridCellEditCommand(
       this.gridApi,
