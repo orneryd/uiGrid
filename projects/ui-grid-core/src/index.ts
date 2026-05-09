@@ -11,6 +11,7 @@ export * from './lib/ui-grid.adapter-shim';
 export * from './lib/ui-grid.commands';
 export * from './lib/ui-grid.engine';
 export * from './lib/ui-grid.engine.wasm';
+export * from './lib/ui-grid.wasm-path';
 export * from './lib/ui-grid.events';
 export * from './lib/ui-grid.host';
 export * from './lib/ui-grid.state';

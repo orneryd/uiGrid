@@ -1,5 +1,6 @@
 import {
   SORT_DIRECTIONS,
+  activeGridEngineBackend,
   beginGridCellEditCommand,
   buildGridRows,
   buildGridCellContext,
@@ -15,6 +16,7 @@ import {
   defaultGridEngine,
   expandAllGridRowsCommand,
   expandAllGridTreeRowsCommand,
+  enableUiGridWasmEngine,
   findGridRowById as coreFindGridRowById,
   formatGridCellDisplayValue,
   getCellValue,
@@ -339,6 +341,8 @@ export class VanillaGridController {
   private labels: GridLabels;
   private visibleColumns: GridColumnDef[] = [];
   private apiRegistered = false;
+  private disposed = false;
+  private wasmEngineInitRequested = false;
 
   private readonly subscribers = new Set<GridControllerSubscriber>();
 
@@ -584,6 +588,7 @@ export class VanillaGridController {
    * subscriptions). */
   private disposeLanguageListener: (() => void) | null = null;
   dispose(): void {
+    this.disposed = true;
     this.disposeLanguageListener?.();
     this.disposeLanguageListener = null;
     this.subscribers.clear();
@@ -1781,6 +1786,8 @@ export class VanillaGridController {
   }
 
   private refresh(): void {
+    this.maybeEnableWasmEngine();
+
     const orderedColumns = orderVisibleColumns(this.options.columnDefs, this.columnOrder);
     const applyWidthOverrides = (columns: GridColumnDef[]): GridColumnDef[] =>
       columns.map((col) => {
@@ -1865,6 +1872,23 @@ export class VanillaGridController {
     }
 
     this.emit();
+  }
+
+  private maybeEnableWasmEngine(): void {
+    if (this.wasmEngineInitRequested || activeGridEngineBackend() === 'rust-wasm') {
+      return;
+    }
+
+    this.wasmEngineInitRequested = true;
+    void enableUiGridWasmEngine()
+      .then(() => {
+        if (!this.disposed) {
+          this.refresh();
+        }
+      })
+      .catch(() => {
+        this.wasmEngineInitRequested = false;
+      });
   }
 
   private emit(): void {

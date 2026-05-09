@@ -1,20 +1,13 @@
-import type { BuildGridPipelineContext, PipelineResult } from './grid.core';
-import { registerRustWasmGridEngine } from './ui-grid.engine';
+import { initWasmCore } from './grid.core';
 
-type UiGridWasmModule = {
-  build_pipeline_js(context: BuildGridPipelineContext): PipelineResult;
-};
-const uiGridWasmModulePath = '../../../../dist/ui-grid-wasm/ui_grid_wasm.js';
+type UiGridWasmModule = object;
 
-export function registerUiGridWasmEngineFromModule(module: UiGridWasmModule): void {
-  registerRustWasmGridEngine({
-    buildPipeline(context: BuildGridPipelineContext): PipelineResult {
-      return module.build_pipeline_js(context);
-    },
-  });
+export function registerUiGridWasmEngineFromModule(_module: UiGridWasmModule): void {
 }
 
 export async function enableUiGridWasmEngine(): Promise<void> {
-  const module = await import(/* @vite-ignore */ uiGridWasmModulePath);
-  registerUiGridWasmEngineFromModule(module);
+  const ready = await initWasmCore();
+  if (!ready) {
+    throw new Error('Failed to initialize UI Grid WASM module');
+  }
 }

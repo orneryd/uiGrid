@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   activeGridEngineBackend,
@@ -6,6 +6,8 @@ import {
   defaultGridEngine,
   registerRustWasmGridEngine,
 } from './ui-grid.engine';
+import { configureWasmSerializationAudit } from './grid.core';
+import { registerUiGridWasmEngineFromModule } from './ui-grid.engine.wasm';
 import { SORT_DIRECTIONS } from './grid.constants';
 import type { BuildGridPipelineContext, PipelineResult } from './grid.core';
 
@@ -37,6 +39,16 @@ function createContext(): BuildGridPipelineContext {
 }
 
 describe('ui-grid.engine', () => {
+  afterEach(() => {
+    clearRustWasmGridEngine();
+    configureWasmSerializationAudit({
+      enabled: false,
+      sizeThresholdBytes: 8_192,
+      warnOnce: true,
+    });
+    vi.restoreAllMocks();
+  });
+
   it('falls back to the TypeScript engine when no Rust/WASM bindings are registered', () => {
     clearRustWasmGridEngine();
 
@@ -63,5 +75,16 @@ describe('ui-grid.engine', () => {
     expect(activeGridEngineBackend()).toBe('rust-wasm');
 
     clearRustWasmGridEngine();
+  });
+
+  it('does not register a wasm pipeline binding from the helper bootstrap module', () => {
+    registerUiGridWasmEngineFromModule({
+      default: async () => undefined,
+    });
+
+    const result = defaultGridEngine.buildPipeline(createContext());
+
+    expect(activeGridEngineBackend()).toBe('typescript');
+    expect(result.visibleRows.map((row) => row.id)).toEqual(['engine-spec-0', 'engine-spec-1']);
   });
 });

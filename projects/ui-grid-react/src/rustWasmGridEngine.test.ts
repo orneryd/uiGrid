@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  activeGridEngineBackend,
-  clearRustWasmGridEngine,
-  defaultGridEngine,
-} from '@ornery/ui-grid-core';
+import { activeGridEngineBackend, clearRustWasmGridEngine, defaultGridEngine } from '@ornery/ui-grid-core';
 import { registerReactUiGridWasmEngineFromModule } from './rustWasmGridEngine';
 import { SORT_DIRECTIONS } from '@ornery/ui-grid-core';
-import type { BuildGridPipelineContext, PipelineResult } from '@ornery/ui-grid-core';
+import type { BuildGridPipelineContext } from '@ornery/ui-grid-core';
 
 function createContext(): BuildGridPipelineContext {
   return {
@@ -37,20 +33,15 @@ describe('rustWasmGridEngine', () => {
     clearRustWasmGridEngine();
   });
 
-  it('registers the real module shape into the shared engine seam', () => {
-    const sentinel: PipelineResult = {
-      visibleRows: [],
-      displayItems: [],
-      virtualizationEnabled: true,
-      pipelineMs: 0,
-      totalItems: 77,
-    };
-
+  it('does not install a wasm pipeline engine through the React helper', () => {
     registerReactUiGridWasmEngineFromModule({
-      build_pipeline_js: () => sentinel,
+      default: async () => undefined,
     });
 
-    expect(defaultGridEngine.buildPipeline(createContext())).toBe(sentinel);
-    expect(activeGridEngineBackend()).toBe('rust-wasm');
+    expect(defaultGridEngine.buildPipeline(createContext()).visibleRows.map((row) => row.id)).toEqual([
+      'react-engine-spec-0',
+      'react-engine-spec-1',
+    ]);
+    expect(activeGridEngineBackend()).toBe('typescript');
   });
 });

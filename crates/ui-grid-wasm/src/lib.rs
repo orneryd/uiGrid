@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeMap};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use wasm_bindgen::prelude::*;
 
 use ui_grid_core::{
@@ -210,6 +210,14 @@ struct PinnedColumnsColumnLabelsInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ResolveGridLabelsInput {
+    current_labels: GridLabels,
+    #[serde(default)]
+    overrides: Option<Map<String, Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CellPositionMatchInput {
     position: Option<GridCellPosition>,
     row_id: String,
@@ -251,6 +259,75 @@ struct ParseGridEditedValueInput {
     column: GridColumnDef,
     value: String,
     old_value: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PipelineStaticContext {
+    options: GridOptions,
+    columns: Vec<GridColumnDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PipelineDynamicContext {
+    #[serde(default)]
+    active_filters: BTreeMap<String, String>,
+    #[serde(default)]
+    sort_state: SortState,
+    #[serde(default)]
+    group_by_columns: Vec<String>,
+    #[serde(default)]
+    collapsed_groups: BTreeMap<String, bool>,
+    #[serde(default)]
+    hidden_row_reasons: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    expanded_rows: BTreeMap<String, bool>,
+    #[serde(default)]
+    expanded_tree_rows: BTreeMap<String, bool>,
+    #[serde(default = "pipeline_default_current_page")]
+    current_page: usize,
+    #[serde(default)]
+    page_size: usize,
+    #[serde(default = "pipeline_default_row_size")]
+    row_size: usize,
+}
+
+thread_local! {
+    static CACHED_PIPELINE_STATIC_CONTEXT: RefCell<Option<PipelineStaticContext>> = const { RefCell::new(None) };
+}
+
+fn pipeline_default_current_page() -> usize {
+    1
+}
+
+fn pipeline_default_row_size() -> usize {
+    44
+}
+
+fn build_pipeline_context_from_cached_static(
+    dynamic: PipelineDynamicContext,
+) -> Result<BuildGridPipelineContext, JsValue> {
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        let static_context = cached.borrow().clone().ok_or_else(|| {
+            JsValue::from_str("cached pipeline static context has not been initialized")
+        })?;
+
+        Ok(BuildGridPipelineContext {
+            options: static_context.options,
+            columns: static_context.columns,
+            active_filters: dynamic.active_filters,
+            sort_state: dynamic.sort_state,
+            group_by_columns: dynamic.group_by_columns,
+            collapsed_groups: dynamic.collapsed_groups,
+            hidden_row_reasons: dynamic.hidden_row_reasons,
+            expanded_rows: dynamic.expanded_rows,
+            expanded_tree_rows: dynamic.expanded_tree_rows,
+            current_page: dynamic.current_page,
+            page_size: dynamic.page_size,
+            row_size: dynamic.row_size,
+        })
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -917,6 +994,30 @@ pub fn build_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn set_cached_pipeline_static_context_js(context: JsValue) -> Result<(), JsValue> {
+    let context: PipelineStaticContext = from_js(context)?;
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        *cached.borrow_mut() = Some(context);
+    });
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub fn clear_cached_pipeline_static_context_js() {
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        *cached.borrow_mut() = None;
+    });
+}
+
+#[wasm_bindgen]
+pub fn build_pipeline_from_cached_static_context_js(context: JsValue) -> Result<JsValue, JsValue> {
+    let dynamic: PipelineDynamicContext = from_js(context)?;
+    let context = build_pipeline_context_from_cached_static(dynamic)?;
+    let result = build_grid_pipeline(&context);
+    to_js(&result)
+}
+
+#[wasm_bindgen]
 pub fn build_grid_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
     build_pipeline_js(context)
 }
@@ -1578,13 +1679,12 @@ pub fn build_grid_row_edit_menu_items_js(input: JsValue) -> Result<JsValue, JsVa
 // Viewmodel
 
 #[wasm_bindgen]
-pub fn resolve_grid_labels_js(overrides: JsValue) -> Result<JsValue, JsValue> {
-    if overrides.is_null() || overrides.is_undefined() {
-        return to_js(&resolve_grid_labels(None));
-    }
-
-    let overrides: GridLabels = from_js(overrides)?;
-    to_js(&resolve_grid_labels(Some(&overrides)))
+pub fn resolve_grid_labels_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ResolveGridLabelsInput = from_js(input)?;
+    to_js(&resolve_grid_labels(
+        &input.current_labels,
+        input.overrides.as_ref(),
+    ))
 }
 
 #[wasm_bindgen]

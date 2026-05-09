@@ -423,7 +423,7 @@ fn label_resolution_supports_i18n_overrides() {
         ..GridLabels::default()
     };
 
-    let labels = resolve_grid_labels(Some(&spanish));
+    let labels = resolve_grid_labels(&spanish, None);
     assert_eq!(labels.sort_default, "Ordenar");
     assert_eq!(labels.pagination_rows, "Filas por pagina");
     assert_eq!(labels.pin_left, "Fijar a la izquierda");

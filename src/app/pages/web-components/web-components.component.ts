@@ -927,6 +927,7 @@ export class WebComponentsComponent {
       benchmark: {
         iterations: 40,
       },
+      rowIdentity: (row) => String(row['id']),
       onRegisterApi: (api) => {
         this.primaryGridApi = api as UiGridApi;
         this.visibleRowCount.set(this.primaryGridApi.core.getVisibleRows().length);

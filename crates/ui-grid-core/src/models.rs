@@ -382,6 +382,8 @@ pub struct GridOptions {
     #[serde(default)]
     pub enable_expandable: bool,
     #[serde(default)]
+    pub has_expandable_row_template: bool,
+    #[serde(default)]
     pub expandable_row_height: Option<usize>,
     #[serde(default)]
     pub expandable_row_header_width: Option<usize>,
@@ -538,6 +540,7 @@ impl Default for GridOptions {
             pagination_current_page: None,
             total_items: None,
             enable_expandable: false,
+            has_expandable_row_template: false,
             expandable_row_height: None,
             expandable_row_header_width: None,
             enable_tree_view: false,
