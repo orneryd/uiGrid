@@ -255,9 +255,10 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     }
 
     if (action === 'benchmark') {
-      const result = el.controller.gridApi.core.benchmark();
-      el.benchmarkAverage = result.averageMs.toFixed(2);
-      el.render();
+      void el.controller.gridApi.core.benchmark().then((result) => {
+        el.benchmarkAverage = result.averageMs.toFixed(2);
+        el.render();
+      });
       return;
     }
 

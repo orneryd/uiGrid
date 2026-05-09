@@ -25,6 +25,7 @@ import type {
   FrameworkSlotDelta,
 } from '@ornery/ui-grid-vanilla';
 import type {
+  GridBenchmarkResult,
   GridCellTemplateContext,
   GridColumnDef,
   GridOptions,
@@ -102,6 +103,49 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  private createWrappedGridApi(api: UiGridApi, opts: GridOptions): UiGridApi {
+    const benchmarkListeners = new Set<(result: GridBenchmarkResult) => void>();
+    const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+
+    return {
+      ...api,
+      core: {
+        ...api.core,
+        on: {
+          ...api.core.on,
+          benchmarkComplete: (listener) => {
+            benchmarkListeners.add(listener);
+            return () => benchmarkListeners.delete(listener);
+          },
+        },
+        benchmark: async (iterations?: number) => {
+          const loops = Math.max(1, iterations ?? opts.benchmark?.iterations ?? 25);
+          const started = now();
+          let lastResult: GridBenchmarkResult | null = null;
+
+          for (let index = 0; index < loops; index += 1) {
+            lastResult = await api.core.benchmark(1);
+            await Promise.resolve();
+          }
+
+          const totalMs = now() - started;
+          const result: GridBenchmarkResult = {
+            iterations: loops,
+            totalMs,
+            averageMs: totalMs / loops,
+            visibleRows: lastResult?.visibleRows ?? 0,
+            renderedItems: lastResult?.renderedItems ?? 0,
+          };
+
+          for (const listener of benchmarkListeners) {
+            listener(result);
+          }
+          return result;
+        },
+      },
+    };
+  }
+
   private applyOptions(opts: GridOptions): void {
     const el = this.gridElement!;
 
@@ -151,8 +195,9 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         ...opts,
         columnDefs: cleanedColumnDefs,
         onRegisterApi: (api) => {
-          this.zone.run(() => this.apiReady.emit(api as UiGridApi));
-          opts.onRegisterApi?.(api);
+          const wrappedApi = this.createWrappedGridApi(api as UiGridApi, opts);
+          this.zone.run(() => this.apiReady.emit(wrappedApi));
+          opts.onRegisterApi?.(wrappedApi);
         },
       };
 

@@ -123,6 +123,7 @@ import {
   type DisplayItem,
   type GridCellPosition,
   type GridColumnDef,
+  type GridBenchmarkResult,
   type GridRowColumn,
   type GridLabels,
   type GridOptions,
@@ -1489,6 +1490,14 @@ export class VanillaGridController {
     this.infiniteScrollScrollToTopRequest = handler;
   }
 
+  /** Element-owned render benchmark. When present, `core.benchmark()`
+   * measures the actual render path instead of the controller-only
+   * pipeline builder. */
+  private benchmarkRequest: ((iterations?: number) => Promise<GridBenchmarkResult>) | null = null;
+  setBenchmarkHandler(handler: ((iterations?: number) => Promise<GridBenchmarkResult>) | null): void {
+    this.benchmarkRequest = handler;
+  }
+
   getInfiniteScrollState(): Readonly<GridInfiniteScrollState> {
     return this.infiniteScrollState;
   }
@@ -1999,7 +2008,11 @@ export class VanillaGridController {
     this.refresh();
   }
 
-  private benchmark(iterations?: number) {
+  private async benchmark(iterations?: number): Promise<GridBenchmarkResult> {
+    if (this.benchmarkRequest) {
+      return await this.benchmarkRequest(iterations);
+    }
+
     const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
     const loops = Math.max(1, iterations ?? this.options.benchmark?.iterations ?? 25);
     const started = now();

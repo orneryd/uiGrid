@@ -4,7 +4,7 @@ import { createGridApi } from './grid.api';
 import { GridRow } from './grid.models';
 
 describe('createGridApi', () => {
-  it('delegates core methods to the provided bindings', () => {
+  it('delegates core methods to the provided bindings', async () => {
     const refresh = vi.fn();
     const getVisibleRows = vi.fn(() => [new GridRow('row-1', { id: 1 }, 0)]);
     const setRowInvisible = vi.fn();
@@ -15,7 +15,7 @@ describe('createGridApi', () => {
     const moveColumn = vi.fn();
     const toggleGrouping = vi.fn();
     const clearGrouping = vi.fn();
-    const benchmark = vi.fn(() => ({
+    const benchmark = vi.fn(async () => ({
       iterations: 2,
       totalMs: 6,
       averageMs: 3,
@@ -112,7 +112,7 @@ describe('createGridApi', () => {
     api.core.moveColumn(0, 2);
     api.core.groupByColumn('status');
     api.core.clearGrouping();
-    expect(api.core.benchmark(2)).toEqual({
+    await expect(api.core.benchmark(2)).resolves.toEqual({
       iterations: 2,
       totalMs: 6,
       averageMs: 3,
@@ -201,7 +201,7 @@ describe('createGridApi', () => {
       moveColumn: vi.fn(),
       toggleGrouping: vi.fn(),
       clearGrouping: vi.fn(),
-      benchmark: vi.fn(() => ({
+      benchmark: vi.fn(async () => ({
         iterations: 1,
         totalMs: 0,
         averageMs: 0,
@@ -317,7 +317,7 @@ describe('createGridApi', () => {
       moveColumn: vi.fn(),
       toggleGrouping: vi.fn(),
       clearGrouping: vi.fn(),
-      benchmark: vi.fn(() => ({
+      benchmark: vi.fn(async () => ({
         iterations: 1,
         totalMs: 0,
         averageMs: 0,

@@ -44,7 +44,7 @@ export interface GridApiBindings {
   pinColumn?: (columnName: string, direction: PinDirection) => void;
   toggleGrouping: (columnName: string) => void;
   clearGrouping: () => void;
-  benchmark: (iterations?: number) => GridBenchmarkResult;
+  benchmark: (iterations?: number) => Promise<GridBenchmarkResult>;
   exportCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
   /** Returns the CSV string without triggering a download. Used by
    * consumers that want to post-process the CSV (e.g. upload it). */
@@ -205,7 +205,7 @@ export interface UiGridApi {
     moveColumn: (fromIndex: number, toIndex: number) => void;
     groupByColumn: (columnName: string) => void;
     clearGrouping: () => void;
-    benchmark: (iterations?: number) => GridBenchmarkResult;
+    benchmark: (iterations?: number) => Promise<GridBenchmarkResult>;
     exportCsv: (rowType?: GridExporterRowType, colType?: GridExporterColumnType) => void;
   };
   exporter: {
