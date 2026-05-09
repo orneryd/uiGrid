@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid-core",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Framework-neutral UI Grid core runtime, models, styling, and WASM bridge",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
