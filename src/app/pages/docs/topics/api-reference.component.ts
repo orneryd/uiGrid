@@ -86,7 +86,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <td><code>enableVirtualization</code></td>
             <td><code>boolean</code></td>
             <td>auto</td>
-            <td>CDK virtual scroll (auto at 40+ rows)</td>
+            <td>virtual scroll (auto at 40+ rows)</td>
           </tr>
           <tr>
             <td><code>virtualizationThreshold</code></td>

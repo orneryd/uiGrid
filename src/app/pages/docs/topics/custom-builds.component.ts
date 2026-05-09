@@ -25,7 +25,7 @@ import { CodeBlockComponent } from '../../shared/code-block.component';
           <tr><td><code>expandable</code></td><td><code>FEATURE_EXPANDABLE</code></td><td>Expandable detail rows</td></tr>
           <tr><td><code>tree-view</code></td><td><code>FEATURE_TREE_VIEW</code></td><td>Tree row rendering and tree pipeline</td></tr>
           <tr><td><code>infinite-scroll</code></td><td><code>FEATURE_INFINITE_SCROLL</code></td><td>Infinite scroll state machine</td></tr>
-          <tr><td><code>column-moving</code></td><td><code>FEATURE_COLUMN_MOVING</code></td><td>CDK drag-and-drop on headers</td></tr>
+          <tr><td><code>column-moving</code></td><td><code>FEATURE_COLUMN_MOVING</code></td><td>drag-and-drop on headers</td></tr>
           <tr><td><code>csv-export</code></td><td><code>FEATURE_CSV_EXPORT</code></td><td>CSV export and toolbar button</td></tr>
           <tr><td><code>save-state</code></td><td><code>FEATURE_SAVE_STATE</code></td><td>Save/restore state serialization</td></tr>
           <tr><td><code>auto-resize</code></td><td><code>FEATURE_AUTO_RESIZE</code></td><td>ResizeObserver integration</td></tr>

@@ -37,7 +37,7 @@ import { createSmallDemoData } from '../../shared/demo-data';
           <tr><td>PDF Export</td><td><code>gridApi.exporter.pdfExport()</code></td><td>—</td><td>pdfMake-ready doc definition; auto-invokes <code>window.pdfMake</code> when present</td></tr>
           <tr><td>Excel Export</td><td><code>gridApi.exporter.excelExport()</code></td><td>—</td><td>ExcelBuilder-compatible sheet data; native numeric / boolean types preserved</td></tr>
           <tr><td>Importer</td><td><code>enableImporter</code></td><td>false</td><td>File picker + CSV / JSON parsers, column header matching, integration with Row Edit. <a routerLink="/docs/importer">docs</a></td></tr>
-          <tr><td>Virtual Scrolling</td><td><code>enableVirtualization</code></td><td>auto</td><td>CDK virtual scroll viewport, auto-enabled at 40+ rows</td></tr>
+          <tr><td>Virtual Scrolling</td><td><code>enableVirtualization</code></td><td>auto</td><td>virtual scroll viewport, auto-enabled at 40+ rows</td></tr>
           <tr><td>Save / Restore State</td><td><code>gridApi.saveState</code></td><td>—</td><td>Serialize and restore sort, filter, grouping, pagination, expansion, selection, focus, scroll (per-field opt-in)</td></tr>
           <tr><td>Cell Navigation</td><td><code>gridApi.cellNav</code></td><td>auto</td><td>Arrow / Tab / Home / End navigation, <code>keyDownOverrides</code>, <code>scrollToFocus()</code></td></tr>
           <tr><td>Auto Resize</td><td><code>enableAutoResize</code></td><td>false</td><td>ResizeObserver-driven viewport height recalculation</td></tr>

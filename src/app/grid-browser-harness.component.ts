@@ -82,7 +82,7 @@ function createTreeRows(): GridRecord[] {
           <p class="browser-harness__eyebrow">Browser Harness</p>
           <h2>Virtual scroll branch harness</h2>
           <p>
-            Use this in a real browser while running the app to exercise CDK virtual-scroll branches that jsdom does
+            Use this in a real browser while running the app to exercise virtual-scroll branches that jsdom does
             not reliably materialize in the unit runner.
           </p>
         </div>
