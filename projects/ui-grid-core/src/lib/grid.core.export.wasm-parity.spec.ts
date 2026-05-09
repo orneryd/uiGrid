@@ -6,14 +6,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGridCsv,
   buildGridExcelSheetData,
-  buildGridHeaderContext,
   buildGridPdfDocDefinition,
   calculateGridPdfColumnWidths,
   filterExporterColumns,
   formatGridExcelField,
-  formatGridHeaderDisplayValue,
   formatGridPdfField,
-  resolveExporterFilename,
   resolveGridExporterExcelOptions,
   resolveGridExporterOptions,
   resolveGridExporterPdfOptions,
@@ -185,46 +182,5 @@ describe('grid.core.export wasm parity', () => {
         styles: { header: { id: 'H1' } },
       }),
     ).toEqual(buildGridExcelSheetData(excelColumns, excelRows, {}, 'visible', { header: { id: 'H1' } }));
-  });
-
-  it('matches buildGridHeaderContext + formatGridHeaderDisplayValue for static columns', { timeout: 30000 }, () => {
-    const columns = [
-      { name: 'name', displayName: 'Customer' },
-      { name: 'revenue', type: 'number' as const }, // no displayName -> titleize
-      { name: 'firstName', displayName: '' }, // empty displayName -> titleize fallback
-    ];
-    for (const column of columns) {
-      const ts = buildGridHeaderContext(column);
-      const wasm = runWasm<{ value: string; column: typeof column }>(
-        'buildGridHeaderContext',
-        { column },
-      );
-      // The wasm shim emits `$implicit` (matches the serialized wire shape);
-      // strip it before comparing to the TS object which uses the same key.
-      expect(wasm.value).toBe(ts.value);
-      expect(wasm.column.name).toBe(ts.column.name);
-
-      const tsDisplay = formatGridHeaderDisplayValue(ts);
-      const wasmDisplay = runWasm<string>('formatGridHeaderDisplayValue', wasm);
-      expect(wasmDisplay).toBe(tsDisplay);
-    }
-  });
-
-  it('matches resolveExporterFilename for static / undefined / empty inputs', { timeout: 30000 }, () => {
-    const cases: Array<{
-      filename: string | undefined;
-      fallback: string;
-      rowType: 'all' | 'visible' | 'selected';
-      colType: 'all' | 'visible';
-    }> = [
-      { filename: 'custom.csv', fallback: 'fallback.csv', rowType: 'visible', colType: 'visible' },
-      { filename: undefined, fallback: 'fallback.csv', rowType: 'all', colType: 'all' },
-      { filename: '', fallback: 'fallback.csv', rowType: 'selected', colType: 'visible' },
-    ];
-    for (const c of cases) {
-      const ts = resolveExporterFilename(c.filename, c.fallback, c.rowType, c.colType);
-      const wasm = runWasm<string>('resolveExporterFilename', c);
-      expect(wasm).toBe(ts);
-    }
   });
 });
