@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.3 — 2026-05-08
+
+### Changed
+
+- **Per-column header icons now hide on opt-out instead of rendering disabled** — columns with `sortable: false`, `enableSorting: false`, or `enableGrouping: false` no longer render their sort or group buttons in the header, matching the legacy ui-grid `ng-if` hide pattern and the existing pin behavior. The grid-level `enableSorting` / `enableGrouping` master flags still gate the entire feature.
+- **npm publish pipeline now mirrors the runtime dependency graph** — the web suite publishes as `core → vanilla → {react, angular}`, with the React and Angular jobs waiting on `publish-vanilla` and polling the registry for the vanilla tarball before building.
+
+### Fixed
+
+- **Per-column `enableCellEdit: false` is now honored when the grid is globally enabled** — `VanillaGridController.beginCellEdit` guards on `isCellEditable`, so opted-out columns can no longer enter edit mode via double-click, F2, Enter, printable keys, or the post-Tab/Enter `resumeEdit` hop. Brings the vanilla and Angular hosts in line with the React wrapper, which already enforced this.
+
 ## v1.0.0 — 2026-05-08
 
 ### Added
