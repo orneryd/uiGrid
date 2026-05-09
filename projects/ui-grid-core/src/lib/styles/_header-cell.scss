@@ -288,16 +288,3 @@
   fill: currentColor;
 }
 
-.header-cell.cdk-drag-placeholder {
-  background: var(--ui-grid-drag-placeholder-background);
-  border: var(--ui-grid-drag-placeholder-border);
-  box-shadow: var(--ui-grid-drag-placeholder-shadow);
-  opacity: 0.9;
-}
-
-.header-grid.cdk-drop-list-dragging .header-cell:not(.cdk-drag-placeholder) {
-  transition:
-    transform 120ms ease,
-    background-color 120ms ease;
-}
-
