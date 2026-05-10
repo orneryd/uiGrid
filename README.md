@@ -16,7 +16,7 @@ Just like the original grid, it will **NEVER** be monetized. This is purely my c
 
 It proves that the datagrid cabal wants you to think it's hard to write a data grid. Well, it's not, and nobody should be paying to group data.
 
-**[Live Demo & Docs](https://orneryd.github.io/uiGrid/)** | **[npm](https://www.npmjs.com/package/@ornery/ui-grid)** | **[crates.io](https://crates.io/crates/ui-grid-egui)**
+**[Live Demo & Docs](https://orneryd.github.io/uiGrid/)** | **[npm](https://www.npmjs.com/package/@ornery/ui-grid)** | **[crates.io](https://crates.io/crates/ui-grid-egui)** | **[Used by NornicDB](https://orneryd.github.io/NornicDB/)**
 
 ---
 
