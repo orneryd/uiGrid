@@ -38,6 +38,7 @@
     "start": "vite serve demo --config demo/vite.config.ts",
     "build": "tsup src/index.ts --format esm,cjs --tsconfig tsconfig.build.json --external react --external react-dom --external @ornery/ui-grid-core --external @ornery/ui-grid-vanilla && tsc -p tsconfig.dts.json && node -e \"require('fs').copyFileSync('src/ui-grid.css','dist/ui-grid.css')\"",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   }
 }

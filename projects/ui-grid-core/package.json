@@ -29,6 +29,7 @@
     "generate-css": "node generate-core-css.mjs",
     "prebuild": "node generate-core-css.mjs",
     "build": "tsup",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   }
 }

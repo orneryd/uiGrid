@@ -115,7 +115,16 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "codeCoverage": true,
+            "codeCoverageExclude": [
+              "src/main.ts",
+              "src/main.element.ts",
+              "**/*.spec.ts",
+              "**/*.d.ts"
+            ]
+          }
         }
       }
     },

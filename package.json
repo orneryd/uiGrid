@@ -19,6 +19,7 @@
     "publish:package": "npm publish ./dist/npm-package --access public",
     "watch": "ng build --watch --configuration development",
     "test": "npm run build:rust:wasm && npm run build:core && ng test --watch=false && npm test --prefix projects/ui-grid-core && npm test --prefix projects/ui-grid-react && npm test --prefix projects/ui-grid-vanilla",
+    "test:coverage": "npm run build:rust:wasm && npm run build:core && ng test --watch=false && npm run test:coverage --prefix projects/ui-grid-core && npm run test:coverage --prefix projects/ui-grid-react && npm run test:coverage --prefix projects/ui-grid-vanilla",
     "test:angular": "npm run build:rust:wasm && npm run build:core && npm run build:rust:web && npm run build --prefix projects/ui-grid-react && ng test --watch=false",
     "test:rust": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --workspace",
     "build:react": "npm run build:rust:wasm && npm run build:core && npm run build:rust:web && npm run build --prefix projects/ui-grid-vanilla && npm run build --prefix projects/ui-grid-react",

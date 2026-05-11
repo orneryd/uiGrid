@@ -11,5 +11,18 @@ export default defineConfig({
     dir: path.resolve(__dirname, 'src'),
     environment: 'node',
     globals: true,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.spec.ts',
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/lib/i18n/**',
+        'src/lib/grid-core-styles.ts',
+      ],
+      reporter: ['text', 'lcov', 'html'],
+      reportsDirectory: './coverage',
+    },
   },
 });
