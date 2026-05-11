@@ -1,7 +1,6 @@
 import { mountVanillaUiGrid } from '../src/index';
 import type { GridOptions, UiGridApi } from '../src/index';
 import type { GridBenchmarkResult } from '@ornery/ui-grid-core';
-import * as uiGridRustWebModule from '../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
 
 const statuses = ['Active', 'Expansion', 'Enterprise', 'Pilot'] as const;
 const companies = ['Northwind', 'Blue Harbor', 'Forge Group', 'Larkspur', 'Atlas'] as const;
@@ -113,7 +112,7 @@ exportButton?.addEventListener('click', () => {
   gridApi?.core.exportCsv();
 });
 
-void mountVanillaUiGrid(mountPoint, options, uiGridRustWebModule).catch((error) => {
+void mountVanillaUiGrid(mountPoint, options).catch((error) => {
   console.error(error);
   mountPoint.textContent = error instanceof Error ? error.message : String(error);
 });
