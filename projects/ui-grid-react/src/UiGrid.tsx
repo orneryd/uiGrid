@@ -50,6 +50,7 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
   const wrapperRenderVersionRef = React.useRef(0);
   const scheduledWrapperRenderVersionRef = React.useRef(0);
   const wrapperRenderWaitersRef = React.useRef<Array<{ target: number; resolve: () => void }>>([]);
+  const benchmarkSubscriptionUnsubscribeRef = React.useRef<(() => void) | null>(null);
 
   React.useLayoutEffect(() => {
     wrapperRenderVersionRef.current += 1;
@@ -66,6 +67,16 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
       waiter.resolve();
     }
   });
+
+  // Clean up underlying benchmark subscription if it's still active
+  React.useEffect(() => {
+    return () => {
+      if (benchmarkSubscriptionUnsubscribeRef.current) {
+        benchmarkSubscriptionUnsubscribeRef.current();
+        benchmarkSubscriptionUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   // Mount the vanilla element once
   React.useEffect(() => {
@@ -97,6 +108,10 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
 
     return () => {
       disposed = true;
+      if (benchmarkSubscriptionUnsubscribeRef.current) {
+        benchmarkSubscriptionUnsubscribeRef.current();
+        benchmarkSubscriptionUnsubscribeRef.current = null;
+      }
       if (el) {
         el.removeEventListener('cellSlotsChanged', handleCellSlotsChanged);
         el.remove();
@@ -168,6 +183,16 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
   function createWrappedGridApi(api: UiGridApi, opts: GridOptions): UiGridApi {
     const benchmarkListeners = new Set<(result: GridBenchmarkResult) => void>();
     const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    // Clean up previous underlying subscription if it exists
+    if (benchmarkSubscriptionUnsubscribeRef.current) {
+      benchmarkSubscriptionUnsubscribeRef.current();
+    }
+    // Subscribe to underlying benchmarkComplete and forward to wrapper listeners
+    benchmarkSubscriptionUnsubscribeRef.current = api.core.on.benchmarkComplete((result) => {
+      for (const listener of benchmarkListeners) {
+        listener(result);
+      }
+    });
 
     return {
       ...api,
@@ -234,8 +259,7 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
 
     const prev = currentSlotColumnsRef.current;
     const columnsChanged =
-      cellSlotColumns.length !== prev.length ||
-      cellSlotColumns.some((name, i) => name !== prev[i]);
+      cellSlotColumns.length !== prev.length || cellSlotColumns.some((name, i) => name !== prev[i]);
 
     if (columnsChanged) {
       currentSlotColumnsRef.current = cellSlotColumns;
@@ -298,7 +322,11 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
   }
 
   return (
-    <div ref={containerRef} className={className} style={{ display: 'block', height: '100%', minHeight: 0 }}>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ display: 'block', height: '100%', minHeight: 0 }}
+    >
       {portals}
     </div>
   );

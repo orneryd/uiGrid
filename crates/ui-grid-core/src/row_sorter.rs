@@ -128,9 +128,12 @@ fn stringify_value(value: &Value) -> String {
 }
 
 fn looks_like_number_string(value: &str) -> bool {
-    regex::Regex::new(r"^[$£€]?\s*-?[\d,.]+$")
-        .expect("valid number-string regex")
-        .is_match(value)
+    use std::sync::OnceLock;
+    static CURRENCY_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+    let regex = CURRENCY_REGEX.get_or_init(|| {
+        regex::Regex::new(r"^[$£€]?\s*-?[\d,.]+$").expect("valid number-string regex")
+    });
+    regex.is_match(value)
 }
 
 pub fn guess_sort_kind(column: &GridColumnDef, rows: &[GridRecord]) -> SortKind {

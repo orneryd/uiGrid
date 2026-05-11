@@ -1,5 +1,16 @@
 use regex::Regex;
 use serde_json::Value;
+use std::sync::OnceLock;
+
+fn get_moustache_regex() -> &'static Regex {
+    static MOUSTACHE: OnceLock<Regex> = OnceLock::new();
+    MOUSTACHE.get_or_init(|| Regex::new(r"\{\{\s*([^}]+?)\s*\}\}").expect("valid moustache regex"))
+}
+
+fn get_dollar_regex() -> &'static Regex {
+    static DOLLAR: OnceLock<Regex> = OnceLock::new();
+    DOLLAR.get_or_init(|| Regex::new(r"\$\{(.+?)\}").expect("valid dollar regex"))
+}
 
 fn html_escape(value: &str) -> String {
     value
@@ -39,20 +50,18 @@ pub fn resolve_grid_template_value(context: &Value, expression: &str) -> Value {
 }
 
 pub fn interpolate_grid_template(template_markup: &str, context: &Value) -> String {
-    let moustache = Regex::new(r"\{\{\s*([^}]+?)\s*\}\}").expect("valid moustache regex");
-    let dollar = Regex::new(r"\$\{(.+?)\}").expect("valid dollar regex");
+    let with_moustache =
+        get_moustache_regex().replace_all(template_markup, |captures: &regex::Captures| {
+            let expression = captures
+                .get(1)
+                .map(|capture| capture.as_str())
+                .unwrap_or("")
+                .trim();
+            let value = resolve_grid_template_value(context, expression);
+            html_escape(&value_to_string(&value))
+        });
 
-    let with_moustache = moustache.replace_all(template_markup, |captures: &regex::Captures| {
-        let expression = captures
-            .get(1)
-            .map(|capture| capture.as_str())
-            .unwrap_or("")
-            .trim();
-        let value = resolve_grid_template_value(context, expression);
-        html_escape(&value_to_string(&value))
-    });
-
-    dollar
+    get_dollar_regex()
         .replace_all(&with_moustache, |captures: &regex::Captures| {
             let expression = captures
                 .get(1)

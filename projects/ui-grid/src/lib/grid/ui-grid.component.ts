@@ -16,14 +16,8 @@ import {
   output,
   untracked,
 } from '@angular/core';
-import {
-  defineStandaloneUiGridElement,
-  UiGridStandaloneElement,
-} from '@ornery/ui-grid-vanilla';
-import type {
-  FrameworkCellSlot,
-  FrameworkSlotDelta,
-} from '@ornery/ui-grid-vanilla';
+import { defineStandaloneUiGridElement, UiGridStandaloneElement } from '@ornery/ui-grid-vanilla';
+import type { FrameworkCellSlot, FrameworkSlotDelta } from '@ornery/ui-grid-vanilla';
 import type {
   GridBenchmarkResult,
   GridCellTemplateContext,
@@ -64,9 +58,13 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private gridElement: UiGridStandaloneElement | null = null;
   private elementReady = false;
   private listenerAttached = false;
-  private slotViews = new Map<string, { view: EmbeddedViewRef<GridCellTemplateContext>; columnName: string; rowId: string }>();
+  private slotViews = new Map<
+    string,
+    { view: EmbeddedViewRef<GridCellTemplateContext>; columnName: string; rowId: string }
+  >();
   private templateColumns = new Map<string, GridTemplateRefLike<GridCellTemplateContext>>();
   private currentSlotColumnNames: string[] = [];
+  private benchmarkSubscriptionUnsubscribe: (() => void) | null = null;
 
   constructor() {
     effect(() => {
@@ -96,6 +94,11 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyAllSlotViews();
 
+    if (this.benchmarkSubscriptionUnsubscribe) {
+      this.benchmarkSubscriptionUnsubscribe();
+      this.benchmarkSubscriptionUnsubscribe = null;
+    }
+
     if (this.gridElement) {
       this.gridElement.removeEventListener('cellSlotsChanged', this.onCellSlotsChanged);
       this.gridElement.remove();
@@ -106,6 +109,16 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private createWrappedGridApi(api: UiGridApi, opts: GridOptions): UiGridApi {
     const benchmarkListeners = new Set<(result: GridBenchmarkResult) => void>();
     const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    // Clean up previous underlying subscription if it exists
+    if (this.benchmarkSubscriptionUnsubscribe) {
+      this.benchmarkSubscriptionUnsubscribe();
+    }
+    // Subscribe to underlying benchmarkComplete and forward to wrapper listeners
+    this.benchmarkSubscriptionUnsubscribe = api.core.on.benchmarkComplete((result) => {
+      for (const listener of benchmarkListeners) {
+        listener(result);
+      }
+    });
 
     return {
       ...api,
@@ -278,7 +291,9 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       const templateRef = this.templateColumns.get(slot.columnName);
       if (!templateRef?.createEmbeddedView) continue;
 
-      const viewRef = templateRef.createEmbeddedView(slot.context) as EmbeddedViewRef<GridCellTemplateContext>;
+      const viewRef = templateRef.createEmbeddedView(
+        slot.context,
+      ) as EmbeddedViewRef<GridCellTemplateContext>;
       this.appRef.attachView(viewRef);
       viewRef.detectChanges();
 
@@ -294,7 +309,11 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         this.appRef.detachView(oldEntry.view);
         oldEntry.view.destroy();
       }
-      this.slotViews.set(slot.slotName, { view: viewRef, columnName: slot.columnName, rowId: slot.rowId });
+      this.slotViews.set(slot.slotName, {
+        view: viewRef,
+        columnName: slot.columnName,
+        rowId: slot.rowId,
+      });
     }
   };
 }
