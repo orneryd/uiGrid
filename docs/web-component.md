@@ -1,122 +1,6 @@
-# Web Component
+## Web Component Output (`@ornery/ui-grid-vanilla`)
 
-UI Grid ships **two separate web component outputs** that happen to share the same default tag name, `<ui-grid-element>`.
-
-- **Angular Elements output**: published from `@ornery/ui-grid`, rendered through Angular via `@angular/elements`
-- **Vanilla output**: published from `@ornery/ui-grid-vanilla`, rendered with the framework-free DOM implementation
-
-Do not load both outputs on the same page with the same tag name. Pick the package that matches your host environment and runtime requirements.
-
-## Angular Elements Output (`@ornery/ui-grid`)
-
-Wraps the Angular `UiGridComponent` as a custom element using `@angular/elements`. The Angular runtime is bundled into the output.
-
-### Build
-
-```bash
-npm run build:element
-```
-
-This produces `dist/ui-grid-element/main.js` — a self-contained ES module that includes the Angular runtime.
-
-### Declarative HTML Usage
-
-This is the Angular-powered custom element build. Use it when you want to embed the Angular renderer itself as a web component.
-
-The Angular Elements output supports the same declarative attribute surface as the vanilla build for common markup-first setup:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <script type="module" src="ui-grid-element/main.js"></script>
-</head>
-<body>
-  <ui-grid-element
-    grid-id="angular-element-demo"
-    title="Team Roster"
-    enable-sorting
-    enable-filtering
-    column-defs='[
-      { "name": "name" },
-      { "name": "role" },
-      { "name": "salary", "type": "number", "align": "end" }
-    ]'
-    data='[
-      { "name": "Alice", "role": "Engineer", "salary": 120000 },
-      { "name": "Bob", "role": "Designer", "salary": 95000 }
-    ]'>
-  </ui-grid-element>
-</body>
-</html>
-```
-
-Supported declarative inputs include:
-
-- Boolean attributes such as `enable-sorting`, `enable-filtering`, `enable-grouping`, `enable-pinning`, `enable-pagination`, and `enable-virtualization`
-- JSON attributes such as `column-defs`, `data`, `grouping`, and `pagination-page-sizes`
-
-Use the declarative surface for static pages, docs, CMS-rendered content, and simple embeds. For callbacks like `onRegisterApi` or function-based column logic, use the `options` property.
-
-### Performance Guidance
-
-- **Best use for declarative attributes**: initial render, static embeds, server-rendered HTML, CMS content, and occasional UI reconfiguration.
-- **Cost of declarative updates**: changing JSON attributes such as `data`, `column-defs`, or `grouping` requires parsing the new string payload and re-running the element's configuration/update path.
-- **Best use for imperative updates**: callbacks, function-valued configuration, programmatic integration, and batched reconfiguration from application code.
-- **High-frequency updates**: avoid pushing a new `data` attribute every frame. For the Angular Elements output, batch `options` changes and prefer the Angular component directly for truly live data feeds.
-
-### JavaScript Property Usage
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <script type="module" src="ui-grid-element/main.js"></script>
-</head>
-<body>
-  <ui-grid-element id="my-grid"></ui-grid-element>
-
-  <script type="module">
-    const grid = document.querySelector('#my-grid');
-    grid.options = {
-      id: 'angular-element-demo',
-      data: [
-        { name: 'Alice', role: 'Engineer', salary: 120000 },
-        { name: 'Bob', role: 'Designer', salary: 95000 },
-      ],
-      columnDefs: [
-        { name: 'name' },
-        { name: 'role' },
-        { name: 'salary', type: 'number', align: 'end' },
-      ],
-    };
-  </script>
-</body>
-</html>
-```
-
-### Programmatic Registration
-
-```typescript
-import { defineUiGridElement } from '@ornery/ui-grid';
-
-await defineUiGridElement();           // registers <ui-grid-element>
-await defineUiGridElement('my-grid');   // or register with a custom tag name
-```
-
-To also enable the Rust/WASM pipeline engine:
-
-```typescript
-import { defineUiGridRustElement } from '@ornery/ui-grid';
-
-await defineUiGridRustElement(); // inits WASM, then registers <ui-grid-element>
-```
-
----
-
-## Vanilla Output (`@ornery/ui-grid-vanilla`)
-
-A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No Angular dependency at all.
+A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No external dependencies at all.
 
 ### Install
 
@@ -144,7 +28,8 @@ The vanilla element supports the same declarative attribute surface. Small and m
   data='[
     { "name": "Alice", "role": "Engineer", "salary": 120000 },
     { "name": "Bob", "role": "Designer", "salary": 95000 }
-  ]'>
+  ]'
+>
 </ui-grid-element>
 
 <script type="module">
@@ -250,6 +135,8 @@ const grid = await mountVanillaUiGrid(
 );
 ```
 
+If no WASM module is provided, or if WASM initialization fails, the grid automatically falls back to the JavaScript engine.
+
 ### Slot Templates
 
 The vanilla element supports `<template>` elements with `slot` attributes for custom cell and expandable row content. Templates use `{{ expression }}` interpolation:
@@ -270,8 +157,8 @@ The vanilla element supports `<template>` elements with `slot` attributes for cu
 The vanilla element exposes `getState()` and `setState()` methods for save/restore:
 
 ```javascript
-const state = grid.getState();  // returns GridSaveState | null
-grid.setState(state);           // applies a previously saved state
+const state = grid.getState(); // returns GridSaveState | null
+grid.setState(state); // applies a previously saved state
 ```
 
 ---

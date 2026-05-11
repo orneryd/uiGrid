@@ -67,6 +67,7 @@ impl DemoLanguage {
                 pin_left: "Fijar a la izquierda".to_string(),
                 pin_right: "Fijar a la derecha".to_string(),
                 unpin: "Desfijar".to_string(),
+                ..GridLabels::default()
             },
         }
     }

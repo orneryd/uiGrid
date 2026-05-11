@@ -51,6 +51,9 @@ fn base_columns() -> Vec<GridColumnDef> {
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
+            validators: None,
+            exporter_suppress_export: false,
+            exporter_pdf_align: None,
             width: None,
             align: None,
             sort: None,
@@ -76,6 +79,9 @@ fn base_columns() -> Vec<GridColumnDef> {
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
+            validators: None,
+            exporter_suppress_export: false,
+            exporter_pdf_align: None,
             width: None,
             align: None,
             sort: None,
@@ -101,6 +107,9 @@ fn base_columns() -> Vec<GridColumnDef> {
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
+            validators: None,
+            exporter_suppress_export: false,
+            exporter_pdf_align: None,
             width: None,
             align: None,
             sort: None,
@@ -411,9 +420,10 @@ fn label_resolution_supports_i18n_overrides() {
         pin_left: "Fijar a la izquierda".to_string(),
         pin_right: "Fijar a la derecha".to_string(),
         unpin: "Desfijar".to_string(),
+        ..GridLabels::default()
     };
 
-    let labels = resolve_grid_labels(Some(&spanish));
+    let labels = resolve_grid_labels(&spanish, None);
     assert_eq!(labels.sort_default, "Ordenar");
     assert_eq!(labels.pagination_rows, "Filas por pagina");
     assert_eq!(labels.pin_left, "Fijar a la izquierda");

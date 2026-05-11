@@ -106,7 +106,7 @@ That means explicit JS property values win over declarative attributes when both
 | `infiniteScrollUp`           | `boolean`                                          | —          | Enable upward infinite scroll              |
 | `infiniteScrollDown`         | `boolean`                                          | —          | Enable downward infinite scroll            |
 | `rowIdentity`                | `(row, i) => string`                               | —          | Custom row ID function                     |
-| `benchmark`                  | `{ iterations?: number }`                          | —          | Pipeline benchmark configuration           |
+| `benchmark`                  | `{ iterations?: number }`                          | —          | Render benchmark configuration             |
 | `onRegisterApi`              | `(api) => void`                                    | —          | Callback to receive the UiGridApi instance |
 
 ## GridColumnDef
@@ -160,7 +160,7 @@ Access the API via `onRegisterApi`. The API is organized into namespaces.
 | `clearGrouping()`                 | Remove all grouping                   |
 | `moveColumn(from, to)`            | Reorder columns by index              |
 | `exportCsv()`                     | Download visible rows as CSV          |
-| `benchmark(iterations?)`          | Run pipeline benchmark                |
+| `benchmark(iterations?)`          | Run render benchmark                  |
 | `setRowInvisible(row, reason?)`   | Hide a row programmatically           |
 | `clearRowInvisible(row, reason?)` | Un-hide a row                         |
 

@@ -52,9 +52,6 @@ jobs:
       - name: Build the Angular library package
         run: npm run build:library
 
-      - name: Build the web component bundle
-        run: npm run build:element
-
       - name: Run the Angular test suite
         run: npm run test:angular -- --watch=false --coverage --coverage-reporters lcovonly
 

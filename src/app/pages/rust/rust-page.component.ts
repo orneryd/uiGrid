@@ -442,7 +442,6 @@ import {
 await registerVanillaUiGridRustModule(
   {
     default: initWasm,
-    build_pipeline_js: wasmModule.build_pipeline_js,
   },
   '/dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm',
 );

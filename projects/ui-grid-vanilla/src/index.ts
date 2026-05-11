@@ -1,5 +1,4 @@
-import { registerRustWasmGridEngine } from '@ornery/ui-grid-core';
-import type { BuildGridPipelineContext, GridOptions, PipelineResult } from '@ornery/ui-grid-core';
+import type { GridOptions } from '@ornery/ui-grid-core';
 
 import {
   defineStandaloneUiGridElement,
@@ -33,7 +32,6 @@ export type { GridOptions, UiGridApi } from '@ornery/ui-grid-core';
 
 export interface UiGridRustWebModule {
   default(input?: unknown): Promise<unknown>;
-  build_pipeline_js(context: BuildGridPipelineContext): PipelineResult;
 }
 
 export { defineStandaloneUiGridElement as defineUiGridElement };
@@ -43,11 +41,6 @@ export async function registerVanillaUiGridRustModule(
   input?: unknown,
 ): Promise<void> {
   await module.default(input);
-  registerRustWasmGridEngine({
-    buildPipeline(context: BuildGridPipelineContext): PipelineResult {
-      return module.build_pipeline_js(context);
-    },
-  });
 }
 
 export async function mountVanillaUiGrid(
@@ -57,7 +50,11 @@ export async function mountVanillaUiGrid(
   tagName = 'ui-grid-element',
 ): Promise<VanillaUiGridElement> {
   if (rustModule) {
-    await registerVanillaUiGridRustModule(rustModule);
+    try {
+      await registerVanillaUiGridRustModule(rustModule);
+    } catch {
+      // Fall back to JS engine when WASM cannot be initialized.
+    }
   }
 
   await defineStandaloneUiGridElement(tagName);

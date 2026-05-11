@@ -309,6 +309,10 @@ export interface GridOptions {
   expandableRowHeight?: number;
   expandableRowHeaderWidth?: number;
   expandableRowTemplate?: GridTemplateRefLike<GridExpandableTemplateContext>;
+  /** Internal bridge hint used only for JS↔wasm parity. Mirrors whether
+   * an expandable template is actually available after function-valued
+   * fields are stripped from the wasm payload. */
+  hasExpandableRowTemplate?: boolean;
   expandableRowScope?: Record<string, unknown>;
   enableTreeView?: boolean;
   treeChildrenField?: string;

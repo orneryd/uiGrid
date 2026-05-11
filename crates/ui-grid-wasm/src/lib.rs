@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeMap};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use wasm_bindgen::prelude::*;
 
 use ui_grid_core::{
@@ -11,14 +11,34 @@ use ui_grid_core::{
         clear_grid_edit_session, find_next_grid_cell, is_grid_cell_position, is_printable_grid_key,
         parse_grid_edited_value, should_grid_edit_on_focus, stringify_grid_editor_value,
     },
-    export::{export_csv_rows, header_label},
+    export::{
+        GridExporterColumnType, build_grid_csv, build_grid_excel_sheet_data,
+        build_grid_pdf_doc_definition, calculate_grid_pdf_column_widths, export_csv_rows,
+        filter_exporter_columns, format_grid_excel_field, format_grid_pdf_field, header_label,
+        resolve_grid_exporter_excel_options, resolve_grid_exporter_options,
+        resolve_grid_exporter_pdf_options,
+    },
     filtering::{clear_grid_filter_reasons, matches_grid_row_filters},
     grouping::build_grid_display_items,
+    i18n::{
+        GridI18nService, add_grid_i18n_locale, create_grid_i18n_service,
+        get_grid_i18n_current_labels, get_grid_i18n_current_lang, get_grid_i18n_labels,
+        get_grid_i18n_supported_languages, resolve_labels_from_i18n, set_grid_i18n_current_lang,
+    },
     identity::{build_grid_sort_state, find_grid_row_by_id, resolve_grid_row_id},
+    importer::{
+        build_grid_importer_objects_from_csv, build_grid_importer_objects_from_json,
+        default_grid_importer_process_headers, flatten_grid_column_defs_for_import,
+        parse_grid_importer_csv, parse_grid_importer_json, resolve_grid_importer_options,
+    },
     infinite_scroll::{
         MaybeRequestInfiniteScrollDataContext, complete_infinite_scroll_data_load,
         maybe_request_infinite_scroll_data, reset_infinite_scroll_state,
         save_infinite_scroll_percentage, set_infinite_scroll_directions_state,
+    },
+    menu::{
+        GridExporterMenuContext, GridRowEditMenuPredicates, build_grid_exporter_menu_items,
+        build_grid_importer_menu_items, build_grid_row_edit_menu_items,
     },
     models::{
         BuildGridPipelineContext, GridCellPosition, GridColumnDef, GridLabels, GridOptions,
@@ -35,18 +55,39 @@ use ui_grid_core::{
         pinning_button_label,
     },
     pipeline::build_grid_pipeline,
+    row_edit::{
+        GridRowEditState, collect_grid_row_entities, create_grid_row_edit_state,
+        is_grid_row_edit_timer_enabled, mark_grid_row_clean, mark_grid_row_dirty,
+        mark_grid_row_error, mark_grid_row_saving, resolve_grid_row_edit_wait_interval,
+    },
+    row_searcher::{ParsedCondition, get_term, run_column_filter, setup_filters},
+    row_sorter::{SortKind, compare_values, guess_sort_kind},
     row_state::{
         add_grid_row_invisible_reason, are_all_grid_rows_expanded, clear_grid_row_invisible_reason,
         expand_all_grid_rows, expand_all_grid_tree_rows, get_grid_tree_row_children,
         set_grid_tree_row_expanded, toggle_grid_row_expanded, toggle_grid_tree_row_expanded,
+    },
+    selection::{
+        GridSelectionState, SelectAllGridRowsOptions, ShiftGridRowSelectionOptions,
+        ToggleGridRowSelectionOptions, clear_all_grid_selection, create_grid_selection_state,
+        find_grid_row_by_key, map_selected_rows_to_entities, reconcile_grid_selection,
+        resolve_grid_selection_options, select_all_grid_rows, select_all_visible_grid_rows,
+        shift_grid_row_selection, toggle_grid_row_selection,
     },
     sorting::sort_grid_rows,
     state::{
         BuildGridSavedStateContext, build_grid_saved_state, is_safe_state_key,
         normalize_boolean_map, normalize_grid_saved_state, sanitize_download_filename,
     },
+    template::{interpolate_grid_template, resolve_grid_template_value},
     tree::{build_grid_rows, filter_and_flatten_grid_tree_rows, is_tree_enabled},
     utils::{get_cell_value, get_path_value, stringify_cell_value, titleize},
+    validate::{
+        GridValidatorRegistry, clear_grid_cell_error, create_grid_validator_registry,
+        errors_field_for, get_grid_cell_error_messages, get_grid_cell_error_names,
+        invalid_field_for, is_grid_cell_invalid, run_grid_cell_validators, set_grid_cell_error,
+        set_grid_cell_invalid, set_grid_cell_valid, validate_all_grid_rows,
+    },
     viewmodel::{
         can_grid_expand_rows, can_grid_move_columns, grid_cell_indent, grid_column_width,
         grid_editor_input_type, grid_expand_toggle_label, grid_expand_toggle_label_for_row,
@@ -169,6 +210,14 @@ struct PinnedColumnsColumnLabelsInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ResolveGridLabelsInput {
+    current_labels: GridLabels,
+    #[serde(default)]
+    overrides: Option<Map<String, Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CellPositionMatchInput {
     position: Option<GridCellPosition>,
     row_id: String,
@@ -210,6 +259,75 @@ struct ParseGridEditedValueInput {
     column: GridColumnDef,
     value: String,
     old_value: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PipelineStaticContext {
+    options: GridOptions,
+    columns: Vec<GridColumnDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PipelineDynamicContext {
+    #[serde(default)]
+    active_filters: BTreeMap<String, String>,
+    #[serde(default)]
+    sort_state: SortState,
+    #[serde(default)]
+    group_by_columns: Vec<String>,
+    #[serde(default)]
+    collapsed_groups: BTreeMap<String, bool>,
+    #[serde(default)]
+    hidden_row_reasons: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    expanded_rows: BTreeMap<String, bool>,
+    #[serde(default)]
+    expanded_tree_rows: BTreeMap<String, bool>,
+    #[serde(default = "pipeline_default_current_page")]
+    current_page: usize,
+    #[serde(default)]
+    page_size: usize,
+    #[serde(default = "pipeline_default_row_size")]
+    row_size: usize,
+}
+
+thread_local! {
+    static CACHED_PIPELINE_STATIC_CONTEXT: RefCell<Option<PipelineStaticContext>> = const { RefCell::new(None) };
+}
+
+fn pipeline_default_current_page() -> usize {
+    1
+}
+
+fn pipeline_default_row_size() -> usize {
+    44
+}
+
+fn build_pipeline_context_from_cached_static(
+    dynamic: PipelineDynamicContext,
+) -> Result<BuildGridPipelineContext, JsValue> {
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        let static_context = cached.borrow().clone().ok_or_else(|| {
+            JsValue::from_str("cached pipeline static context has not been initialized")
+        })?;
+
+        Ok(BuildGridPipelineContext {
+            options: static_context.options,
+            columns: static_context.columns,
+            active_filters: dynamic.active_filters,
+            sort_state: dynamic.sort_state,
+            group_by_columns: dynamic.group_by_columns,
+            collapsed_groups: dynamic.collapsed_groups,
+            hidden_row_reasons: dynamic.hidden_row_reasons,
+            expanded_rows: dynamic.expanded_rows,
+            expanded_tree_rows: dynamic.expanded_tree_rows,
+            current_page: dynamic.current_page,
+            page_size: dynamic.page_size,
+            row_size: dynamic.row_size,
+        })
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -436,6 +554,343 @@ struct NormalizeBooleanMapInput {
     value: serde_json::Map<String, Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToggleGridRowSelectionInput {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+    row_id: String,
+    multi_select: bool,
+    no_unselect: bool,
+    can_be_invisible: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShiftGridRowSelectionInput {
+    state: GridSelectionState,
+    visible_row_cache: Vec<GridRow>,
+    row_id: String,
+    multi_select: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectAllGridRowsInput {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+    multi_select: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClearAllGridSelectionInput {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FindGridRowByKeyInput {
+    rows: Vec<GridRow>,
+    is_in_entity: bool,
+    key: String,
+    comparator: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReconcileGridSelectionInput {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectionMutationResult {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+    change: ui_grid_core::selection::SelectionChange,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectionReconcileResult {
+    state: GridSelectionState,
+    all_rows: Vec<GridRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RowEditMutationInput {
+    state: GridRowEditState,
+    row: GridRow,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RowEditMutationResult {
+    state: GridRowEditState,
+    row: GridRow,
+    changed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveGridRowEditWaitIntervalInput {
+    wait_interval: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CollectGridRowEntitiesInput {
+    rows: Vec<GridRow>,
+    ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GridI18nAddLocaleInput {
+    service: GridI18nService,
+    lang: String,
+    labels: serde_json::Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GridI18nServiceLangInput {
+    service: GridI18nService,
+    lang: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GridI18nResolveLabelsInput {
+    service: GridI18nService,
+    overrides: Option<serde_json::Map<String, Value>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GridI18nServiceResult {
+    service: GridI18nService,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridExporterMenuItemsInput {
+    options: GridOptions,
+    labels: serde_json::Map<String, Value>,
+    has_selection: bool,
+    include_pdf: bool,
+    include_excel: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridImporterMenuItemsInput {
+    options: GridOptions,
+    labels: serde_json::Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridRowEditMenuItemsInput {
+    options: GridOptions,
+    labels: serde_json::Map<String, Value>,
+    has_dirty_rows: bool,
+    has_error_rows: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RunColumnFilterInput {
+    row: GridRecord,
+    column: GridColumnDef,
+    filter: ui_grid_core::models::GridFilterDescriptor,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ParsedFilterSummary {
+    term: Option<Value>,
+    condition_tag: String,
+    matcher_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SortValuesInput {
+    column: GridColumnDef,
+    rows: Vec<GridRecord>,
+    #[serde(default)]
+    values: Vec<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompareSortValuesInput {
+    column: GridColumnDef,
+    rows: Vec<GridRecord>,
+    left: Value,
+    right: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveGridTemplateValueInput {
+    context: Value,
+    expression: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InterpolateGridTemplateInput {
+    template_markup: String,
+    context: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegistryNameArgumentInput {
+    registry: GridValidatorRegistry,
+    name: String,
+    argument: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RowEntityColumnInput {
+    row_entity: GridRecord,
+    col_def: GridColumnDef,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RowEntityColumnValidatorInput {
+    row_entity: GridRecord,
+    col_def: GridColumnDef,
+    validator_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ErrorMessagesInput {
+    row_entity: GridRecord,
+    col_def: GridColumnDef,
+    registry: GridValidatorRegistry,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RunGridCellValidatorsInput {
+    row_entity: GridRecord,
+    col_def: GridColumnDef,
+    new_value: Value,
+    old_value: Value,
+    registry: GridValidatorRegistry,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RunGridCellValidatorsResult {
+    row_entity: GridRecord,
+    failures: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ValidateAllGridRowsInput {
+    row_entities: Vec<GridRecord>,
+    column_defs: Vec<GridColumnDef>,
+    registry: GridValidatorRegistry,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ValidateAllGridRowsResult {
+    row_entities: Vec<GridRecord>,
+    invalid_rows: Vec<GridRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DefaultGridImporterProcessHeadersInput {
+    column_defs: Option<Vec<GridColumnDef>>,
+    header_row: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ParseGridImporterJsonInput {
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ParseGridImporterJsonResult {
+    parsed: Option<Vec<GridRecord>>,
+    error_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridImporterObjectsFromCsvInput {
+    import_array: Vec<Vec<String>>,
+    column_defs: Option<Vec<GridColumnDef>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FilterExporterColumnsInput {
+    columns: Vec<GridColumnDef>,
+    options: ui_grid_core::export::GridExporterOptions,
+    col_type: GridExporterColumnType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridCsvInput {
+    columns: Vec<GridColumnDef>,
+    rows: Vec<GridRow>,
+    options: ui_grid_core::export::GridExporterOptions,
+    col_type: GridExporterColumnType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CalculateGridPdfColumnWidthsInput {
+    columns: Vec<GridColumnDef>,
+    max_grid_width: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FormatGridPdfFieldInput {
+    value: Value,
+    alignment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridPdfDocDefinitionInput {
+    columns: Vec<GridColumnDef>,
+    rows: Vec<GridRow>,
+    pdf_options: ui_grid_core::export::GridExporterPdfOptions,
+    exporter_options: ui_grid_core::export::GridExporterOptions,
+    col_type: GridExporterColumnType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildGridExcelSheetDataInput {
+    columns: Vec<GridColumnDef>,
+    rows: Vec<GridRow>,
+    exporter_options: ui_grid_core::export::GridExporterOptions,
+    col_type: GridExporterColumnType,
+    styles: Option<Value>,
+}
+
 fn from_js<T: DeserializeOwned>(value: JsValue) -> Result<T, JsValue> {
     serde_wasm_bindgen::from_value(value)
         .map_err(|error| JsValue::from_str(&format!("failed to decode wasm input: {error}")))
@@ -446,6 +901,77 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serializer)
         .map_err(|error| JsValue::from_str(&format!("failed to encode wasm output: {error}")))
+}
+
+fn sort_kind_tag(kind: SortKind) -> &'static str {
+    match kind {
+        SortKind::Basic => "basic",
+        SortKind::Number => "number",
+        SortKind::NumberString => "numberString",
+        SortKind::Alpha => "alpha",
+        SortKind::Date => "date",
+        SortKind::Boolean => "boolean",
+    }
+}
+
+fn parsed_condition_tag(condition: &ParsedCondition) -> &'static str {
+    match condition {
+        ParsedCondition::Regex(_) => "regex",
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::Contains) => {
+            "contains"
+        }
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::StartsWith) => {
+            "startsWith"
+        }
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::EndsWith) => {
+            "endsWith"
+        }
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::Exact) => "exact",
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::NotEqual) => {
+            "notEqual"
+        }
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::GreaterThan) => {
+            "greaterThan"
+        }
+        ParsedCondition::Comparator(
+            ui_grid_core::constants::FilterCondition::GreaterThanOrEqual,
+        ) => "greaterThanOrEqual",
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::LessThan) => {
+            "lessThan"
+        }
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::LessThanOrEqual) => {
+            "lessThanOrEqual"
+        }
+    }
+}
+
+fn parsed_matcher_kind(
+    descriptor: &ui_grid_core::models::GridFilterDescriptor,
+    condition: &ParsedCondition,
+) -> Option<String> {
+    match condition {
+        ParsedCondition::Regex(_) => match descriptor.condition {
+            Some(ui_grid_core::constants::FilterCondition::StartsWith) => {
+                Some("startsWith".to_string())
+            }
+            Some(ui_grid_core::constants::FilterCondition::EndsWith) => {
+                Some("endsWith".to_string())
+            }
+            Some(ui_grid_core::constants::FilterCondition::Exact) => Some("exact".to_string()),
+            Some(ui_grid_core::constants::FilterCondition::Contains) => {
+                Some("contains".to_string())
+            }
+            None => match get_term(descriptor) {
+                Some(Value::String(value)) if value.contains('*') => None,
+                _ => Some("contains".to_string()),
+            },
+            _ => None,
+        },
+        ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::Contains) => {
+            Some("contains".to_string())
+        }
+        _ => None,
+    }
 }
 
 #[wasm_bindgen(start)]
@@ -468,20 +994,697 @@ pub fn build_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn set_cached_pipeline_static_context_js(context: JsValue) -> Result<(), JsValue> {
+    let context: PipelineStaticContext = from_js(context)?;
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        *cached.borrow_mut() = Some(context);
+    });
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub fn clear_cached_pipeline_static_context_js() {
+    CACHED_PIPELINE_STATIC_CONTEXT.with(|cached| {
+        *cached.borrow_mut() = None;
+    });
+}
+
+#[wasm_bindgen]
+pub fn build_pipeline_from_cached_static_context_js(context: JsValue) -> Result<JsValue, JsValue> {
+    let dynamic: PipelineDynamicContext = from_js(context)?;
+    let context = build_pipeline_context_from_cached_static(dynamic)?;
+    let result = build_grid_pipeline(&context);
+    to_js(&result)
+}
+
+#[wasm_bindgen]
 pub fn build_grid_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
     build_pipeline_js(context)
+}
+
+// Row searcher
+
+#[wasm_bindgen]
+pub fn get_grid_filter_term_js(filter: JsValue) -> Result<JsValue, JsValue> {
+    let filter: ui_grid_core::models::GridFilterDescriptor = from_js(filter)?;
+    to_js(&get_term(&filter))
+}
+
+#[wasm_bindgen]
+pub fn setup_grid_filters_js(filters: JsValue) -> Result<JsValue, JsValue> {
+    let filters: Vec<ui_grid_core::models::GridFilterDescriptor> = from_js(filters)?;
+    let parsed = setup_filters(&filters);
+    let summaries = filters
+        .iter()
+        .zip(parsed.iter())
+        .map(|(descriptor, parsed)| ParsedFilterSummary {
+            term: parsed.term.clone(),
+            condition_tag: parsed_condition_tag(&parsed.condition).to_string(),
+            matcher_kind: parsed_matcher_kind(descriptor, &parsed.condition),
+        })
+        .collect::<Vec<_>>();
+    to_js(&summaries)
+}
+
+#[wasm_bindgen]
+pub fn run_grid_column_filter_js(input: JsValue) -> Result<bool, JsValue> {
+    let input: RunColumnFilterInput = from_js(input)?;
+    let parsed = setup_filters(&[input.filter]);
+    let Some(filter) = parsed.first() else {
+        return Ok(false);
+    };
+    Ok(run_column_filter(&input.row, &input.column, filter))
+}
+
+// Row sorter
+
+#[wasm_bindgen]
+pub fn guess_grid_sort_kind_js(input: JsValue) -> Result<String, JsValue> {
+    let input: SortValuesInput = from_js(input)?;
+    Ok(sort_kind_tag(guess_sort_kind(&input.column, &input.rows)).to_string())
+}
+
+#[wasm_bindgen]
+pub fn compare_grid_sort_values_js(input: JsValue) -> Result<i32, JsValue> {
+    let input: CompareSortValuesInput = from_js(input)?;
+    let kind = guess_sort_kind(&input.column, &input.rows);
+    let ordering = compare_values(kind, &input.left, &input.right);
+    Ok(match ordering {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    })
+}
+
+#[wasm_bindgen]
+pub fn sort_grid_scalar_values_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: SortValuesInput = from_js(input)?;
+    let kind = guess_sort_kind(&input.column, &input.rows);
+    let mut values = input.values;
+    values.sort_by(|left, right| compare_values(kind, left, right));
+    to_js(&values)
+}
+
+// Template
+
+#[wasm_bindgen]
+pub fn resolve_grid_template_value_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ResolveGridTemplateValueInput = from_js(input)?;
+    to_js(&resolve_grid_template_value(
+        &input.context,
+        &input.expression,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn interpolate_grid_template_js(input: JsValue) -> Result<String, JsValue> {
+    let input: InterpolateGridTemplateInput = from_js(input)?;
+    Ok(interpolate_grid_template(
+        &input.template_markup,
+        &input.context,
+    ))
+}
+
+// Validate
+
+#[wasm_bindgen]
+pub fn create_grid_validator_registry_js(labels: JsValue) -> Result<JsValue, JsValue> {
+    let labels: GridLabels = from_js(labels)?;
+    to_js(&create_grid_validator_registry(&labels))
+}
+
+#[wasm_bindgen]
+pub fn grid_validator_has_js(input: JsValue) -> Result<bool, JsValue> {
+    let input: RegistryNameArgumentInput = from_js(input)?;
+    Ok(input.registry.has(&input.name))
+}
+
+#[wasm_bindgen]
+pub fn grid_validator_message_js(input: JsValue) -> Result<String, JsValue> {
+    let input: RegistryNameArgumentInput = from_js(input)?;
+    Ok(input.registry.get_message(&input.name, &input.argument))
+}
+
+#[wasm_bindgen]
+pub fn invalid_field_for_js(col_def: JsValue) -> Result<String, JsValue> {
+    let col_def: GridColumnDef = from_js(col_def)?;
+    Ok(invalid_field_for(&col_def))
+}
+
+#[wasm_bindgen]
+pub fn errors_field_for_js(col_def: JsValue) -> Result<String, JsValue> {
+    let col_def: GridColumnDef = from_js(col_def)?;
+    Ok(errors_field_for(&col_def))
+}
+
+#[wasm_bindgen]
+pub fn is_grid_cell_invalid_js(input: JsValue) -> Result<bool, JsValue> {
+    let input: RowEntityColumnInput = from_js(input)?;
+    Ok(is_grid_cell_invalid(&input.row_entity, &input.col_def))
+}
+
+#[wasm_bindgen]
+pub fn set_grid_cell_invalid_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEntityColumnInput = from_js(input)?;
+    set_grid_cell_invalid(&mut input.row_entity, &input.col_def);
+    to_js(&input.row_entity)
+}
+
+#[wasm_bindgen]
+pub fn set_grid_cell_valid_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEntityColumnInput = from_js(input)?;
+    set_grid_cell_valid(&mut input.row_entity, &input.col_def);
+    to_js(&input.row_entity)
+}
+
+#[wasm_bindgen]
+pub fn set_grid_cell_error_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEntityColumnValidatorInput = from_js(input)?;
+    set_grid_cell_error(&mut input.row_entity, &input.col_def, &input.validator_name);
+    to_js(&input.row_entity)
+}
+
+#[wasm_bindgen]
+pub fn clear_grid_cell_error_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEntityColumnValidatorInput = from_js(input)?;
+    clear_grid_cell_error(&mut input.row_entity, &input.col_def, &input.validator_name);
+    to_js(&input.row_entity)
+}
+
+#[wasm_bindgen]
+pub fn get_grid_cell_error_names_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: RowEntityColumnInput = from_js(input)?;
+    to_js(&get_grid_cell_error_names(
+        &input.row_entity,
+        &input.col_def,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn get_grid_cell_error_messages_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ErrorMessagesInput = from_js(input)?;
+    to_js(&get_grid_cell_error_messages(
+        &input.row_entity,
+        &input.col_def,
+        &input.registry,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn run_grid_cell_validators_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RunGridCellValidatorsInput = from_js(input)?;
+    let failures = run_grid_cell_validators(
+        &mut input.row_entity,
+        &input.col_def,
+        &input.new_value,
+        &input.old_value,
+        &input.registry,
+    )
+    .map_err(|error| JsValue::from_str(&error))?;
+    to_js(&RunGridCellValidatorsResult {
+        row_entity: input.row_entity,
+        failures,
+    })
+}
+
+#[wasm_bindgen]
+pub fn validate_all_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: ValidateAllGridRowsInput = from_js(input)?;
+    let invalid_rows =
+        validate_all_grid_rows(&mut input.row_entities, &input.column_defs, &input.registry)
+            .map_err(|error| JsValue::from_str(&error))?;
+    to_js(&ValidateAllGridRowsResult {
+        row_entities: input.row_entities,
+        invalid_rows,
+    })
+}
+
+// Importer
+
+#[wasm_bindgen]
+pub fn resolve_grid_importer_options_js(options: JsValue) -> Result<JsValue, JsValue> {
+    let options: GridOptions = from_js(options)?;
+    to_js(&resolve_grid_importer_options(&options))
+}
+
+#[wasm_bindgen]
+pub fn flatten_grid_column_defs_for_import_js(column_defs: JsValue) -> Result<JsValue, JsValue> {
+    let column_defs: Vec<GridColumnDef> = from_js(column_defs)?;
+    to_js(&flatten_grid_column_defs_for_import(&column_defs, None))
+}
+
+#[wasm_bindgen]
+pub fn default_grid_importer_process_headers_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: DefaultGridImporterProcessHeadersInput = from_js(input)?;
+    to_js(&default_grid_importer_process_headers(
+        input.column_defs.as_deref(),
+        &input.header_row,
+        None,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn parse_grid_importer_json_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ParseGridImporterJsonInput = from_js(input)?;
+    let result = match parse_grid_importer_json(&input.source) {
+        Ok(parsed) => ParseGridImporterJsonResult {
+            parsed: Some(parsed),
+            error_key: None,
+        },
+        Err(ui_grid_core::importer::GridImporterJsonError::InvalidJson) => {
+            ParseGridImporterJsonResult {
+                parsed: None,
+                error_key: Some("importer.invalidJson".to_string()),
+            }
+        }
+        Err(ui_grid_core::importer::GridImporterJsonError::JsonNotArray) => {
+            ParseGridImporterJsonResult {
+                parsed: Some(Vec::new()),
+                error_key: Some("importer.jsonNotarray".to_string()),
+            }
+        }
+    };
+    to_js(&result)
+}
+
+#[wasm_bindgen]
+pub fn parse_grid_importer_csv_js(source: JsValue) -> Result<JsValue, JsValue> {
+    let source: String = from_js(source)?;
+    to_js(&parse_grid_importer_csv(&source))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_importer_objects_from_csv_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridImporterObjectsFromCsvInput = from_js(input)?;
+    to_js(&build_grid_importer_objects_from_csv(
+        &input.import_array,
+        input.column_defs.as_deref(),
+    ))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_importer_objects_from_json_js(parsed: JsValue) -> Result<JsValue, JsValue> {
+    let parsed: Vec<GridRecord> = from_js(parsed)?;
+    to_js(&build_grid_importer_objects_from_json(&parsed))
+}
+
+// Exporter
+
+#[wasm_bindgen]
+pub fn filter_exporter_columns_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: FilterExporterColumnsInput = from_js(input)?;
+    to_js(&filter_exporter_columns(
+        &input.columns,
+        &input.options,
+        input.col_type,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_csv_js(input: JsValue) -> Result<String, JsValue> {
+    let input: BuildGridCsvInput = from_js(input)?;
+    Ok(build_grid_csv(
+        &input.columns,
+        &input.rows,
+        &input.options,
+        input.col_type,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn resolve_grid_exporter_options_js(options: JsValue) -> Result<JsValue, JsValue> {
+    let options: GridOptions = from_js(options)?;
+    to_js(&resolve_grid_exporter_options(&options))
+}
+
+#[wasm_bindgen]
+pub fn resolve_grid_exporter_pdf_options_js(options: JsValue) -> Result<JsValue, JsValue> {
+    let options: GridOptions = from_js(options)?;
+    to_js(&resolve_grid_exporter_pdf_options(&options))
+}
+
+#[wasm_bindgen]
+pub fn resolve_grid_exporter_excel_options_js(options: JsValue) -> Result<JsValue, JsValue> {
+    let options: GridOptions = from_js(options)?;
+    to_js(&resolve_grid_exporter_excel_options(&options))
+}
+
+#[wasm_bindgen]
+pub fn calculate_grid_pdf_column_widths_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: CalculateGridPdfColumnWidthsInput = from_js(input)?;
+    to_js(&calculate_grid_pdf_column_widths(
+        &input.columns,
+        input.max_grid_width,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn format_grid_pdf_field_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: FormatGridPdfFieldInput = from_js(input)?;
+    to_js(&format_grid_pdf_field(
+        &input.value,
+        input.alignment.as_deref(),
+    ))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_pdf_doc_definition_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridPdfDocDefinitionInput = from_js(input)?;
+    to_js(&build_grid_pdf_doc_definition(
+        &input.columns,
+        &input.rows,
+        &input.pdf_options,
+        &input.exporter_options,
+        input.col_type,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn format_grid_excel_field_js(value: JsValue) -> Result<JsValue, JsValue> {
+    let value: Value = from_js(value)?;
+    to_js(&format_grid_excel_field(&value))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_excel_sheet_data_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridExcelSheetDataInput = from_js(input)?;
+    to_js(&build_grid_excel_sheet_data(
+        &input.columns,
+        &input.rows,
+        &input.exporter_options,
+        input.col_type,
+        input.styles.as_ref(),
+    ))
+}
+
+// Selection
+
+#[wasm_bindgen]
+pub fn create_grid_selection_state_js() -> Result<JsValue, JsValue> {
+    to_js(&create_grid_selection_state())
+}
+
+#[wasm_bindgen]
+pub fn resolve_grid_selection_options_js(options: JsValue) -> Result<JsValue, JsValue> {
+    let callback_value = js_sys::Reflect::get(&options, &JsValue::from_str("isRowSelectable"))
+        .unwrap_or(JsValue::UNDEFINED);
+    let options: GridOptions = from_js(options)?;
+    let output = to_js(&resolve_grid_selection_options(&options))?;
+    let callback_value = if callback_value.is_undefined() {
+        JsValue::NULL
+    } else {
+        callback_value
+    };
+    js_sys::Reflect::set(
+        &output,
+        &JsValue::from_str("isRowSelectable"),
+        &callback_value,
+    )?;
+    Ok(output)
+}
+
+#[wasm_bindgen]
+pub fn toggle_grid_row_selection_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: ToggleGridRowSelectionInput = from_js(input)?;
+    let change = toggle_grid_row_selection(
+        &mut input.state,
+        &mut input.all_rows,
+        &input.row_id,
+        &ToggleGridRowSelectionOptions {
+            multi_select: input.multi_select,
+            no_unselect: input.no_unselect,
+            can_be_invisible: input.can_be_invisible.unwrap_or(true),
+        },
+    );
+    to_js(&SelectionMutationResult {
+        state: input.state,
+        all_rows: input.all_rows,
+        change,
+    })
+}
+
+#[wasm_bindgen]
+pub fn shift_grid_row_selection_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: ShiftGridRowSelectionInput = from_js(input)?;
+    let change = shift_grid_row_selection(
+        &mut input.state,
+        &mut input.visible_row_cache,
+        &input.row_id,
+        &ShiftGridRowSelectionOptions {
+            multi_select: input.multi_select,
+        },
+    );
+    to_js(&SelectionMutationResult {
+        state: input.state,
+        all_rows: input.visible_row_cache,
+        change,
+    })
+}
+
+#[wasm_bindgen]
+pub fn select_all_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: SelectAllGridRowsInput = from_js(input)?;
+    let change = select_all_grid_rows(
+        &mut input.state,
+        &mut input.all_rows,
+        &SelectAllGridRowsOptions {
+            multi_select: input.multi_select,
+        },
+    );
+    to_js(&SelectionMutationResult {
+        state: input.state,
+        all_rows: input.all_rows,
+        change,
+    })
+}
+
+#[wasm_bindgen]
+pub fn select_all_visible_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: SelectAllGridRowsInput = from_js(input)?;
+    let change = select_all_visible_grid_rows(
+        &mut input.state,
+        &mut input.all_rows,
+        &SelectAllGridRowsOptions {
+            multi_select: input.multi_select,
+        },
+    );
+    to_js(&SelectionMutationResult {
+        state: input.state,
+        all_rows: input.all_rows,
+        change,
+    })
+}
+
+#[wasm_bindgen]
+pub fn clear_all_grid_selection_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: ClearAllGridSelectionInput = from_js(input)?;
+    let change = clear_all_grid_selection(&mut input.state, &mut input.all_rows);
+    to_js(&SelectionMutationResult {
+        state: input.state,
+        all_rows: input.all_rows,
+        change,
+    })
+}
+
+#[wasm_bindgen]
+pub fn find_grid_row_by_key_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: FindGridRowByKeyInput = from_js(input)?;
+    to_js(&find_grid_row_by_key(
+        &input.rows,
+        input.is_in_entity,
+        &input.key,
+        &input.comparator,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn reconcile_grid_selection_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: ReconcileGridSelectionInput = from_js(input)?;
+    reconcile_grid_selection(&mut input.state, &mut input.all_rows);
+    to_js(&SelectionReconcileResult {
+        state: input.state,
+        all_rows: input.all_rows,
+    })
+}
+
+#[wasm_bindgen]
+pub fn map_selected_rows_to_entities_js(rows: JsValue) -> Result<JsValue, JsValue> {
+    let rows: Vec<GridRow> = from_js(rows)?;
+    to_js(&map_selected_rows_to_entities(&rows))
+}
+
+// Row edit
+
+#[wasm_bindgen]
+pub fn create_grid_row_edit_state_js() -> Result<JsValue, JsValue> {
+    to_js(&create_grid_row_edit_state())
+}
+
+#[wasm_bindgen]
+pub fn mark_grid_row_dirty_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEditMutationInput = from_js(input)?;
+    let changed = mark_grid_row_dirty(&mut input.state, &mut input.row);
+    to_js(&RowEditMutationResult {
+        state: input.state,
+        row: input.row,
+        changed,
+    })
+}
+
+#[wasm_bindgen]
+pub fn mark_grid_row_clean_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEditMutationInput = from_js(input)?;
+    mark_grid_row_clean(&mut input.state, &mut input.row);
+    to_js(&RowEditMutationResult {
+        state: input.state,
+        row: input.row,
+        changed: true,
+    })
+}
+
+#[wasm_bindgen]
+pub fn mark_grid_row_saving_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEditMutationInput = from_js(input)?;
+    mark_grid_row_saving(&mut input.state, &mut input.row);
+    to_js(&RowEditMutationResult {
+        state: input.state,
+        row: input.row,
+        changed: true,
+    })
+}
+
+#[wasm_bindgen]
+pub fn mark_grid_row_error_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: RowEditMutationInput = from_js(input)?;
+    mark_grid_row_error(&mut input.state, &mut input.row);
+    to_js(&RowEditMutationResult {
+        state: input.state,
+        row: input.row,
+        changed: true,
+    })
+}
+
+#[wasm_bindgen]
+pub fn is_grid_row_edit_timer_enabled_js(wait_interval: JsValue) -> Result<bool, JsValue> {
+    let wait_interval: Option<i32> = from_js(wait_interval)?;
+    Ok(is_grid_row_edit_timer_enabled(wait_interval))
+}
+
+#[wasm_bindgen]
+pub fn resolve_grid_row_edit_wait_interval_js(input: JsValue) -> Result<i32, JsValue> {
+    let input: ResolveGridRowEditWaitIntervalInput = from_js(input)?;
+    Ok(resolve_grid_row_edit_wait_interval(input.wait_interval))
+}
+
+#[wasm_bindgen]
+pub fn collect_grid_row_entities_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: CollectGridRowEntitiesInput = from_js(input)?;
+    let ids = input.ids.into_iter().collect();
+    to_js(&collect_grid_row_entities(&input.rows, &ids))
+}
+
+// i18n
+
+#[wasm_bindgen]
+pub fn create_grid_i18n_service_js() -> Result<JsValue, JsValue> {
+    to_js(&create_grid_i18n_service())
+}
+
+#[wasm_bindgen]
+pub fn add_grid_i18n_locale_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: GridI18nAddLocaleInput = from_js(input)?;
+    add_grid_i18n_locale(&mut input.service, &input.lang, input.labels);
+    to_js(&GridI18nServiceResult {
+        service: input.service,
+    })
+}
+
+#[wasm_bindgen]
+pub fn get_grid_i18n_labels_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: GridI18nServiceLangInput = from_js(input)?;
+    to_js(&get_grid_i18n_labels(&input.service, &input.lang))
+}
+
+#[wasm_bindgen]
+pub fn set_grid_i18n_current_lang_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: GridI18nServiceLangInput = from_js(input)?;
+    set_grid_i18n_current_lang(&mut input.service, &input.lang);
+    to_js(&GridI18nServiceResult {
+        service: input.service,
+    })
+}
+
+#[wasm_bindgen]
+pub fn get_grid_i18n_current_lang_js(service: JsValue) -> Result<String, JsValue> {
+    let service: GridI18nService = from_js(service)?;
+    Ok(get_grid_i18n_current_lang(&service))
+}
+
+#[wasm_bindgen]
+pub fn get_grid_i18n_supported_languages_js(service: JsValue) -> Result<JsValue, JsValue> {
+    let service: GridI18nService = from_js(service)?;
+    to_js(&get_grid_i18n_supported_languages(&service))
+}
+
+#[wasm_bindgen]
+pub fn get_grid_i18n_current_labels_js(service: JsValue) -> Result<JsValue, JsValue> {
+    let service: GridI18nService = from_js(service)?;
+    to_js(&get_grid_i18n_current_labels(&service))
+}
+
+#[wasm_bindgen]
+pub fn resolve_labels_from_i18n_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: GridI18nResolveLabelsInput = from_js(input)?;
+    to_js(&resolve_labels_from_i18n(&input.service, input.overrides))
+}
+
+// Menus
+
+#[wasm_bindgen]
+pub fn build_grid_exporter_menu_items_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridExporterMenuItemsInput = from_js(input)?;
+    to_js(&build_grid_exporter_menu_items(
+        &input.options,
+        &input.labels,
+        &GridExporterMenuContext {
+            has_selection: input.has_selection,
+            include_pdf: input.include_pdf,
+            include_excel: input.include_excel,
+        },
+    ))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_importer_menu_items_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridImporterMenuItemsInput = from_js(input)?;
+    to_js(&build_grid_importer_menu_items(
+        &input.options,
+        &input.labels,
+    ))
+}
+
+#[wasm_bindgen]
+pub fn build_grid_row_edit_menu_items_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: BuildGridRowEditMenuItemsInput = from_js(input)?;
+    to_js(&build_grid_row_edit_menu_items(
+        &input.options,
+        &input.labels,
+        &GridRowEditMenuPredicates {
+            has_dirty_rows: input.has_dirty_rows,
+            has_error_rows: input.has_error_rows,
+        },
+    ))
 }
 
 // Viewmodel
 
 #[wasm_bindgen]
-pub fn resolve_grid_labels_js(overrides: JsValue) -> Result<JsValue, JsValue> {
-    if overrides.is_null() || overrides.is_undefined() {
-        return to_js(&resolve_grid_labels(None));
-    }
-
-    let overrides: GridLabels = from_js(overrides)?;
-    to_js(&resolve_grid_labels(Some(&overrides)))
+pub fn resolve_grid_labels_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ResolveGridLabelsInput = from_js(input)?;
+    to_js(&resolve_grid_labels(
+        &input.current_labels,
+        input.overrides.as_ref(),
+    ))
 }
 
 #[wasm_bindgen]

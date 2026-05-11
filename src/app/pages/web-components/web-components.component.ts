@@ -51,7 +51,7 @@ type DeclarativeGridConfig = {
   readonly id: string;
   readonly title: string;
   readonly emptyMessage: string;
-  readonly dataJson: string;
+  readonly dataJson?: string;
   readonly columnDefsJson: string;
   readonly groupingJson?: string;
   readonly rowHeight: number;
@@ -218,7 +218,6 @@ export class WebComponentsComponent {
     viewChild.required<ElementRef<WebComponentGridElement>>('demoGrid');
   private savedGridState: unknown = null;
   private readonly primaryData = createDemoData();
-  private readonly primaryDataJson = JSON.stringify(this.primaryData);
   private primaryGridApi: UiGridApi | null = null;
   private disposePrimaryVisibleRows: (() => void) | null = null;
   private disposePrimaryBenchmark: (() => void) | null = null;
@@ -351,7 +350,6 @@ export class WebComponentsComponent {
     id: 'ui-grid-web-components-primary',
     title: 'UI Grid Modernized (Web Component)',
     emptyMessage: 'No rows match the current filters.',
-    dataJson: this.primaryDataJson,
     columnDefsJson: this.primaryColumnDefsJson,
     groupingJson: JSON.stringify({ groupBy: ['status'] }),
     rowHeight: 48,
@@ -924,9 +922,11 @@ export class WebComponentsComponent {
     this.benchmarkResult.set(null);
     grid.options = {
       ...grid.options,
+      data: this.primaryData,
       benchmark: {
         iterations: 40,
       },
+      rowIdentity: (row) => String(row['id']),
       onRegisterApi: (api) => {
         this.primaryGridApi = api as UiGridApi;
         this.visibleRowCount.set(this.primaryGridApi.core.getVisibleRows().length);

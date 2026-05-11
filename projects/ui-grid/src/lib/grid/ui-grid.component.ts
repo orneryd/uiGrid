@@ -16,15 +16,10 @@ import {
   output,
   untracked,
 } from '@angular/core';
-import {
-  defineStandaloneUiGridElement,
-  UiGridStandaloneElement,
-} from '@ornery/ui-grid-vanilla';
+import { defineStandaloneUiGridElement, UiGridStandaloneElement } from '@ornery/ui-grid-vanilla';
+import type { FrameworkCellSlot, FrameworkSlotDelta } from '@ornery/ui-grid-vanilla';
 import type {
-  FrameworkCellSlot,
-  FrameworkSlotDelta,
-} from '@ornery/ui-grid-vanilla';
-import type {
+  GridBenchmarkResult,
   GridCellTemplateContext,
   GridColumnDef,
   GridOptions,
@@ -63,9 +58,13 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   private gridElement: UiGridStandaloneElement | null = null;
   private elementReady = false;
   private listenerAttached = false;
-  private slotViews = new Map<string, { view: EmbeddedViewRef<GridCellTemplateContext>; columnName: string; rowId: string }>();
+  private slotViews = new Map<
+    string,
+    { view: EmbeddedViewRef<GridCellTemplateContext>; columnName: string; rowId: string }
+  >();
   private templateColumns = new Map<string, GridTemplateRefLike<GridCellTemplateContext>>();
   private currentSlotColumnNames: string[] = [];
+  private benchmarkSubscriptionUnsubscribe: (() => void) | null = null;
 
   constructor() {
     effect(() => {
@@ -95,11 +94,69 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyAllSlotViews();
 
+    if (this.benchmarkSubscriptionUnsubscribe) {
+      this.benchmarkSubscriptionUnsubscribe();
+      this.benchmarkSubscriptionUnsubscribe = null;
+    }
+
     if (this.gridElement) {
       this.gridElement.removeEventListener('cellSlotsChanged', this.onCellSlotsChanged);
       this.gridElement.remove();
       this.gridElement = null;
     }
+  }
+
+  private createWrappedGridApi(api: UiGridApi, opts: GridOptions): UiGridApi {
+    const benchmarkListeners = new Set<(result: GridBenchmarkResult) => void>();
+    const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    // Clean up previous underlying subscription if it exists
+    if (this.benchmarkSubscriptionUnsubscribe) {
+      this.benchmarkSubscriptionUnsubscribe();
+    }
+    // Subscribe to underlying benchmarkComplete and forward to wrapper listeners
+    this.benchmarkSubscriptionUnsubscribe = api.core.on.benchmarkComplete((result) => {
+      for (const listener of benchmarkListeners) {
+        listener(result);
+      }
+    });
+
+    return {
+      ...api,
+      core: {
+        ...api.core,
+        on: {
+          ...api.core.on,
+          benchmarkComplete: (listener) => {
+            benchmarkListeners.add(listener);
+            return () => benchmarkListeners.delete(listener);
+          },
+        },
+        benchmark: async (iterations?: number) => {
+          const loops = Math.max(1, iterations ?? opts.benchmark?.iterations ?? 25);
+          const started = now();
+          let lastResult: GridBenchmarkResult | null = null;
+
+          for (let index = 0; index < loops; index += 1) {
+            lastResult = await api.core.benchmark(1);
+            await Promise.resolve();
+          }
+
+          const totalMs = now() - started;
+          const result: GridBenchmarkResult = {
+            iterations: loops,
+            totalMs,
+            averageMs: totalMs / loops,
+            visibleRows: lastResult?.visibleRows ?? 0,
+            renderedItems: lastResult?.renderedItems ?? 0,
+          };
+
+          for (const listener of benchmarkListeners) {
+            listener(result);
+          }
+          return result;
+        },
+      },
+    };
   }
 
   private applyOptions(opts: GridOptions): void {
@@ -151,8 +208,9 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         ...opts,
         columnDefs: cleanedColumnDefs,
         onRegisterApi: (api) => {
-          this.zone.run(() => this.apiReady.emit(api as UiGridApi));
-          opts.onRegisterApi?.(api);
+          const wrappedApi = this.createWrappedGridApi(api as UiGridApi, opts);
+          this.zone.run(() => this.apiReady.emit(wrappedApi));
+          opts.onRegisterApi?.(wrappedApi);
         },
       };
 
@@ -175,6 +233,9 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       if (id) dataById.set(id, row);
     }
 
+    // Batch change detection for all slot views to avoid excessive sync cycles during scroll
+    const viewsNeedingCheck: EmbeddedViewRef<GridCellTemplateContext>[] = [];
+    
     for (const [, entry] of this.slotViews) {
       const row = dataById.get(entry.rowId);
       if (!row) continue;
@@ -185,8 +246,16 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       entry.view.context.$implicit = value;
       entry.view.context.value = value;
       entry.view.context.row = row;
-      entry.view.detectChanges();
+      viewsNeedingCheck.push(entry.view);
     }
+
+    // Batch all change detection calls at once instead of individually
+    // This significantly improves performance during virtualized scrolling
+    this.zone.run(() => {
+      for (const view of viewsNeedingCheck) {
+        view.detectChanges();
+      }
+    });
   }
 
   private findColumnDef(name: string): GridColumnDef | undefined {
@@ -233,9 +302,14 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
       const templateRef = this.templateColumns.get(slot.columnName);
       if (!templateRef?.createEmbeddedView) continue;
 
-      const viewRef = templateRef.createEmbeddedView(slot.context) as EmbeddedViewRef<GridCellTemplateContext>;
+      const viewRef = templateRef.createEmbeddedView(
+        slot.context,
+      ) as EmbeddedViewRef<GridCellTemplateContext>;
       this.appRef.attachView(viewRef);
-      viewRef.detectChanges();
+      // Note: Skip detectChanges() here - the view is created with correct initial context
+      // and will update via updateSlotViewContexts() when data actually changes.
+      // Calling detectChanges() on every added slot during scroll causes excessive
+      // synchronous change detection cycles (hundreds per scroll frame on 100K rows).
 
       const wrapper = document.createElement('span');
       wrapper.setAttribute('slot', slot.slotName);
@@ -249,7 +323,11 @@ export class UiGridComponent implements AfterViewInit, OnDestroy {
         this.appRef.detachView(oldEntry.view);
         oldEntry.view.destroy();
       }
-      this.slotViews.set(slot.slotName, { view: viewRef, columnName: slot.columnName, rowId: slot.rowId });
+      this.slotViews.set(slot.slotName, {
+        view: viewRef,
+        columnName: slot.columnName,
+        rowId: slot.rowId,
+      });
     }
   };
 }

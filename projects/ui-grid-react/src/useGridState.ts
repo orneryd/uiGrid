@@ -316,7 +316,7 @@ export interface UseGridStateResult {
   nextPage: () => void;
   previousPage: () => void;
   onPageSizeChange: (value: string) => void;
-  runBenchmark: (iterations?: number) => GridBenchmarkResult;
+  runBenchmark: (iterations?: number) => Promise<GridBenchmarkResult>;
   exportCsv: () => void;
   onViewportScroll: (startIndex: number) => void;
 }
@@ -1070,11 +1070,19 @@ export function useGridState(
     [focusRenderedCell, isCellEditable, shouldEditOnFocusFn, startCellEditFn],
   );
 
-  const runBenchmarkFn = useCallback((iterations?: number): GridBenchmarkResult => {
+  const runBenchmarkFn = useCallback(async (iterations?: number): Promise<GridBenchmarkResult> => {
     const safeIterations = resolveBenchmarkIterations(
       iterations,
       optionsRef.current.benchmark?.iterations,
     );
+    const nextFrame = () =>
+      new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame === 'undefined') {
+          setTimeout(resolve, 0);
+          return;
+        }
+        requestAnimationFrame(() => resolve());
+      });
     const startedAt = performance.now();
     let lastResult = defaultGridEngine.buildPipeline({
       options: optionsRef.current,
@@ -1118,6 +1126,7 @@ export function useGridState(
     };
 
     setBenchmarkResult(result);
+    await nextFrame();
     raiseGridBenchmarkComplete(gridApiRef.current!, result);
     return result;
   }, []);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type {
+  GridBenchmarkResult,
   GridOptions,
   GridCellTemplateContext,
   GridRecord,
@@ -46,6 +47,36 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
   const currentSlotColumnsRef = React.useRef<string[]>([]);
+  const wrapperRenderVersionRef = React.useRef(0);
+  const scheduledWrapperRenderVersionRef = React.useRef(0);
+  const wrapperRenderWaitersRef = React.useRef<Array<{ target: number; resolve: () => void }>>([]);
+  const benchmarkSubscriptionUnsubscribeRef = React.useRef<(() => void) | null>(null);
+
+  React.useLayoutEffect(() => {
+    wrapperRenderVersionRef.current += 1;
+    const ready = wrapperRenderWaitersRef.current.filter(
+      (waiter) => waiter.target <= wrapperRenderVersionRef.current,
+    );
+    if (ready.length === 0) {
+      return;
+    }
+    wrapperRenderWaitersRef.current = wrapperRenderWaitersRef.current.filter(
+      (waiter) => waiter.target > wrapperRenderVersionRef.current,
+    );
+    for (const waiter of ready) {
+      waiter.resolve();
+    }
+  });
+
+  // Clean up underlying benchmark subscription if it's still active
+  React.useEffect(() => {
+    return () => {
+      if (benchmarkSubscriptionUnsubscribeRef.current) {
+        benchmarkSubscriptionUnsubscribeRef.current();
+        benchmarkSubscriptionUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   // Mount the vanilla element once
   React.useEffect(() => {
@@ -77,6 +108,10 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
 
     return () => {
       disposed = true;
+      if (benchmarkSubscriptionUnsubscribeRef.current) {
+        benchmarkSubscriptionUnsubscribeRef.current();
+        benchmarkSubscriptionUnsubscribeRef.current = null;
+      }
       if (el) {
         el.removeEventListener('cellSlotsChanged', handleCellSlotsChanged);
         el.remove();
@@ -115,6 +150,7 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
       const value = col?.field ? getNestedValue(row, col.field) : row[entry.columnName];
 
       if (entry.context.value !== value || entry.context.row !== row) {
+        markWrapperRenderScheduled();
         nextSlots.set(key, {
           ...entry,
           context: { ...entry.context, $implicit: value, value, row },
@@ -126,6 +162,77 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
     if (changed) setSlots(nextSlots);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.data]);
+
+  function markWrapperRenderScheduled() {
+    scheduledWrapperRenderVersionRef.current = Math.max(
+      scheduledWrapperRenderVersionRef.current,
+      wrapperRenderVersionRef.current + 1,
+    );
+  }
+
+  function waitForScheduledWrapperRender(): Promise<void> {
+    const target = scheduledWrapperRenderVersionRef.current;
+    if (target <= wrapperRenderVersionRef.current) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      wrapperRenderWaitersRef.current.push({ target, resolve });
+    });
+  }
+
+  function createWrappedGridApi(api: UiGridApi, opts: GridOptions): UiGridApi {
+    const benchmarkListeners = new Set<(result: GridBenchmarkResult) => void>();
+    const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    // Clean up previous underlying subscription if it exists
+    if (benchmarkSubscriptionUnsubscribeRef.current) {
+      benchmarkSubscriptionUnsubscribeRef.current();
+    }
+    // Subscribe to underlying benchmarkComplete and forward to wrapper listeners
+    benchmarkSubscriptionUnsubscribeRef.current = api.core.on.benchmarkComplete((result) => {
+      for (const listener of benchmarkListeners) {
+        listener(result);
+      }
+    });
+
+    return {
+      ...api,
+      core: {
+        ...api.core,
+        on: {
+          ...api.core.on,
+          benchmarkComplete: (listener) => {
+            benchmarkListeners.add(listener);
+            return () => benchmarkListeners.delete(listener);
+          },
+        },
+        benchmark: async (iterations?: number) => {
+          const loops = Math.max(1, iterations ?? opts.benchmark?.iterations ?? 25);
+          const started = now();
+          let lastResult: GridBenchmarkResult | null = null;
+
+          for (let index = 0; index < loops; index += 1) {
+            lastResult = await api.core.benchmark(1);
+            await waitForScheduledWrapperRender();
+          }
+
+          const totalMs = now() - started;
+
+          const result: GridBenchmarkResult = {
+            iterations: loops,
+            totalMs,
+            averageMs: totalMs / loops,
+            visibleRows: lastResult?.visibleRows ?? 0,
+            renderedItems: lastResult?.renderedItems ?? 0,
+          };
+
+          for (const listener of benchmarkListeners) {
+            listener(result);
+          }
+          return result;
+        },
+      },
+    };
+  }
 
   function applyOptions(el: UiGridStandaloneElement, opts: GridOptions) {
     const renderers = cellRenderersRef.current;
@@ -142,8 +249,9 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
     const wrappedOptions: GridOptions = {
       ...opts,
       onRegisterApi: (api) => {
-        onRegisterApiRef.current?.(api as UiGridApi);
-        opts.onRegisterApi?.(api);
+        const wrappedApi = createWrappedGridApi(api as UiGridApi, opts);
+        onRegisterApiRef.current?.(wrappedApi);
+        opts.onRegisterApi?.(wrappedApi);
       },
     };
 
@@ -151,8 +259,7 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
 
     const prev = currentSlotColumnsRef.current;
     const columnsChanged =
-      cellSlotColumns.length !== prev.length ||
-      cellSlotColumns.some((name, i) => name !== prev[i]);
+      cellSlotColumns.length !== prev.length || cellSlotColumns.some((name, i) => name !== prev[i]);
 
     if (columnsChanged) {
       currentSlotColumnsRef.current = cellSlotColumns;
@@ -164,6 +271,9 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
     const detail = (event as CustomEvent<FrameworkSlotDelta<FrameworkCellSlot>>).detail;
     const el = elementRef.current;
     if (!el) return;
+    if (detail.removed.length > 0 || detail.added.length > 0) {
+      markWrapperRenderScheduled();
+    }
 
     setSlots((prev) => {
       const next = new Map(prev);
@@ -212,7 +322,11 @@ export function UiGrid({ options, onRegisterApi, cellRenderers, className }: UiG
   }
 
   return (
-    <div ref={containerRef} className={className} style={{ display: 'block', height: '100%', minHeight: 0 }}>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ display: 'block', height: '100%', minHeight: 0 }}
+    >
       {portals}
     </div>
   );

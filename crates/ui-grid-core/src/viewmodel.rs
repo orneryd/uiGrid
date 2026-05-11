@@ -1,10 +1,26 @@
+use serde_json::{Map, Value};
+
 use crate::{
     constants::SortDirection,
     models::{GridColumnDef, GridIcon, GridIcons, GridLabels, GridOptions, GridRow},
 };
 
-pub fn resolve_grid_labels(overrides: Option<&GridLabels>) -> GridLabels {
-    overrides.cloned().unwrap_or_default()
+pub fn resolve_grid_labels(
+    current_labels: &GridLabels,
+    overrides: Option<&Map<String, Value>>,
+) -> GridLabels {
+    let mut value = serde_json::to_value(current_labels).expect("grid labels serialize");
+    let Value::Object(ref mut object) = value else {
+        unreachable!("grid labels serialize as object")
+    };
+
+    if let Some(overrides) = overrides {
+        for (key, override_value) in overrides {
+            object.insert(key.clone(), override_value.clone());
+        }
+    }
+
+    serde_json::from_value(value).expect("merged grid labels deserialize")
 }
 
 pub fn resolve_grid_icons(overrides: Option<&GridIcons>) -> GridIcons {
@@ -20,7 +36,7 @@ pub fn is_grid_grouping_enabled(options: &GridOptions) -> bool {
 }
 
 pub fn can_grid_expand_rows(options: &GridOptions) -> bool {
-    options.enable_expandable
+    options.enable_expandable && options.has_expandable_row_template
 }
 
 pub fn is_grid_pagination_enabled(options: &GridOptions) -> bool {
@@ -257,4 +273,42 @@ pub fn grid_tree_toggle_label_for_row(
 
 pub fn grid_expand_toggle_label_for_row(row: &GridRow, labels: &GridLabels) -> String {
     grid_expand_toggle_label(row.expanded, labels)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn resolve_grid_labels_merges_overrides_on_top_of_current_labels() {
+        let current = GridLabels {
+            sort_default: "Ordenar".to_string(),
+            ..GridLabels::default()
+        };
+        let overrides = serde_json::from_value(json!({ "groupColumn": "Custom Group" })).unwrap();
+
+        let resolved = resolve_grid_labels(&current, Some(&overrides));
+
+        assert_eq!(resolved.sort_default, "Ordenar");
+        assert_eq!(resolved.group_column, "Custom Group");
+    }
+
+    #[test]
+    fn can_grid_expand_rows_requires_template_presence() {
+        let with_template = GridOptions {
+            enable_expandable: true,
+            has_expandable_row_template: true,
+            ..GridOptions::default()
+        };
+        let without_template = GridOptions {
+            enable_expandable: true,
+            has_expandable_row_template: false,
+            ..GridOptions::default()
+        };
+
+        assert!(can_grid_expand_rows(&with_template));
+        assert!(!can_grid_expand_rows(&without_template));
+    }
 }

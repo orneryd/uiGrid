@@ -1,5 +1,6 @@
 import {
   SORT_DIRECTIONS,
+  activeGridEngineBackend,
   beginGridCellEditCommand,
   buildGridRows,
   buildGridCellContext,
@@ -15,6 +16,7 @@ import {
   defaultGridEngine,
   expandAllGridRowsCommand,
   expandAllGridTreeRowsCommand,
+  enableUiGridWasmEngine,
   findGridRowById as coreFindGridRowById,
   formatGridCellDisplayValue,
   getCellValue,
@@ -121,6 +123,7 @@ import {
   type DisplayItem,
   type GridCellPosition,
   type GridColumnDef,
+  type GridBenchmarkResult,
   type GridRowColumn,
   type GridLabels,
   type GridOptions,
@@ -215,7 +218,10 @@ const DEFAULT_COL_MIN_WIDTH = 176;
  * 3. Flex columns (*, 1fr, minmax): divide remaining space equally.
  * 4. Leftover/excess pixels distributed 1px at a time for pixel-perfect fit.
  */
-function buildGridTemplateColumns(columns: readonly GridColumnDef[], viewportWidth?: number): string {
+function buildGridTemplateColumns(
+  columns: readonly GridColumnDef[],
+  viewportWidth?: number,
+): string {
   if (!viewportWidth || viewportWidth <= 0) {
     return columns.map((column) => gridColumnWidth(column)).join(' ');
   }
@@ -339,6 +345,8 @@ export class VanillaGridController {
   private labels: GridLabels;
   private visibleColumns: GridColumnDef[] = [];
   private apiRegistered = false;
+  private disposed = false;
+  private wasmEngineInitRequested = false;
 
   private readonly subscribers = new Set<GridControllerSubscriber>();
 
@@ -355,7 +363,9 @@ export class VanillaGridController {
     this.groupByColumns = options.grouping?.groupBy ? [...options.grouping.groupBy] : [];
     this.lastOptionsGroupBy = options.grouping?.groupBy ? [...options.grouping.groupBy] : undefined;
     this.pinnedColumns = buildInitialPinnedState(options.columnDefs);
-    const declaresPin = options.columnDefs.some((col) => col.pinnedLeft === true || col.pinnedRight === true);
+    const declaresPin = options.columnDefs.some(
+      (col) => col.pinnedLeft === true || col.pinnedRight === true,
+    );
     this.lastOptionsPinnedState = declaresPin ? { ...this.pinnedColumns } : undefined;
     this.lastOptionsInfiniteScrollUp = options.infiniteScrollUp;
     this.lastOptionsInfiniteScrollDown = options.infiniteScrollDown;
@@ -396,12 +406,14 @@ export class VanillaGridController {
       exportCsv: (rowType, colType) => this.exportCsv(rowType, colType),
       buildCsv: (rowType, colType) => this.buildCsv(rowType, colType),
       pdfExport: (rowType, colType) => this.exportPdf(rowType, colType),
-      buildPdfDocDefinition: (rowType, colType) =>
-        this.buildPdfDocDefinition(rowType, colType),
+      buildPdfDocDefinition: (rowType, colType) => this.buildPdfDocDefinition(rowType, colType),
       excelExport: (rowType, colType) => this.exportExcel(rowType, colType),
       buildExcelSheetData: (rowType, colType) => this.buildExcelSheetData(rowType, colType),
       getExporterMenuItems: () => this.buildExporterMenuItems(),
-      getExporterOptions: () => ({ ...this.exporterOverrides, ...resolveGridExporterOptions(this.options) }),
+      getExporterOptions: () => ({
+        ...this.exporterOverrides,
+        ...resolveGridExporterOptions(this.options),
+      }),
       setExporterOptions: (overrides) => {
         this.exporterOverrides = { ...this.exporterOverrides, ...overrides };
       },
@@ -491,8 +503,7 @@ export class VanillaGridController {
       infiniteScrollSetDirections: (scrollUp, scrollDown) =>
         this.infiniteScrollSetDirections(scrollUp, scrollDown),
       // Row-edit bindings — port of ui.grid.rowEdit public API.
-      rowEditSetSavePromise: (rowEntity, promise) =>
-        this.rowEditSetSavePromise(rowEntity, promise),
+      rowEditSetSavePromise: (rowEntity, promise) => this.rowEditSetSavePromise(rowEntity, promise),
       rowEditGetDirtyRows: () => this.rowEditGetDirtyRows(),
       rowEditGetErrorRows: () => this.rowEditGetErrorRows(),
       rowEditFlushDirtyRows: () => this.rowEditFlushDirtyRows(),
@@ -584,6 +595,7 @@ export class VanillaGridController {
    * subscriptions). */
   private disposeLanguageListener: (() => void) | null = null;
   dispose(): void {
+    this.disposed = true;
     this.disposeLanguageListener?.();
     this.disposeLanguageListener = null;
     this.subscribers.clear();
@@ -621,7 +633,8 @@ export class VanillaGridController {
     if (options.grouping?.groupBy !== undefined) {
       const incoming = options.grouping.groupBy;
       const prev = this.lastOptionsGroupBy;
-      const changed = !prev || prev.length !== incoming.length || prev.some((col, i) => col !== incoming[i]);
+      const changed =
+        !prev || prev.length !== incoming.length || prev.some((col, i) => col !== incoming[i]);
       if (changed) {
         this.groupByColumns = [...incoming];
         this.lastOptionsGroupBy = [...incoming];
@@ -651,8 +664,12 @@ export class VanillaGridController {
     // Re-seed infinite-scroll directions only when the values structurally
     // changed from the last options pass.
     if (options.infiniteScrollUp !== undefined || options.infiniteScrollDown !== undefined) {
-      const upChanged = options.infiniteScrollUp !== undefined && options.infiniteScrollUp !== this.lastOptionsInfiniteScrollUp;
-      const downChanged = options.infiniteScrollDown !== undefined && options.infiniteScrollDown !== this.lastOptionsInfiniteScrollDown;
+      const upChanged =
+        options.infiniteScrollUp !== undefined &&
+        options.infiniteScrollUp !== this.lastOptionsInfiniteScrollUp;
+      const downChanged =
+        options.infiniteScrollDown !== undefined &&
+        options.infiniteScrollDown !== this.lastOptionsInfiniteScrollDown;
       if (upChanged || downChanged) {
         this.infiniteScrollState = setInfiniteScrollDirectionsState(
           this.infiniteScrollState,
@@ -1039,10 +1056,7 @@ export class VanillaGridController {
   // re-renders with the updated `isSelected` / `isFocused` flags.
 
   /** Internal: run a core selection mutation, raise events, trigger a render. */
-  private applySelectionChange(
-    apply: () => { changed: GridRow[] },
-    evt?: Event | null,
-  ): void {
+  private applySelectionChange(apply: () => { changed: GridRow[] }, evt?: Event | null): void {
     const { changed } = apply();
     if (changed.length === 0) {
       return;
@@ -1329,10 +1343,7 @@ export class VanillaGridController {
 
   /** Raise viewPortKeyDown / viewPortKeyPress on behalf of the element.
    * Element gates this with `options.keyDownOverrides`. */
-  raiseCellNavKeyEvent(
-    type: 'keydown' | 'keypress',
-    event: KeyboardEvent,
-  ): void {
+  raiseCellNavKeyEvent(type: 'keydown' | 'keypress', event: KeyboardEvent): void {
     const rowCol = this.resolveCellNavRowCol(this.cellNavLastRowCol);
     if (type === 'keydown') this.gridApi.cellNav.raise.viewPortKeyDown(event, rowCol);
     else this.gridApi.cellNav.raise.viewPortKeyPress(event, rowCol);
@@ -1388,8 +1399,11 @@ export class VanillaGridController {
 
   /** Element registers its scroll-and-focus handler here so the API
    * binding above can delegate DOM work. Controller stays DOM-free. */
-  private cellNavScrollRequest: ((rowId: string | null, columnName: string | null) => void) | null = null;
-  setCellNavScrollHandler(handler: ((rowId: string | null, columnName: string | null) => void) | null): void {
+  private cellNavScrollRequest: ((rowId: string | null, columnName: string | null) => void) | null =
+    null;
+  setCellNavScrollHandler(
+    handler: ((rowId: string | null, columnName: string | null) => void) | null,
+  ): void {
     this.cellNavScrollRequest = handler;
   }
 
@@ -1437,10 +1451,7 @@ export class VanillaGridController {
   }
 
   private infiniteScrollResetScroll(scrollUp?: boolean, scrollDown?: boolean): void {
-    this.infiniteScrollState = resetInfiniteScrollState(
-      scrollUp ?? false,
-      scrollDown ?? true,
-    );
+    this.infiniteScrollState = resetInfiniteScrollState(scrollUp ?? false, scrollDown ?? true);
     this.infiniteScrollScrollToTopRequest?.();
   }
 
@@ -1484,6 +1495,16 @@ export class VanillaGridController {
     this.infiniteScrollScrollToTopRequest = handler;
   }
 
+  /** Element-owned render benchmark. When present, `core.benchmark()`
+   * measures the actual render path instead of the controller-only
+   * pipeline builder. */
+  private benchmarkRequest: ((iterations?: number) => Promise<GridBenchmarkResult>) | null = null;
+  setBenchmarkHandler(
+    handler: ((iterations?: number) => Promise<GridBenchmarkResult>) | null,
+  ): void {
+    this.benchmarkRequest = handler;
+  }
+
   getInfiniteScrollState(): Readonly<GridInfiniteScrollState> {
     return this.infiniteScrollState;
   }
@@ -1513,9 +1534,7 @@ export class VanillaGridController {
   buildTemplateColumnsWithOverride(columnName: string, widthPx: number): string {
     const widthStr = `${Math.max(88, Math.round(widthPx))}px`;
     return buildGridTemplateColumns(
-      this.visibleColumns.map((c) =>
-        c.name === columnName ? { ...c, width: widthStr } : c,
-      ),
+      this.visibleColumns.map((c) => (c.name === columnName ? { ...c, width: widthStr } : c)),
       this.viewportWidth,
     );
   }
@@ -1684,7 +1703,7 @@ export class VanillaGridController {
     const saveScroll = opts.saveScroll === true;
     const saveFocus = saveScroll ? false : opts.saveFocus !== false;
     void saveVisible; // Visible column state is derived from columnOrder + defs;
-                     // kept as an opt-flag for forward compat.
+    // kept as an opt-flag for forward compat.
 
     const state: GridSaveState = {};
     if (saveSort) state.sortState = { ...this.sortState };
@@ -1735,7 +1754,8 @@ export class VanillaGridController {
     if (state.collapsedGroups !== undefined) this.collapsedGroups = { ...state.collapsedGroups };
     if (state.pinnedColumns !== undefined) this.pinnedColumns = { ...state.pinnedColumns };
     if (state.columnOrder !== undefined) this.columnOrder = [...state.columnOrder];
-    if (state.columnWidthOverrides !== undefined) this.columnWidthOverrides = { ...state.columnWidthOverrides };
+    if (state.columnWidthOverrides !== undefined)
+      this.columnWidthOverrides = { ...state.columnWidthOverrides };
     if (state.currentPage !== undefined) this.currentPage = state.currentPage;
     if (state.pageSize !== undefined) this.pageSize = state.pageSize;
     if (state.expandedRows !== undefined) this.expandedRows = { ...state.expandedRows };
@@ -1781,6 +1801,8 @@ export class VanillaGridController {
   }
 
   private refresh(): void {
+    this.maybeEnableWasmEngine();
+
     const orderedColumns = orderVisibleColumns(this.options.columnDefs, this.columnOrder);
     const applyWidthOverrides = (columns: GridColumnDef[]): GridColumnDef[] =>
       columns.map((col) => {
@@ -1865,6 +1887,23 @@ export class VanillaGridController {
     }
 
     this.emit();
+  }
+
+  private maybeEnableWasmEngine(): void {
+    if (this.wasmEngineInitRequested || activeGridEngineBackend() === 'rust-wasm') {
+      return;
+    }
+
+    this.wasmEngineInitRequested = true;
+    void enableUiGridWasmEngine()
+      .then(() => {
+        if (!this.disposed) {
+          this.refresh();
+        }
+      })
+      .catch(() => {
+        this.wasmEngineInitRequested = false;
+      });
   }
 
   private emit(): void {
@@ -1975,37 +2014,43 @@ export class VanillaGridController {
     this.refresh();
   }
 
-  private benchmark(iterations?: number) {
+  private async benchmark(iterations?: number): Promise<GridBenchmarkResult> {
     const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
-    const loops = Math.max(1, iterations ?? this.options.benchmark?.iterations ?? 25);
-    const started = now();
-    let lastResult = this.pipeline;
+    let result: GridBenchmarkResult;
 
-    for (let index = 0; index < loops; index += 1) {
-      lastResult = defaultGridEngine.buildPipeline({
-        options: this.options,
-        columns: this.visibleColumns,
-        activeFilters: this.activeFilters,
-        sortState: this.sortState,
-        groupByColumns: this.groupByColumns,
-        collapsedGroups: this.collapsedGroups,
-        hiddenRowReasons: this.hiddenRowReasons,
-        expandedRows: this.expandedRows,
-        expandedTreeRows: this.expandedTreeRows,
-        currentPage: this.currentPage,
-        pageSize: this.pageSize,
-        rowSize: this.getRowSize(),
-      });
+    if (this.benchmarkRequest) {
+      result = await this.benchmarkRequest(iterations);
+    } else {
+      const loops = Math.max(1, iterations ?? this.options.benchmark?.iterations ?? 25);
+      const started = now();
+      let lastResult = this.pipeline;
+
+      for (let index = 0; index < loops; index += 1) {
+        lastResult = defaultGridEngine.buildPipeline({
+          options: this.options,
+          columns: this.visibleColumns,
+          activeFilters: this.activeFilters,
+          sortState: this.sortState,
+          groupByColumns: this.groupByColumns,
+          collapsedGroups: this.collapsedGroups,
+          hiddenRowReasons: this.hiddenRowReasons,
+          expandedRows: this.expandedRows,
+          expandedTreeRows: this.expandedTreeRows,
+          currentPage: this.currentPage,
+          pageSize: this.pageSize,
+          rowSize: this.getRowSize(),
+        });
+      }
+
+      const elapsedMs = now() - started;
+      result = {
+        iterations: loops,
+        totalMs: elapsedMs,
+        averageMs: elapsedMs / loops,
+        visibleRows: lastResult.visibleRows.length,
+        renderedItems: lastResult.displayItems.length,
+      };
     }
-
-    const elapsedMs = now() - started;
-    const result = {
-      iterations: loops,
-      totalMs: elapsedMs,
-      averageMs: elapsedMs / loops,
-      visibleRows: lastResult.visibleRows.length,
-      renderedItems: lastResult.displayItems.length,
-    };
 
     this.gridApi.core.raise.benchmarkComplete(result);
     return result;
@@ -2074,18 +2119,21 @@ export class VanillaGridController {
     // present, open the generated PDF the same way the old module did;
     // when missing, just return the doc definition so the caller can
     // render it themselves. This mirrors `uiGridExporterService.pdfExport`.
-    const win = typeof window !== 'undefined' ? (window as typeof window & {
-      pdfMake?: { createPdf: (doc: GridExporterPdfDocDefinition) => { open: () => void; download: (filename: string) => void } };
-    }) : undefined;
+    const win =
+      typeof window !== 'undefined'
+        ? (window as typeof window & {
+            pdfMake?: {
+              createPdf: (doc: GridExporterPdfDocDefinition) => {
+                open: () => void;
+                download: (filename: string) => void;
+              };
+            };
+          })
+        : undefined;
     if (win?.pdfMake) {
       const resolved = this.resolveExporterOptions();
       const pdfOpts = resolveGridExporterPdfOptions(this.options);
-      const filename = resolveExporterFilename(
-        pdfOpts.filename,
-        'download.pdf',
-        rowType,
-        colType,
-      );
+      const filename = resolveExporterFilename(pdfOpts.filename, 'download.pdf', rowType, colType);
       const pdf = win.pdfMake.createPdf(doc);
       // Prefer download when the consumer supplied a filename; otherwise
       // fall back to .open() which pops the pdf in a new browser tab.
@@ -2104,7 +2152,12 @@ export class VanillaGridController {
   ): GridExporterExcelSheetData {
     const exporterOptions = this.resolveExporterOptions();
     const columns = colType === 'all' ? this.options.columnDefs : this.visibleColumns;
-    return buildGridExcelSheetData(columns, this.exporterRowsFor(rowType), exporterOptions, colType);
+    return buildGridExcelSheetData(
+      columns,
+      this.exporterRowsFor(rowType),
+      exporterOptions,
+      colType,
+    );
   }
 
   private exportExcel(
@@ -2115,21 +2168,27 @@ export class VanillaGridController {
     // ExcelBuilder is an optional global (consumers load it separately).
     // When present, produce + download the xlsx the same way the old module
     // did; when missing, just return the raw sheet data.
-    const win = typeof window !== 'undefined' ? (window as typeof window & {
-      ExcelBuilder?: {
-        Worksheet: new (config: { name: string }) => { setData: (data: unknown) => void };
-        Workbook: new () => { addWorksheet: (sheet: unknown) => void };
-        Builder: { createFile: (workbook: unknown, options: { type: 'blob' }) => Promise<Blob> };
-      };
-    }) : undefined;
+    const win =
+      typeof window !== 'undefined'
+        ? (window as typeof window & {
+            ExcelBuilder?: {
+              Worksheet: new (config: { name: string }) => { setData: (data: unknown) => void };
+              Workbook: new () => { addWorksheet: (sheet: unknown) => void };
+              Builder: {
+                createFile: (workbook: unknown, options: { type: 'blob' }) => Promise<Blob>;
+              };
+            };
+          })
+        : undefined;
     const ExcelBuilder = win?.ExcelBuilder;
     if (!ExcelBuilder) {
       return sheetData;
     }
     const excelOptions = resolveGridExporterExcelOptions(this.options);
-    const sheetName = typeof excelOptions.sheetName === 'function'
-      ? excelOptions.sheetName(rowType, colType)
-      : (excelOptions.sheetName ?? 'Sheet1');
+    const sheetName =
+      typeof excelOptions.sheetName === 'function'
+        ? excelOptions.sheetName(rowType, colType)
+        : (excelOptions.sheetName ?? 'Sheet1');
     const filename = sanitizeDownloadFilename(
       resolveExporterFilename(excelOptions.filename, 'download.xlsx', rowType, colType),
     );
@@ -2186,11 +2245,7 @@ export class VanillaGridController {
   }
 
   private async validateGetInvalidRows(): Promise<GridRecord[]> {
-    return validateAllGridRows(
-      this.options.data,
-      this.options.columnDefs,
-      this.validatorRegistry,
-    );
+    return validateAllGridRows(this.options.data, this.options.columnDefs, this.validatorRegistry);
   }
 
   /** Test hook — exposes the validator registry so consumers can inspect or
@@ -2247,7 +2302,12 @@ export class VanillaGridController {
     // the caller didn't force JSON, fall through to CSV. The old module
     // decided purely based on MIME type; `importText` is a newer entry
     // point we provide for drag/drop flows.
-    const asJson = type === 'csv' ? null : parseGridImporterJson(text, { errorCallback: type === 'json' ? opts.errorCallback : undefined });
+    const asJson =
+      type === 'csv'
+        ? null
+        : parseGridImporterJson(text, {
+            errorCallback: type === 'json' ? opts.errorCallback : undefined,
+          });
     if (asJson && asJson.length > 0) {
       const objects = buildGridImporterObjectsFromJson(asJson, opts);
       this.importerDispatchObjects(objects);
@@ -2320,11 +2380,9 @@ export class VanillaGridController {
   /** Menu items the importer contributes. Just the single "Import"
    * entry when the feature is enabled; returns an empty array otherwise. */
   private buildImporterMenuItems(): GridMenuItem[] {
-    return buildGridImporterMenuItems(
-      this.options,
-      this.labels,
-      { importAFile: () => this.importerRequestFile() },
-    );
+    return buildGridImporterMenuItems(this.options, this.labels, {
+      importAFile: () => this.importerRequestFile(),
+    });
   }
 
   /** Menu items row-edit contributes: "Save changes" + "Retry errored
@@ -2354,15 +2412,11 @@ export class VanillaGridController {
   }
 
   private rowEditGetDirtyRows(): GridRow[] {
-    return this.pipeline.visibleRows.filter((row) =>
-      this.rowEditState.dirtyRowIds.has(row.id),
-    );
+    return this.pipeline.visibleRows.filter((row) => this.rowEditState.dirtyRowIds.has(row.id));
   }
 
   private rowEditGetErrorRows(): GridRow[] {
-    return this.pipeline.visibleRows.filter((row) =>
-      this.rowEditState.errorRowIds.has(row.id),
-    );
+    return this.pipeline.visibleRows.filter((row) => this.rowEditState.errorRowIds.has(row.id));
   }
 
   private rowEditFlushDirtyRows(): Promise<void> {
@@ -2437,8 +2491,7 @@ export class VanillaGridController {
     markGridRowSaving(this.rowEditState, row);
     this.rowEditSavePromiseOverrides.delete(row.id);
     this.gridApi.rowEdit.raise.saveRow(row.entity);
-    const savePromise =
-      this.rowEditSavePromiseOverrides.get(row.id) ?? Promise.resolve();
+    const savePromise = this.rowEditSavePromiseOverrides.get(row.id) ?? Promise.resolve();
     this.rowEditState.savePromises.set(row.id, savePromise);
     this.emit();
     return savePromise

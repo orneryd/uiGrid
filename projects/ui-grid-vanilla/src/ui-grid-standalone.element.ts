@@ -692,9 +692,56 @@ export class UiGridStandaloneElement extends HTMLElement {
       cancelAnimationFrame(this.scrollFrame);
       this.scrollFrame = null;
     }
+    this.controller?.setBenchmarkHandler(null);
     // Emit `removed` events for every framework-rendered slot so wrappers
     // can destroy their views.
     this.frameworkSlots.flushRemovals();
+  }
+
+  private benchmarkRender(iterations?: number) {
+    const controller = this.controller;
+    const snapshot = this.snapshot;
+    if (!controller || !snapshot) {
+      return Promise.resolve({
+        iterations: 0,
+        totalMs: 0,
+        averageMs: 0,
+        visibleRows: 0,
+        renderedItems: 0,
+      });
+    }
+
+    const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    const nextFrame = () =>
+      new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame === 'undefined') {
+          setTimeout(resolve, 0);
+          return;
+        }
+        requestAnimationFrame(() => resolve());
+      });
+    const loops = Math.max(1, iterations ?? controller.getOptions().benchmark?.iterations ?? 25);
+    return (async () => {
+      const started = now();
+
+      for (let index = 0; index < loops; index += 1) {
+        this.render();
+        await nextFrame();
+      }
+
+      const currentSnapshot = this.snapshot ?? snapshot;
+      const totalMs = now() - started;
+      const result = {
+        iterations: loops,
+        totalMs,
+        averageMs: totalMs / loops,
+        visibleRows: currentSnapshot.pipeline.visibleRows.length,
+        renderedItems: currentSnapshot.pipeline.displayItems.length,
+      };
+
+      controller.gridApi.core.raise.benchmarkComplete(result);
+      return result;
+    })();
   }
 
   /** @internal */
@@ -709,6 +756,7 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */
   ensureController(options: VanillaGridOptions): void {
     if (this.controller) {
+      this.controller.setBenchmarkHandler((iterations) => this.benchmarkRender(iterations));
       if (this.clientWidth > 0) {
         this.controller.setViewportWidth(this.clientWidth);
       }
@@ -717,6 +765,7 @@ export class UiGridStandaloneElement extends HTMLElement {
     }
 
     this.controller = createVanillaGridController(options);
+    this.controller.setBenchmarkHandler((iterations) => this.benchmarkRender(iterations));
     if (this.clientWidth > 0) {
       this.controller.setViewportWidth(this.clientWidth);
     }

@@ -45,6 +45,10 @@ function buildGridRowsCached(context: BuildGridPipelineContext): GridRow[] {
   return rows;
 }
 
+export function getCachedGridPipelineRows(context: BuildGridPipelineContext): GridRow[] {
+  return buildGridRowsCached(context);
+}
+
 export function clearGridPipelineRowsCache(): void {
   rowsCache = null;
 }

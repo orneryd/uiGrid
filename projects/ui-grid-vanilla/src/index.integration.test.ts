@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as core from '@ornery/ui-grid-core';
 import {
   SORT_DIRECTIONS,
   activeGridEngineBackend,
+  buildGridRows,
   clearRustWasmGridEngine,
 } from '@ornery/ui-grid-core';
 import {
@@ -143,18 +145,11 @@ describe('mountVanillaUiGrid integration', () => {
   it('registers Rust/WASM bindings through the vanilla API', async () => {
     const module: UiGridRustWebModule = {
       default: vi.fn(async () => undefined),
-      build_pipeline_js: vi.fn((context) => ({
-        visibleRows: context.options.data,
-        displayItems: [],
-        virtualizationEnabled: false,
-        pipelineMs: 0,
-        totalItems: context.options.data.length,
-      })),
     };
 
     await registerVanillaUiGridRustModule(module);
     expect(module.default).toHaveBeenCalledTimes(1);
-    expect(activeGridEngineBackend()).toBe('rust-wasm');
+    expect(activeGridEngineBackend()).toBe('typescript');
   });
 
   it('controller API exposes subscribe and action methods', () => {
@@ -182,6 +177,54 @@ describe('mountVanillaUiGrid integration', () => {
     expect(controller.getSnapshot().pipeline.visibleRows.map((row) => row.entity['name'])).toEqual([
       'Alpha',
     ]);
+  });
+
+  it('lazy-loads the wasm engine once and refreshes through it when ready', async () => {
+    const enableSpy = vi.spyOn(core, 'enableUiGridWasmEngine').mockImplementation(async () => {
+      core.registerRustWasmGridEngine({
+        buildPipeline(context) {
+          return {
+            visibleRows: buildGridRows(
+              context.options,
+              context.rowSize,
+              context.hiddenRowReasons,
+              context.expandedRows,
+            ),
+            displayItems: [],
+            virtualizationEnabled: false,
+            pipelineMs: 123,
+            totalItems: context.options.data.length,
+          };
+        },
+      });
+    });
+
+    const controller = createVanillaGridController({
+      id: 'controller-wasm-bootstrap',
+      data: [
+        { id: 'r1', name: 'Gamma' },
+        { id: 'r2', name: 'Alpha' },
+      ],
+      columnDefs: [{ name: 'name' }],
+      enableSorting: true,
+      enableFiltering: true,
+    });
+
+    expect(enableSpy).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      const snapshot = controller.getSnapshot();
+      return activeGridEngineBackend() === 'rust-wasm' && snapshot.pipeline.pipelineMs === 123
+        ? snapshot
+        : null;
+    });
+
+    controller.setFilter('name', 'Alpha');
+    controller.sortColumn('name', SORT_DIRECTIONS.asc);
+
+    expect(enableSpy).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot().pipeline.pipelineMs).toBe(123);
+    enableSpy.mockRestore();
   });
 
   it('applies overridable SVG icons for controls', async () => {

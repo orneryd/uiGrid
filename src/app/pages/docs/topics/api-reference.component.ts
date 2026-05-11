@@ -347,7 +347,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           </tr>
           <tr>
             <td><code>benchmark(n?)</code></td>
-            <td>Run pipeline benchmark</td>
+            <td>Run render benchmark</td>
           </tr>
           <tr>
             <td><code>setRowInvisible(row, reason?)</code></td>

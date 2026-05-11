@@ -70,44 +70,9 @@ function App() {
 
 ## Web Components
 
-The grid ships two distinct web component outputs. Both register a `<ui-grid-element>` custom element with the same `GridOptions` API. See [Web Component](./web-component.md) for full details.
-
-### Angular-backed (`@ornery/ui-grid`)
-
-Built with `@angular/elements`. Bundles the Angular runtime. Produced by `npm run build:element`:
-
-```html
-<script type="module" src="ui-grid-element/main.js"></script>
-
-<ui-grid-element
-  grid-id="element-demo"
-  enable-sorting
-  enable-filtering
-  column-defs='[{"name":"name"},{"name":"role"}]'
-  data='[{"name":"Alice","role":"Engineer"}]'>
-</ui-grid-element>
-```
-
-Or assign the full `options` object when you need callbacks or function-valued configuration:
-
-```html
-<script type="module" src="ui-grid-element/main.js"></script>
-
-<ui-grid-element id="my-grid"></ui-grid-element>
-
-<script type="module">
-  const grid = document.querySelector('#my-grid');
-  grid.options = {
-    id: 'element-demo',
-    data: [{ name: 'Alice', role: 'Engineer' }],
-    columnDefs: [{ name: 'name' }, { name: 'role' }],
-  };
-</script>
-```
-
 ### Vanilla (`@ornery/ui-grid-vanilla`)
 
-Framework-free, pure DOM with Shadow DOM. No Angular dependency:
+Framework-free, pure DOM with Shadow DOM. zero dependencies:
 
 ```bash
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
@@ -121,7 +86,8 @@ Declarative setup now works directly in HTML:
   enable-sorting
   enable-filtering
   column-defs='[{"name":"name"},{"name":"role"}]'
-  data='[{"name":"Alice","role":"Engineer"}]'>
+  data='[{"name":"Alice","role":"Engineer"}]'
+>
 </ui-grid-element>
 
 <script type="module">
