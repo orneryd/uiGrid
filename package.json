@@ -14,7 +14,7 @@
     "build:core": "npm run build --prefix projects/ui-grid-core",
     "build:library": "npm run build:rust:wasm && npm run build:core && npm run build --prefix projects/ui-grid-vanilla && ng build uiGridPackage",
     "build:library:preset": "npm run build:rust:wasm && node scripts/build-library-preset.mjs",
-    "build:package": "npm run build:library:preset -- --preset=full && npm run build:element && node scripts/prepare-release-package.mjs --presets full",
+    "build:package": "npm run build:library:preset -- --preset=full && node scripts/prepare-release-package.mjs --presets full",
     "build:vanilla": "npm run build:rust:wasm && npm run build:core && npm run build:rust:web && npm run build --prefix projects/ui-grid-vanilla",
     "publish:package": "npm publish ./dist/npm-package --access public",
     "watch": "ng build --watch --configuration development",

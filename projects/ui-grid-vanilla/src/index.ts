@@ -50,7 +50,11 @@ export async function mountVanillaUiGrid(
   tagName = 'ui-grid-element',
 ): Promise<VanillaUiGridElement> {
   if (rustModule) {
-    await registerVanillaUiGridRustModule(rustModule);
+    try {
+      await registerVanillaUiGridRustModule(rustModule);
+    } catch {
+      // Fall back to JS engine when WASM cannot be initialized.
+    }
   }
 
   await defineStandaloneUiGridElement(tagName);
