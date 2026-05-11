@@ -322,5 +322,4 @@ describe('mountVanillaUiGrid integration', () => {
     expect((grid.options.data as Array<{ id: string; name: string }>)[0].name).toBe('Gamma');
     expect(grid.options.minRowsToShow).toBe(20);
   });
-
 });
