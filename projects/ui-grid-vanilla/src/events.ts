@@ -29,6 +29,24 @@ import type { UiGridStandaloneElement } from './ui-grid-standalone.element';
 type BoundShadowRoot = ShadowRoot & { __uiGridBound?: boolean };
 
 /**
+ * Find the `.body-cell[data-row][data-column]` ancestor of an event by walking
+ * the composed event path. Plain `closest()` from the click target stops at
+ * shadow boundaries — for clicks on framework-projected light-DOM cell
+ * content (Angular ng-template, React render props), the body cell sits in
+ * the shadow tree on the other side of the slot. composedPath includes both
+ * sides, so we just scan it.
+ */
+function bodyCellFromEvent(event: Event): HTMLElement | null {
+  const path = event.composedPath();
+  for (const node of path) {
+    if (node instanceof HTMLElement && node.classList.contains('body-cell')) {
+      if (node.dataset['row'] && node.dataset['column']) return node;
+    }
+  }
+  return null;
+}
+
+/**
  * Watch the element's light DOM for `<template slot="…">` changes so
  * consumer template edits trigger a re-render. Ports the old grid's
  * observer that let template updates flow through without an explicit
@@ -38,6 +56,12 @@ export function observeTemplateSlots(el: UiGridStandaloneElement): void {
   if (el.templateObserver) return;
 
   el.templateObserver = new MutationObserver(() => {
+    // Consumer light-DOM templates (`<template slot="cell-…">`) feed the
+    // string-interpolation render path. When they're added/removed/edited
+    // the per-row visual fingerprint cache becomes stale (the fingerprint
+    // doesn't track template content), so blow it away to force the next
+    // patch pass to re-render every cell shell.
+    el.lastRowStateFingerprints.clear();
     if (el.activeOptions) {
       el.ensureController(el.buildEffectiveOptions(el.activeOptions));
     } else {
@@ -115,7 +139,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     // don't reliably focus a div with tabindex="0" on click, so we force it
     // here. This is required for arrow-key nav to work — otherwise focus
     // stays on the grid-table scroll container and arrows just scroll.
-    const clickedCell = realTarget.closest?.<HTMLElement>('.body-cell[data-row][data-column]') ?? null;
+    const clickedCell = bodyCellFromEvent(event);
     if (clickedCell && !realTarget.closest('[data-role="editor"]')) {
       const rowId = clickedCell.dataset['row'];
       const columnName = clickedCell.dataset['column'];
@@ -140,11 +164,8 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     // Row-header checkbox column click — mirrors the old
     // selectionRowHeaderButtons directive: even when enableFullRowSelection
     // is off, clicking the header checkbox selects the row.
-    const checkboxNode = realTarget.closest?.<HTMLElement>(
-      '.body-cell[data-row][data-column="selectionRowHeaderCol"]',
-    );
-    if (checkboxNode) {
-      const rowId = checkboxNode.dataset['row'];
+    if (clickedCell?.dataset['column'] === 'selectionRowHeaderCol') {
+      const rowId = clickedCell.dataset['row'];
       if (rowId) {
         event.stopPropagation();
         handleRowHeaderCheckboxClick(el, rowId, event);
@@ -271,13 +292,16 @@ export function bindEvents(el: UiGridStandaloneElement): void {
   // focusin / focusout: keep `focusedCell` in sync with DOM focus
   // ─────────────────────────────────────────────────────────────────
   root.addEventListener('focusin', (event) => {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-    const cell = target.closest<HTMLElement>('.body-cell[data-row][data-column]');
+    const cell = bodyCellFromEvent(event);
     const rowId = cell?.dataset['row'];
     const columnName = cell?.dataset['column'];
     if (rowId && columnName) {
-      el.focusedCell = { rowId, columnName };
+      const previous = el.focusedCell;
+      const next = { rowId, columnName };
+      if (!previous || previous.rowId !== rowId || previous.columnName !== columnName) {
+        el.focusedCell = next;
+        applyFocusedCellClass(el, previous, next);
+      }
     }
   });
 
@@ -326,7 +350,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     if (realTarget.closest('.filter-cell')) return;
     const resolved = el.controller.getResolvedSelectionOptions();
     if (!resolved.enableRowSelection || !resolved.multiSelect) return;
-    const startCell = realTarget.closest<HTMLElement>('.body-cell[data-row][data-column]');
+    const startCell = bodyCellFromEvent(event);
     if (!startCell) return;
     const startRowId = startCell.dataset['row'];
     if (!startRowId) return;
@@ -357,9 +381,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     };
 
     const handleMove = (moveEvent: MouseEvent): void => {
-      const path = moveEvent.composedPath();
-      const firstEl = path[0] as HTMLElement | undefined;
-      const cell = firstEl?.closest?.<HTMLElement>('.body-cell[data-row][data-column]');
+      const cell = bodyCellFromEvent(moveEvent);
       if (!cell) return;
       const rowId = cell.dataset['row'];
       if (!rowId) return;
@@ -456,7 +478,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
       }
     }
 
-    const cell = target.closest<HTMLElement>('.body-cell');
+    const cell = bodyCellFromEvent(event);
     if (!cell) return;
 
     const rowId = cell.dataset['row'];
@@ -474,11 +496,13 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     const target = event.target as HTMLElement | null;
     if (!target || !el.controller) return;
 
+    const onBodyCell = bodyCellFromEvent(event);
+
     // cellNav.keyDownOverrides: declared overrides skip cellnav's default
     // handling and raise viewPortKeyDown so consumers can disable built-in
     // key handling per-key.
     const overrides = el.controller.getOptions().keyDownOverrides ?? [];
-    if (overrides.length && target.closest('.body-cell')) {
+    if (overrides.length && onBodyCell) {
       for (const override of overrides) {
         if (matchesKeyOverride(override, keyboardEvent)) {
           el.controller.raiseCellNavKeyEvent('keydown', keyboardEvent);
@@ -491,7 +515,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     if (
       (keyboardEvent.ctrlKey || keyboardEvent.metaKey) &&
       (keyboardEvent.key === 'a' || keyboardEvent.key === 'A') &&
-      target.closest('.body-cell')
+      onBodyCell
     ) {
       const resolved = el.controller.getResolvedSelectionOptions();
       if (resolved.enableRowSelection && resolved.multiSelect) {
@@ -503,7 +527,7 @@ export function bindEvents(el: UiGridStandaloneElement): void {
 
     // Space toggles the row when on the checkbox column or in full-row-selection mode.
     if (keyboardEvent.key === ' ' || keyboardEvent.key === 'Spacebar') {
-      const cell = target.closest<HTMLElement>('.body-cell[data-row][data-column]');
+      const cell = onBodyCell;
       const rowId = cell?.dataset['row'];
       const columnName = cell?.dataset['column'];
       if (cell && rowId && columnName) {
@@ -568,10 +592,9 @@ export function bindEvents(el: UiGridStandaloneElement): void {
     // cell).
     let rowId: string | undefined;
     let columnName: string | undefined;
-    const cell = target.closest<HTMLElement>('.body-cell');
-    if (cell) {
-      rowId = cell.dataset['row'];
-      columnName = cell.dataset['column'];
+    if (onBodyCell) {
+      rowId = onBodyCell.dataset['row'];
+      columnName = onBodyCell.dataset['column'];
     } else if (el.focusedCell) {
       rowId = el.focusedCell.rowId;
       columnName = el.focusedCell.columnName;

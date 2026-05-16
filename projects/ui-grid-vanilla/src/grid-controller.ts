@@ -1677,6 +1677,13 @@ export class VanillaGridController {
     return this.editingCell?.rowId === rowId && this.editingCell?.columnName === columnName;
   }
 
+  /** Compact key for the editing cell, or null when no edit is in flight.
+   * Used by the patch path to detect when the editing position moves so it
+   * can force the affected cells through the slow rebuild path. */
+  getEditingCellKey(): string | null {
+    return this.editingCell ? `${this.editingCell.rowId} ${this.editingCell.columnName}` : null;
+  }
+
   /**
    * Serialise the current grid state. Mirrors `ui.grid.saveState.save`:
    * every field is gated by an `options.save*` flag with the old grid's

@@ -111,6 +111,12 @@ export type VanillaUiGridElement = HTMLElement & {
    * remains completely smooth while data ticks in the background.
    */
   setData(rows: GridRecord[]): void;
+  /**
+   * Declare which slots the grid should emit as `<slot>` placeholders for a
+   * framework wrapper to project into. See `FrameworkSlotBridge` for the
+   * full contract.
+   */
+  setFrameworkRenderedSlots(config: FrameworkRenderedSlotsConfig): void;
 };
 
 type VanillaGridOptions = GridOptions & {
@@ -170,6 +176,15 @@ export class UiGridStandaloneElement extends HTMLElement {
   /** @internal */ lastItemsFingerprint: string | null = null;
   /** @internal */ lastVirtualOffset = 0;
   /** @internal */ lastTotalVirtualHeight = 0;
+  /**
+   * @internal Per-row visual-state fingerprint from the previous patch pass.
+   * The patch path uses this to skip cells whose row state hasn't changed
+   * (selection, expand, dirty/saving/error flags) when the structure
+   * fingerprint matches. Cleared on full re-render.
+   */
+  lastRowStateFingerprints = new Map<string, { fingerprint: string; entity: unknown }>();
+  /** @internal */ lastEditingCellKey: string | null = null;
+  /** @internal */ lastFocusedCellKey: string | null = null;
 
   /**
    * @internal Framework-rendered slot bridge. See `./framework-slots.ts`.
@@ -220,7 +235,11 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (this.frameworkSlots.configure(config)) {
       // The set of slot placeholders changed — force a structural re-render
       // so framework-rendered slots transition to `<slot>` nodes (or the
-      // reverse, when a slot is revoked).
+      // reverse, when a slot is revoked). Also bust the per-row patch
+      // fingerprint cache, because the cell-shell content depends on
+      // hasCell() / hasHeader() / etc. — values not captured by the
+      // row-level fingerprint.
+      this.lastRowStateFingerprints.clear();
       this.render();
     }
   }
@@ -968,6 +987,9 @@ export class UiGridStandaloneElement extends HTMLElement {
     if (!snapshot) {
       this.lastStructureKey = null;
       this.lastItemsFingerprint = null;
+      this.lastRowStateFingerprints.clear();
+      this.lastEditingCellKey = null;
+      this.lastFocusedCellKey = null;
       emptyTemplate({ message: 'No grid options provided.' }).connect(root);
       return;
     }
@@ -1272,6 +1294,13 @@ export class UiGridStandaloneElement extends HTMLElement {
     this.lastItemsFingerprint = this.fingerprintItems(plan.itemsToRender);
     this.lastVirtualOffset = plan.virtualOffset;
     this.lastTotalVirtualHeight = plan.totalVirtualHeight;
+    // The row-state cache is keyed against the patched DOM. A full remount
+    // wipes it; the next patch pass will repopulate as it walks rows.
+    this.lastRowStateFingerprints.clear();
+    this.lastEditingCellKey = this.controller?.getEditingCellKey() ?? null;
+    this.lastFocusedCellKey = this.focusedCell
+      ? `${this.focusedCell.rowId} ${this.focusedCell.columnName}`
+      : null;
   }
 
   private renderPatch(

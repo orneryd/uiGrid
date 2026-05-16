@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src"]
 }

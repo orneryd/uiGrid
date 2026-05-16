@@ -346,16 +346,10 @@ describe('vanilla grid keyboard navigation', () => {
   });
 
   it('Enter on a cell enters edit mode for that cell', async () => {
-    const { shadow, options } = await mountGrid();
+    const { shadow } = await mountGrid();
     const cell = cellIn(shadow, 'r2', 'name');
     cell.focus();
     pressKey(cell, 'Enter');
-    const snapshot = getApi(options)!.core.getState
-      ? null
-      : null;
-    // Assert via the controller — query it via the element's getState hook
-    // indirectly: the cell editor should be mounted in the shadow DOM.
-    void snapshot;
     await waitFor(() => shadow.querySelector(`ui-grid-cell-editor[data-row="r2"][data-column="name"]`));
     const editorInput = shadow.querySelector<HTMLInputElement>(
       `ui-grid-cell-editor[data-row="r2"][data-column="name"] input`,

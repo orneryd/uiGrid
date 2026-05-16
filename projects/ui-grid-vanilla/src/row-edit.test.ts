@@ -105,7 +105,7 @@ describe('vanilla grid row-edit', () => {
     const options = baseOptions();
     await mountGrid(options);
     const api = getApi(options);
-    const handler = vi.fn<[Record<string, unknown>], void>();
+    const handler = vi.fn<(row: Record<string, unknown>) => void>();
     api.rowEdit.on.saveRow(handler);
     const row = options.data[0]! as unknown as Record<string, unknown>;
     api.edit.raise.afterCellEdit(row, options.columnDefs[0]!, 'Alpha!', 'Alpha');
