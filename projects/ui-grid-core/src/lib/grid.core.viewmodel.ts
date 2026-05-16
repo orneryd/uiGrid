@@ -56,7 +56,15 @@ export function canGridMoveColumns(options: GridOptions): boolean {
 }
 
 export function isGridPrimaryColumn(visibleColumns: readonly GridColumnDef[], column: GridColumnDef): boolean {
-  return visibleColumns[0]?.name === column.name;
+  // The injected selection row-header (`selectionRowHeaderCol`) always sits
+  // at index 0 when row selection is enabled — but it isn't a real data
+  // column and shouldn't host the tree / expand toggle. Walk past it to
+  // find the first actual data column.
+  for (const candidate of visibleColumns) {
+    if (candidate.name === 'selectionRowHeaderCol') continue;
+    return candidate.name === column.name;
+  }
+  return false;
 }
 
 export function isGridColumnSortable(options: GridOptions, column: GridColumnDef): boolean {

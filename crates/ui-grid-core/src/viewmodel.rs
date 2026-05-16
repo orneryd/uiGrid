@@ -70,9 +70,17 @@ pub fn can_grid_resize_columns(options: &GridOptions) -> bool {
 }
 
 pub fn is_grid_primary_column(visible_columns: &[GridColumnDef], column: &GridColumnDef) -> bool {
-    visible_columns
-        .first()
-        .is_some_and(|candidate| candidate.name == column.name)
+    // The injected selection row-header (`selectionRowHeaderCol`) always sits
+    // at index 0 when row selection is enabled — but it isn't a real data
+    // column and shouldn't host the tree / expand toggle. Walk past it to
+    // find the first actual data column.
+    for candidate in visible_columns {
+        if candidate.name == "selectionRowHeaderCol" {
+            continue;
+        }
+        return candidate.name == column.name;
+    }
+    false
 }
 
 pub fn is_grid_column_sortable(options: &GridOptions, column: &GridColumnDef) -> bool {

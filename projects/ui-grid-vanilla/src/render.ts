@@ -268,7 +268,7 @@ export function renderBodyCell(
   const titleAttr = isCellInvalid
     ? ` title="${escapeHtml(controller.gridApi.validate.getTitleFormattedErrors(row.entity, column))}"`
     : '';
-  return `<ui-grid-body-cell class="${className}" tabindex="0"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''}${titleAttr} data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(align)}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}${expandToggle}<div class="cell-content">${content}</div></div></ui-grid-body-cell>`;
+  return `<ui-grid-body-cell class="${className}" tabindex="0"${stickyStyle ? ` style="${escapeHtml(stickyStyle)}"` : ''}${titleAttr} data-row="${escapeHtml(rowId)}" data-column="${escapeHtml(columnName)}" data-odd="${displayIndex % 2 !== 0}" data-align="${escapeHtml(align)}" data-pinned="${isPinned}" data-pinned-left-last="${isPinnedLeftLast}" data-pinned-right-first="${isPinnedRightFirst}" data-focused="${isFocused}" data-editing="${editing}" data-sticky-style="${escapeHtml(stickyStyle)}"><div class="cell-shell" style="padding-inline-start:${escapeHtml(controller.cellIndent(row, column))}">${treeToggle}<div class="cell-content">${content}</div>${expandToggle}</div></ui-grid-body-cell>`;
 }
 
 /** Render the contents of `.cell-shell` (tree/expand toggles + the
@@ -319,7 +319,7 @@ export function renderCellShellContents(
     : templateMarkupMap
       ? renderCellTemplateFromMarkup(el, row, column, displayIndex, templateMarkupMap.get(columnName) ?? null)
       : renderCellTemplate(el, row, column, displayIndex);
-  return `${treeToggle}${expandToggle}<div class="cell-content">${content}</div>`;
+  return `${treeToggle}<div class="cell-content">${content}</div>${expandToggle}`;
 }
 
 /** Pagination footer markup. Reads page-size options + labels + icons off

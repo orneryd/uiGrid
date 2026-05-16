@@ -416,13 +416,20 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
       -webkit-text-size-adjust: 100%;
     }
 
+    /* overflow: visible on both axes. Setting only overflow-x: auto causes
+       browsers to coerce overflow-y: visible into overflow-y: auto (per the
+       spec), which produced an extra vertical scrollbar on the frame in
+       addition to the grid's own body-viewport scrollbar — visible in
+       Chrome/Firefox on Linux. Horizontal overflow is owned by the grid's
+       body viewport internally, so the outer frame doesn't need its own
+       scroll axis. */
     .react-demo-frame {
       border: 1px solid color-mix(in srgb, var(--teal-strong) 24%, var(--card-border));
       border-radius: calc(var(--theme-radius) - 6px);
       padding: clamp(0.5rem, 1.2vw, 0.9rem);
       background: color-mix(in srgb, var(--panel-surface-strong) 86%, transparent);
       width: 100%;
-      overflow-x: auto;
+      overflow: visible;
     }
 
     .react-primary-shell {
@@ -511,8 +518,11 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
       margin-right: 0.4rem;
     }
 
+    /* Match the vanilla harness sizing: 620px scenario host, taller primary
+       demo. Keeping the heights inline with the other framework demos keeps
+       visual parity across the docs Angular / React / Web Component pages. */
     .react-demo-host {
-      height: 34rem;
+      height: 620px;
     }
 
     .react-demo-host-primary {
