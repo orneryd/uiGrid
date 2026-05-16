@@ -55,7 +55,17 @@ function bodyCellFromEvent(event: Event): HTMLElement | null {
 export function observeTemplateSlots(el: UiGridStandaloneElement): void {
   if (el.templateObserver) return;
 
-  el.templateObserver = new MutationObserver(() => {
+  el.templateObserver = new MutationObserver((mutations) => {
+    // We only care about consumer-provided `<template slot="…">` nodes —
+    // their innerHTML feeds the string-interpolation render path. Skip
+    // mutations that only touched non-template slotted nodes (e.g. the
+    // `<span slot="cell-…">` wrappers Angular / React wrappers append to
+    // project framework-rendered content). Otherwise those framework
+    // wrappers would re-trigger ensureController on every slot delta and
+    // loop forever.
+    const involvesTemplate = mutationsTouchTemplateSlot(mutations);
+    if (!involvesTemplate) return;
+
     // Consumer light-DOM templates (`<template slot="cell-…">`) feed the
     // string-interpolation render path. When they're added/removed/edited
     // the per-row visual fingerprint cache becomes stale (the fingerprint
@@ -75,6 +85,23 @@ export function observeTemplateSlots(el: UiGridStandaloneElement): void {
     attributes: true,
     attributeFilter: ['slot'],
   });
+}
+
+function mutationsTouchTemplateSlot(mutations: MutationRecord[]): boolean {
+  for (const m of mutations) {
+    if (m.type === 'attributes' && m.target instanceof HTMLTemplateElement) {
+      return true;
+    }
+    if (m.type === 'childList') {
+      for (const node of m.addedNodes) {
+        if (node instanceof HTMLTemplateElement && node.hasAttribute('slot')) return true;
+      }
+      for (const node of m.removedNodes) {
+        if (node instanceof HTMLTemplateElement && node.hasAttribute('slot')) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**

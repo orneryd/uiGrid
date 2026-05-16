@@ -70,6 +70,7 @@ type DeclarativeGridConfig = {
   readonly enableExpandable: boolean;
   readonly enableTreeView: boolean;
   readonly showTreeExpandNoChildren: boolean;
+  readonly enableRowSelection?: boolean;
   readonly enablePagination?: boolean;
   readonly enablePaginationControls?: boolean;
   readonly paginationPageSize?: number;
@@ -527,6 +528,7 @@ export class WebComponentsComponent {
           enableExpandable: true,
           enableTreeView: false,
           showTreeExpandNoChildren: false,
+          enableRowSelection: true,
         };
     }
   });
@@ -772,7 +774,8 @@ export class WebComponentsComponent {
   enable-filtering
   enable-column-resizing
   enable-expandable
-  enable-virtualization>
+  enable-virtualization
+  enable-row-selection>
   <template slot="expandable-row" ngNonBindable>
     <article class="detail-card">
       <strong>{{row.name}}</strong>

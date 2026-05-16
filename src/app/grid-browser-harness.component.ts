@@ -403,7 +403,8 @@ export class GridBrowserHarnessComponent {
       ...this.baseOptions(createHarnessRows()),
       enableExpandable: true,
       expandableRowHeight: 112,
-      expandableRowTemplate: this.detailTemplate() ?? undefined
+      expandableRowTemplate: this.detailTemplate() ?? undefined,
+      enableRowSelection: true
     };
   }
 

@@ -274,4 +274,53 @@ describe('UiGrid React component', () => {
 
     expect(gridApi.core.getVisibleRows()).toHaveLength(3);
   });
+
+  it('row selection + expandable rows: selection toggle only repaints the affected row', async () => {
+    // Regression test for the selection+expand performance issue. The patch
+    // path's per-row fingerprint cache (in the vanilla layer) skips cells
+    // whose visual state didn't change. The React wrapper inherits this fix
+    // automatically because it mounts the same vanilla element. This test
+    // pins the end-to-end behaviour: clicking the row-selection checkbox
+    // for one row must only flip ui-grid-row-selected on that row's cells —
+    // not invalidate any visible state on the unselected rows.
+    const expandableTemplate = { createEmbeddedView: () => undefined };
+    const { gridApi, shadowRoot } = await renderGrid({
+      enableRowSelection: true,
+      enableExpandable: true,
+      expandableRowTemplate:
+        expandableTemplate as unknown as GridOptions['expandableRowTemplate'],
+    });
+
+    const cellFor = (rowId: string, column: string): HTMLElement => {
+      const el = shadowRoot.querySelector<HTMLElement>(
+        `.body-cell[data-row="${rowId}"][data-column="${column}"]`,
+      );
+      if (!el) throw new Error(`Cell ${rowId}/${column} not rendered`);
+      return el;
+    };
+
+    expect(cellFor('row-1', 'name').classList.contains('ui-grid-row-selected')).toBe(false);
+    expect(cellFor('row-2', 'name').classList.contains('ui-grid-row-selected')).toBe(false);
+    expect(cellFor('row-3', 'name').classList.contains('ui-grid-row-selected')).toBe(false);
+
+    await act(async () => {
+      gridApi.selection.selectRow(baseData[1] as Record<string, unknown>);
+    });
+
+    // row-2 must be selected, the others untouched.
+    expect(cellFor('row-1', 'name').classList.contains('ui-grid-row-selected')).toBe(false);
+    expect(cellFor('row-2', 'name').classList.contains('ui-grid-row-selected')).toBe(true);
+    expect(cellFor('row-2', 'status').classList.contains('ui-grid-row-selected')).toBe(true);
+    expect(cellFor('row-3', 'name').classList.contains('ui-grid-row-selected')).toBe(false);
+
+    // Toggling expand on row-1 must insert exactly one expandable detail
+    // row and leave selection on row-2 intact.
+    await act(async () => {
+      gridApi.expandable.toggleRowExpansion(baseData[0] as Record<string, unknown>);
+    });
+    await waitFor(() => {
+      expect(shadowRoot.querySelectorAll('.expandable-row').length).toBe(1);
+    });
+    expect(cellFor('row-2', 'name').classList.contains('ui-grid-row-selected')).toBe(true);
+  });
 });

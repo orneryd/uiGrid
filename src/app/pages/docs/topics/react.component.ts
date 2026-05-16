@@ -1069,6 +1069,7 @@ mountUiGrid(host, { options });`;
       ...this.baseOptions(createHarnessRows()),
       enableExpandable: true,
       expandableRowHeight: 112,
+      enableRowSelection: true,
     };
   }
 

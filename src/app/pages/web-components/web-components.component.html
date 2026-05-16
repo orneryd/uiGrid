@@ -182,7 +182,8 @@
                 [attr.enable-infinite-scroll]="demoConfig().enableInfiniteScroll === undefined ? null : (demoConfig().enableInfiniteScroll ? 'true' : 'false')"
                 [attr.infinite-scroll-up]="demoConfig().infiniteScrollUp ? '' : null"
                 [attr.infinite-scroll-down]="demoConfig().infiniteScrollDown ? '' : null"
-                [attr.infinite-scroll-rows-from-end]="demoConfig().infiniteScrollRowsFromEnd ?? null">
+                [attr.infinite-scroll-rows-from-end]="demoConfig().infiniteScrollRowsFromEnd ?? null"
+                [attr.enable-row-selection]="demoConfig().enableRowSelection ? '' : null">
             </ui-grid-element>
         }
     </section>
