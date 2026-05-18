@@ -77,8 +77,11 @@ pub struct GridColumnDef {
     pub enable_grouping: bool,
     #[serde(default)]
     pub enable_cell_edit: bool,
-    #[serde(default)]
-    pub enable_cell_edit_on_focus: bool,
+    /// Tri-state — `None` means "not set on this column, defer to options".
+    /// Mirrors the TS `?? options.enableCellEditOnFocus ?? false` chain so
+    /// a column can explicitly *opt out* even when options enable it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable_cell_edit_on_focus: Option<bool>,
     #[serde(default)]
     pub pinned_left: bool,
     #[serde(default)]
@@ -115,7 +118,7 @@ impl Default for GridColumnDef {
             enable_filtering: true,
             enable_grouping: true,
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: None,
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
@@ -361,8 +364,10 @@ pub struct GridOptions {
     pub enable_column_resizing: bool,
     #[serde(default)]
     pub enable_cell_edit: bool,
-    #[serde(default)]
-    pub enable_cell_edit_on_focus: bool,
+    /// Tri-state on options too — `None` means "not configured", in which
+    /// case the per-column override falls through to `false` (TS shape).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable_cell_edit_on_focus: Option<bool>,
     #[serde(default = "default_true")]
     pub enable_virtualization: bool,
     #[serde(default)]
@@ -513,6 +518,13 @@ pub struct GridOptions {
     pub row_edit_menu_cancel_dirty_rows: Option<bool>,
     #[serde(default)]
     pub row_id_field: Option<String>,
+    /// Internal — populated by the wasm bridge when a JS `rowIdentity`
+    /// callback is configured on the canonical TS options. Maps the
+    /// build-order row index to its callback-resolved id. Hidden from
+    /// JSON serialization output (and not deserialized from JS — the
+    /// bridge sets it programmatically).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_identity_overrides: Option<std::collections::BTreeMap<usize, String>>,
 }
 
 impl Default for GridOptions {
@@ -530,7 +542,7 @@ impl Default for GridOptions {
             enable_column_moving: false,
             enable_column_resizing: true,
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: None,
             enable_virtualization: true,
             enable_pagination: false,
             enable_pagination_controls: false,
@@ -606,6 +618,7 @@ impl Default for GridOptions {
             row_edit_menu_flush_dirty_rows: None,
             row_edit_menu_cancel_dirty_rows: None,
             row_id_field: Some("id".to_string()),
+            row_identity_overrides: None,
         }
     }
 }
@@ -633,24 +646,28 @@ pub struct GridSavedPaginationState {
     pub pagination_page_size: usize,
 }
 
+/// Mirrors TS `GridSavedState`. Every field is optional in TS — missing
+/// keys mean "not set". Match that on serialize by skipping defaults
+/// (empty collections + None) so JSON round-trips between Rust and TS
+/// produce identical output for the same logical state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GridSavedState {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub column_order: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub filters: BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<SortState>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub grouping: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pagination: Option<GridSavedPaginationState>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub expandable: BTreeMap<String, bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub tree_view: BTreeMap<String, bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pinning: BTreeMap<String, String>,
 }
 

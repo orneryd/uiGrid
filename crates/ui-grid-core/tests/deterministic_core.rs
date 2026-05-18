@@ -47,7 +47,7 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_filtering: true,
             enable_grouping: true,
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
@@ -75,7 +75,7 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_filtering: true,
             enable_grouping: true,
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
@@ -103,7 +103,7 @@ fn base_columns() -> Vec<GridColumnDef> {
             enable_filtering: true,
             enable_grouping: true,
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             pinned_left: false,
             pinned_right: false,
             enable_pinning: true,
@@ -454,17 +454,28 @@ fn label_resolution_supports_i18n_overrides() {
 #[test]
 fn edit_helpers_manage_focus_sessions_and_value_parsing() {
     let options = GridOptions {
-        enable_cell_edit_on_focus: true,
+        enable_cell_edit_on_focus: Some(true),
         ..Default::default()
     };
     let editable_column = GridColumnDef {
         name: "owner".to_string(),
         r#type: GridColumnType::String,
         enable_cell_edit: true,
+        // Mirror TS shape: a column without an explicit override (None)
+        // inherits from options; an explicit Some(false) opts out.
+        enable_cell_edit_on_focus: None,
         ..base_columns()[0].clone()
     };
 
+    // Column inherits from options when its own override is None.
     assert!(should_grid_edit_on_focus(&options, &editable_column));
+
+    // Column with explicit Some(false) opts out, even when options enable.
+    let opt_out_column = GridColumnDef {
+        enable_cell_edit_on_focus: Some(false),
+        ..editable_column.clone()
+    };
+    assert!(!should_grid_edit_on_focus(&options, &opt_out_column));
 
     let edit_session = begin_grid_edit_session("row-1", "owner", "Alice");
     assert_eq!(
@@ -491,8 +502,8 @@ fn edit_helpers_manage_focus_sessions_and_value_parsing() {
     assert!(!duplicate_focus_result.should_begin_edit);
 
     let cleared = clear_grid_edit_session();
-    assert_eq!(cleared.0, None);
-    assert!(cleared.1.is_empty());
+    assert_eq!(cleared.editing_cell, None);
+    assert!(cleared.editing_value.is_empty());
 
     assert_eq!(
         stringify_grid_editor_value(&json!(true)),
@@ -519,7 +530,7 @@ fn edit_helpers_manage_focus_sessions_and_value_parsing() {
         name: "active".to_string(),
         r#type: GridColumnType::Boolean,
         enable_cell_edit: true,
-        enable_cell_edit_on_focus: false,
+        enable_cell_edit_on_focus: Some(false),
         ..GridColumnDef::default()
     };
     assert_eq!(
@@ -539,19 +550,19 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridColumnDef {
             name: "name".to_string(),
             enable_cell_edit: true,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             ..GridColumnDef::default()
         },
         GridColumnDef {
             name: "status".to_string(),
             enable_cell_edit: false,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             ..GridColumnDef::default()
         },
         GridColumnDef {
             name: "owner".to_string(),
             enable_cell_edit: true,
-            enable_cell_edit_on_focus: false,
+            enable_cell_edit_on_focus: Some(false),
             ..GridColumnDef::default()
         },
     ];
@@ -564,13 +575,9 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridMoveDirection::Right,
         Some(|_row: &GridRow, column: &GridColumnDef| column.enable_cell_edit),
     );
-    assert_eq!(
-        right,
-        Some(GridCellPosition {
-            row_id: "row-1".to_string(),
-            column_name: "owner".to_string(),
-        })
-    );
+    let right = right.expect("right wrap result");
+    assert_eq!(right.row.id, "row-1");
+    assert_eq!(right.column.name, "owner");
 
     let wrapped = find_next_grid_cell(
         &rows,
@@ -580,13 +587,9 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridMoveDirection::Right,
         Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
     );
-    assert_eq!(
-        wrapped,
-        Some(GridCellPosition {
-            row_id: "row-2".to_string(),
-            column_name: "name".to_string(),
-        })
-    );
+    let wrapped = wrapped.expect("wrapped right result");
+    assert_eq!(wrapped.row.id, "row-2");
+    assert_eq!(wrapped.column.name, "name");
 
     let left = find_next_grid_cell(
         &rows,
@@ -596,13 +599,9 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridMoveDirection::Left,
         Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
     );
-    assert_eq!(
-        left,
-        Some(GridCellPosition {
-            row_id: "row-1".to_string(),
-            column_name: "owner".to_string(),
-        })
-    );
+    let left = left.expect("left wrap result");
+    assert_eq!(left.row.id, "row-1");
+    assert_eq!(left.column.name, "owner");
 
     let down = find_next_grid_cell(
         &rows,
@@ -612,13 +611,9 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridMoveDirection::Down,
         Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
     );
-    assert_eq!(
-        down,
-        Some(GridCellPosition {
-            row_id: "row-2".to_string(),
-            column_name: "status".to_string(),
-        })
-    );
+    let down = down.expect("down result");
+    assert_eq!(down.row.id, "row-2");
+    assert_eq!(down.column.name, "status");
 
     let none = find_next_grid_cell(
         &rows,
@@ -628,15 +623,18 @@ fn navigation_helpers_wrap_rows_and_skip_disallowed_cells() {
         GridMoveDirection::Up,
         Option::<fn(&GridRow, &GridColumnDef) -> bool>::None,
     );
-    assert_eq!(none, None);
+    assert!(none.is_none());
 }
 
 #[test]
 fn row_state_transitions() {
     let rows = build_grid_rows(&base_options(), 44, &BTreeMap::new(), &BTreeMap::new());
-    let (expanded, expanded_rows) = toggle_grid_row_expanded(&BTreeMap::new(), "row-1");
-    assert!(expanded);
-    assert_eq!(expanded_rows, BTreeMap::from([("row-1".to_string(), true)]));
+    let toggled = toggle_grid_row_expanded(&BTreeMap::new(), "row-1");
+    assert!(toggled.expanded);
+    assert_eq!(
+        toggled.next_expanded_rows,
+        BTreeMap::from([("row-1".to_string(), true)])
+    );
 
     let all_expanded = expand_all_grid_rows(&rows);
     assert!(are_all_grid_rows_expanded(&rows, &all_expanded));
@@ -646,11 +644,10 @@ fn row_state_transitions() {
     tree_options.data = sample_tree_rows();
     tree_options.enable_tree_view = true;
     let tree_rows = build_grid_rows(&tree_options, 44, &BTreeMap::new(), &BTreeMap::new());
-    let (tree_expanded, next_tree_state) =
-        toggle_grid_tree_row_expanded(&BTreeMap::new(), "acct-1");
-    assert!(tree_expanded);
+    let tree_toggled = toggle_grid_tree_row_expanded(&BTreeMap::new(), "acct-1");
+    assert!(tree_toggled.expanded);
     assert_eq!(
-        next_tree_state,
+        tree_toggled.next_expanded_tree_rows,
         BTreeMap::from([("acct-1".to_string(), true)])
     );
     assert_eq!(
@@ -719,7 +716,7 @@ fn grid_options_default_only_enables_sorting() {
     assert!(!options.enable_grouping);
     assert!(!options.enable_column_moving);
     assert!(!options.enable_cell_edit);
-    assert!(!options.enable_cell_edit_on_focus);
+    assert_eq!(options.enable_cell_edit_on_focus, None);
     assert!(options.enable_virtualization);
     assert!(!options.enable_pagination);
     assert!(!options.enable_pagination_controls);

@@ -53,7 +53,10 @@ fn build_literal_pattern(term: &Value) -> String {
     escape_reg_exp(&value_to_string(term))
 }
 
-fn build_wildcard_pattern(term: &str) -> Option<String> {
+/// Build a regex pattern for a `*`-bearing filter term, or return `None`
+/// when the term is too long / has too many wildcards. Public so the
+/// wasm bridge can mirror the TS contract for `matcherKind` reporting.
+pub fn build_wildcard_pattern(term: &str) -> Option<String> {
     let wildcard_count = term.matches('*').count();
     if term.len() > MAX_FILTER_PATTERN_LENGTH || wildcard_count > MAX_FILTER_WILDCARDS {
         return None;
@@ -71,21 +74,31 @@ fn regex_from_pattern(pattern: &str, case_sensitive: bool) -> Regex {
 
 fn guess_condition(filter: &GridFilterDescriptor) -> ParsedCondition {
     let Some(Value::String(term)) = get_term(filter) else {
-        return ParsedCondition::Comparator(FilterCondition::Contains);
+        // No term → match anything (matches the TS `containsRE` over an empty
+        // pattern).
+        return ParsedCondition::Regex(regex_from_pattern("", filter.flags.case_sensitive));
     };
 
-    if term.contains('*') {
-        if let Some(pattern) = build_wildcard_pattern(&term) {
-            return ParsedCondition::Regex(regex_from_pattern(
-                &format!("^{pattern}$"),
-                filter.flags.case_sensitive,
-            ));
-        }
-
-        return ParsedCondition::Comparator(FilterCondition::Contains);
+    if term.contains('*')
+        && let Some(pattern) = build_wildcard_pattern(&term)
+    {
+        return ParsedCondition::Regex(regex_from_pattern(
+            &format!("^{pattern}$"),
+            filter.flags.case_sensitive,
+        ));
     }
+    // If we get here either the term has no wildcards, or the wildcard was
+    // rejected (too long / too many `*`s) — fall through to a literal
+    // substring regex on the original term.
 
-    ParsedCondition::Comparator(FilterCondition::Contains)
+    // Default `contains` is a substring regex over the literal-escaped term —
+    // mirrors the TS `setupFilters` `containsRE` path. `run_column_filter`'s
+    // comparator branch has no Contains arm; emitting `Comparator(Contains)`
+    // here would silently match everything and break TS parity.
+    ParsedCondition::Regex(regex_from_pattern(
+        &build_literal_pattern(&Value::String(term)),
+        filter.flags.case_sensitive,
+    ))
 }
 
 pub fn setup_filters(filters: &[GridFilterDescriptor]) -> Vec<ParsedFilter> {
@@ -254,12 +267,24 @@ mod tests {
             ..GridFilterDescriptor::default()
         }]);
 
-        assert!(matches!(
-            filters[0].condition,
-            ParsedCondition::Comparator(FilterCondition::Contains)
-        ));
+        // Wildcard rejected (too many `*`s) → falls through to a literal
+        // substring regex on the original term, mirroring the TS
+        // `setupFilters` `containsRE` path.
+        assert!(matches!(filters[0].condition, ParsedCondition::Regex(_)));
         assert!(run_column_filter(
             &json!({ "status": "a*a*a*a*a*a*a*a*a*a*" }),
+            &column("status"),
+            &filters[0],
+        ));
+        // The substring matches when the cell contains the literal term.
+        assert!(run_column_filter(
+            &json!({ "status": "prefix a*a*a*a*a*a*a*a*a*a* suffix" }),
+            &column("status"),
+            &filters[0],
+        ));
+        // …and rejects when it doesn't.
+        assert!(!run_column_filter(
+            &json!({ "status": "totally different" }),
             &column("status"),
             &filters[0],
         ));

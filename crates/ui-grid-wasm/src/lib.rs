@@ -60,7 +60,9 @@ use ui_grid_core::{
         is_grid_row_edit_timer_enabled, mark_grid_row_clean, mark_grid_row_dirty,
         mark_grid_row_error, mark_grid_row_saving, resolve_grid_row_edit_wait_interval,
     },
-    row_searcher::{ParsedCondition, get_term, run_column_filter, setup_filters},
+    row_searcher::{
+        ParsedCondition, build_wildcard_pattern, get_term, run_column_filter, setup_filters,
+    },
     row_sorter::{SortKind, compare_values, guess_sort_kind},
     row_state::{
         add_grid_row_invisible_reason, are_all_grid_rows_expanded, clear_grid_row_invisible_reason,
@@ -962,7 +964,15 @@ fn parsed_matcher_kind(
                 Some("contains".to_string())
             }
             None => match get_term(descriptor) {
-                Some(Value::String(value)) if value.contains('*') => None,
+                // A `*`-bearing term that built a successful wildcard regex
+                // does not have a `containsRE` matcher in TS — reflect that
+                // as `None`. Anything else (literal contains, oversized
+                // wildcard fallback, etc.) maps to `containsRE`.
+                Some(Value::String(value))
+                    if value.contains('*') && build_wildcard_pattern(&value).is_some() =>
+                {
+                    None
+                }
                 _ => Some("contains".to_string()),
             },
             _ => None,
@@ -986,10 +996,103 @@ pub fn version() -> String {
 
 // Pipeline
 
+/// Walk options.data (recursively for tree mode) calling the JS rowIdentity
+/// callback for each record, returning a parallel index→id map. Used to
+/// pre-resolve identities at the wasm boundary so the Rust core never has
+/// to invoke a JS closure.
+fn collect_row_identity_overrides(
+    raw_options: &JsValue,
+    options: &ui_grid_core::models::GridOptions,
+) -> Option<std::collections::BTreeMap<usize, String>> {
+    let callback = js_sys::Reflect::get(raw_options, &JsValue::from_str("rowIdentity"))
+        .ok()
+        .and_then(|value| {
+            if value.is_function() {
+                Some(js_sys::Function::from(value))
+            } else {
+                None
+            }
+        })?;
+
+    let tree_enabled = ui_grid_core::viewmodel::is_grid_tree_enabled(options);
+    let children_field = options
+        .tree_children_field
+        .clone()
+        .unwrap_or_else(|| "children".to_string());
+
+    let mut overrides: std::collections::BTreeMap<usize, String> =
+        std::collections::BTreeMap::new();
+    let mut next_index: usize = 0;
+
+    fn visit(
+        entities: &[ui_grid_core::models::GridRecord],
+        tree_enabled: bool,
+        children_field: &str,
+        callback: &js_sys::Function,
+        next_index: &mut usize,
+        overrides: &mut std::collections::BTreeMap<usize, String>,
+    ) {
+        for entity in entities {
+            let index = *next_index;
+            *next_index += 1;
+            // Use the json-compatible serializer so JS maps come through as
+            // plain Objects (with `id`, `name`, …) rather than Map instances —
+            // mirrors `to_js()` behaviour and matches what callers expect.
+            let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+            let record_js = entity.serialize(&serializer).unwrap_or(JsValue::UNDEFINED);
+            if let Ok(returned) = callback.call2(
+                &JsValue::UNDEFINED,
+                &record_js,
+                &JsValue::from_f64(index as f64),
+            ) && let Some(string_value) = returned.as_string()
+            {
+                overrides.insert(index, string_value);
+            }
+
+            if tree_enabled
+                && let Some(serde_json::Value::Array(children)) =
+                    ui_grid_core::utils::get_path_value(entity, children_field)
+            {
+                visit(
+                    &children,
+                    tree_enabled,
+                    children_field,
+                    callback,
+                    next_index,
+                    overrides,
+                );
+            }
+        }
+    }
+
+    visit(
+        &options.data,
+        tree_enabled,
+        &children_field,
+        &callback,
+        &mut next_index,
+        &mut overrides,
+    );
+
+    if overrides.is_empty() {
+        None
+    } else {
+        Some(overrides)
+    }
+}
+
 #[wasm_bindgen]
 pub fn build_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
-    let context: BuildGridPipelineContext = from_js(context)?;
-    let result = build_grid_pipeline(&context);
+    // Forward `options.rowIdentity` callback through to the Rust core via
+    // the row_identity_overrides hidden field. See build_grid_rows_js for
+    // the contract.
+    let raw_options =
+        js_sys::Reflect::get(&context, &JsValue::from_str("options")).unwrap_or(JsValue::UNDEFINED);
+    let mut parsed: BuildGridPipelineContext = from_js(context)?;
+    if let Some(overrides) = collect_row_identity_overrides(&raw_options, &parsed.options) {
+        parsed.options.row_identity_overrides = Some(overrides);
+    }
+    let result = build_grid_pipeline(&parsed);
     to_js(&result)
 }
 
@@ -2255,8 +2358,77 @@ pub fn build_grid_sort_state_js(input: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn resolve_grid_row_id_js(input: JsValue) -> Result<String, JsValue> {
-    let input: ResolveGridRowIdInput = from_js(input)?;
-    Ok(resolve_grid_row_id(&input.options, &input.row))
+    // The TS canonical resolves `options.rowIdentity?.(record, rowIndex)`
+    // when the row passed in is a bare GridRecord (not a string and not a
+    // GridRow with `id` + `entity` fields). The callback can't survive serde
+    // serialization, so pluck it off the original JsValue before deserializing.
+    let raw_options =
+        js_sys::Reflect::get(&input, &JsValue::from_str("options")).unwrap_or(JsValue::UNDEFINED);
+    let row_identity_callback =
+        js_sys::Reflect::get(&raw_options, &JsValue::from_str("rowIdentity"))
+            .ok()
+            .and_then(|value| {
+                if value.is_function() {
+                    Some(js_sys::Function::from(value))
+                } else {
+                    None
+                }
+            });
+
+    let parsed: ResolveGridRowIdInput = from_js(input)?;
+
+    // Mirror TS branches: bare-string → return as-is.
+    if let Some(string_value) = parsed.row.as_str() {
+        return Ok(string_value.to_string());
+    }
+
+    // GridRow shape — has both `id` and `entity` fields → return `id` directly.
+    if let Some(object) = parsed.row.as_object()
+        && object.contains_key("id")
+        && object.contains_key("entity")
+        && let Some(serde_json::Value::String(id)) = object.get("id")
+    {
+        return Ok(id.clone());
+    }
+
+    // Otherwise we have a GridRecord. If a JS rowIdentity callback was
+    // provided, invoke it with (record, rowIndex). Else fall through to the
+    // Rust core's row_id_field heuristic.
+    if let Some(callback) = row_identity_callback {
+        // Locate row index in options.data by JSON-equality.
+        let row_index = parsed
+            .options
+            .data
+            .iter()
+            .position(|candidate| candidate == &parsed.row)
+            .map(|index| index as i32)
+            .unwrap_or(-1);
+        // Use the json-compatible serializer so the JS callback sees a plain
+        // object (`{id, name}`) instead of a `Map` instance — matches the
+        // behaviour of `to_js()` for outputs.
+        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+        let record_js = parsed
+            .row
+            .serialize(&serializer)
+            .map_err(|error| JsValue::from_str(&format!("failed to encode row: {error}")))?;
+        let returned = callback
+            .call2(
+                &JsValue::UNDEFINED,
+                &record_js,
+                &JsValue::from_f64(row_index as f64),
+            )
+            .ok();
+        if let Some(value) = returned
+            && let Some(string_value) = value.as_string()
+        {
+            return Ok(string_value);
+        }
+        // Fallback when callback returned non-string or threw — match TS
+        // `${options.id}-${rowIndex}` shape.
+        return Ok(format!("{}-{}", parsed.options.id, row_index.max(0)));
+    }
+
+    Ok(resolve_grid_row_id(&parsed.options, &parsed.row))
 }
 
 // Infinite scroll
@@ -2354,7 +2526,14 @@ pub fn sort_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn build_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
-    let input: BuildGridRowsInput = from_js(input)?;
+    // Forward `options.rowIdentity` callback to Rust through the
+    // row_identity_overrides hidden field — see build_pipeline_js.
+    let raw_options =
+        js_sys::Reflect::get(&input, &JsValue::from_str("options")).unwrap_or(JsValue::UNDEFINED);
+    let mut input: BuildGridRowsInput = from_js(input)?;
+    if let Some(overrides) = collect_row_identity_overrides(&raw_options, &input.options) {
+        input.options.row_identity_overrides = Some(overrides);
+    }
     to_js(&build_grid_rows(
         &input.options,
         input.row_size,

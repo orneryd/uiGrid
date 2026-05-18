@@ -856,6 +856,29 @@ function normalizeOptionsForWasm(options: GridOptions): GridOptions {
   };
 }
 
+/**
+ * Variant of `normalizeOptionsForWasm` for code paths that *do* need the
+ * `data` array and the live `rowIdentity` callback to reach the wasm shim.
+ * The wasm side resolves the callback through `Function::call2` (see
+ * `collect_row_identity_overrides` in `crates/ui-grid-wasm/src/lib.rs`) so
+ * the JSON-serde layer never touches the callback. Returning the actual
+ * options object preserves identity-preserving fields that would otherwise
+ * be stripped by `normalizeOptionsForWasm`.
+ */
+function normalizeOptionsForWasmWithIdentity(options: GridOptions): GridOptions {
+  return {
+    ...options,
+    columnDefs: options.columnDefs.map((column) => normalizeColumnForWasm(column)),
+    labels: tsViewmodel.resolveGridLabels(options.labels),
+    hasExpandableRowTemplate: Boolean(options.expandableRowTemplate),
+    onRegisterApi: undefined,
+    expandableRowTemplate: undefined,
+    cellEditableCondition: undefined,
+    // Keep `data` AND `rowIdentity` — the wasm shim reads both off the live
+    // JsValue so the bridge must not strip them.
+  };
+}
+
 function shouldFallbackPipeline(context: BuildGridPipelineContext): boolean {
   return shouldFallbackFiltering(context.columns);
 }
@@ -1272,7 +1295,14 @@ export const buildGridSortState: typeof tsIdentity.buildGridSortState = (columnN
     () => tsIdentity.buildGridSortState(columnName, direction),
   );
 export const resolveGridRowId: typeof tsIdentity.resolveGridRowId = (options, row) =>
-  tsIdentity.resolveGridRowId(options, row);
+  withWasm(
+    // The wasm shim plucks `options.rowIdentity` off the live JsValue before
+    // serde-deserializing, then invokes the callback through `Function.call2`
+    // when the row is a bare GridRecord. See `resolve_grid_row_id_js` in
+    // crates/ui-grid-wasm.
+    (wasm) => wasm.resolve_grid_row_id_js({ options, row }),
+    () => tsIdentity.resolveGridRowId(options, row),
+  );
 
 export const maybeRequestInfiniteScrollData: typeof tsInfiniteScroll.maybeRequestInfiniteScrollData =
   (context) =>
@@ -1373,7 +1403,10 @@ export const buildGridRows: typeof tsTree.buildGridRows = (
     : withWasm(
         (wasm) =>
           wasm.build_grid_rows_js({
-            options: normalizeOptionsForWasm(options),
+            // The wasm shim invokes options.rowIdentity through
+            // Function.call2 — we MUST keep `data` and `rowIdentity` live
+            // on the JsValue, not stripped by normalizeOptionsForWasm.
+            options: normalizeOptionsForWasmWithIdentity(options),
             rowSize,
             hiddenRowReasons,
             expandedRows,

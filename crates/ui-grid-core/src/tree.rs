@@ -26,12 +26,23 @@ fn get_tree_children(options: &GridOptions, entity: &GridRecord) -> Vec<GridReco
 }
 
 fn resolve_row_id(options: &GridOptions, entity: &GridRecord, index: usize) -> String {
+    // First honor an injected per-index override (used by the wasm bridge to
+    // forward the result of a JS `rowIdentity(record, rowIndex)` callback —
+    // closures cannot cross the wasm boundary, so the bridge pre-resolves
+    // them and passes a parallel id map through this hidden options field).
+    if let Some(overrides) = &options.row_identity_overrides
+        && let Some(value) = overrides.get(&index)
+    {
+        return value.clone();
+    }
+
     if let Some(field) = &options.row_id_field
         && let Some(Value::String(id)) = get_path_value(entity, field)
     {
         return id;
     }
 
+    // Mirror TS `${options.id}-${rowIndex}` fallback.
     format!("{}-{}", options.id, index)
 }
 

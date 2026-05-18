@@ -1,15 +1,39 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::models::GridRow;
+
+/// Return shape of `toggle_grid_row_expanded`. Mirrors the TS
+/// `{ expanded, nextExpandedRows }` object so JSON round-trips between
+/// JavaScript callers and the Rust core stay shape-compatible.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToggleGridRowExpandedResult {
+    pub expanded: bool,
+    pub next_expanded_rows: BTreeMap<String, bool>,
+}
+
+/// Return shape of `toggle_grid_tree_row_expanded`. Mirrors the TS
+/// `{ expanded, nextExpandedTreeRows }` object.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToggleGridTreeRowExpandedResult {
+    pub expanded: bool,
+    pub next_expanded_tree_rows: BTreeMap<String, bool>,
+}
 
 pub fn toggle_grid_row_expanded(
     expanded_rows: &BTreeMap<String, bool>,
     row_id: &str,
-) -> (bool, BTreeMap<String, bool>) {
+) -> ToggleGridRowExpandedResult {
     let expanded = !expanded_rows.get(row_id).copied().unwrap_or(false);
     let mut next = expanded_rows.clone();
     next.insert(row_id.to_string(), expanded);
-    (expanded, next)
+    ToggleGridRowExpandedResult {
+        expanded,
+        next_expanded_rows: next,
+    }
 }
 
 pub fn expand_all_grid_rows(rows: &[GridRow]) -> BTreeMap<String, bool> {
@@ -37,12 +61,12 @@ pub fn set_grid_tree_row_expanded(
 pub fn toggle_grid_tree_row_expanded(
     expanded_tree_rows: &BTreeMap<String, bool>,
     row_id: &str,
-) -> (bool, BTreeMap<String, bool>) {
+) -> ToggleGridTreeRowExpandedResult {
     let expanded = !expanded_tree_rows.get(row_id).copied().unwrap_or(false);
-    (
+    ToggleGridTreeRowExpandedResult {
         expanded,
-        set_grid_tree_row_expanded(expanded_tree_rows, row_id, expanded),
-    )
+        next_expanded_tree_rows: set_grid_tree_row_expanded(expanded_tree_rows, row_id, expanded),
+    }
 }
 
 pub fn expand_all_grid_tree_rows(rows: &[GridRow]) -> BTreeMap<String, bool> {

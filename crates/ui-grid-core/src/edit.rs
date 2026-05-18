@@ -54,7 +54,13 @@ pub fn begin_grid_edit_session(
 }
 
 pub fn should_grid_edit_on_focus(options: &GridOptions, column: &GridColumnDef) -> bool {
-    column.enable_cell_edit_on_focus || options.enable_cell_edit_on_focus
+    // Mirror TS `column.enableCellEditOnFocus ?? options.enableCellEditOnFocus ?? false`.
+    // A column that explicitly sets `Some(false)` opts out even when options
+    // enable focus editing — that's the TS canonical behaviour.
+    column
+        .enable_cell_edit_on_focus
+        .or(options.enable_cell_edit_on_focus)
+        .unwrap_or(false)
 }
 
 pub fn build_grid_focus_cell_result(
@@ -89,8 +95,31 @@ pub fn build_grid_focus_cell_result(
     }
 }
 
-pub fn clear_grid_edit_session() -> (Option<GridCellPosition>, String) {
-    (None, String::new())
+/// Return shape of `clear_grid_edit_session`. Mirrors TS
+/// `{ editingCell: null, editingValue: '' }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearGridEditSessionResult {
+    pub editing_cell: Option<GridCellPosition>,
+    pub editing_value: String,
+}
+
+pub fn clear_grid_edit_session() -> ClearGridEditSessionResult {
+    ClearGridEditSessionResult {
+        editing_cell: None,
+        editing_value: String::new(),
+    }
+}
+
+/// Return shape of `find_next_grid_cell`. Mirrors TS `{ row, column }` —
+/// returns the resolved row + column objects instead of just the position.
+/// `GridColumnDef` carries `f64`-bearing fields so this struct cannot
+/// derive `Eq`; consumers should compare through `row.id` / `column.name`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindNextGridCellResult {
+    pub row: GridRow,
+    pub column: GridColumnDef,
 }
 
 pub fn find_next_grid_cell<F>(
@@ -100,7 +129,7 @@ pub fn find_next_grid_cell<F>(
     column_name: &str,
     direction: GridMoveDirection,
     is_cell_allowed: Option<F>,
-) -> Option<GridCellPosition>
+) -> Option<FindNextGridCellResult>
 where
     F: Fn(&GridRow, &GridColumnDef) -> bool,
 {
@@ -146,9 +175,9 @@ where
             .as_ref()
             .is_none_or(|predicate| predicate(next_row, next_column));
         if allowed {
-            return Some(GridCellPosition {
-                row_id: next_row.id.clone(),
-                column_name: next_column.name.clone(),
+            return Some(FindNextGridCellResult {
+                row: next_row.clone(),
+                column: next_column.clone(),
             });
         }
     }

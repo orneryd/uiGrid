@@ -1063,7 +1063,11 @@ impl EguiGrid {
                     None::<fn(&_, &_) -> bool>,
                 )
             {
-                self.begin_edit_at(&next, options, columns);
+                let position = GridCellPosition {
+                    row_id: next.row.id.clone(),
+                    column_name: next.column.name.clone(),
+                };
+                self.begin_edit_at(&position, options, columns);
             }
             return;
         }
@@ -1094,7 +1098,11 @@ impl EguiGrid {
                     None::<fn(&_, &_) -> bool>,
                 )
             {
-                self.begin_edit_at(&next, options, columns);
+                let position = GridCellPosition {
+                    row_id: next.row.id.clone(),
+                    column_name: next.column.name.clone(),
+                };
+                self.begin_edit_at(&position, options, columns);
             }
             return;
         }
@@ -1126,9 +1134,13 @@ impl EguiGrid {
                 None::<fn(&_, &_) -> bool>,
             )
         {
-            self.focused_cell = Some(next.clone());
-            self.selected_row_ids = vec![next.row_id.clone()];
-            self.last_clicked_row_id = Some(next.row_id.clone());
+            let position = GridCellPosition {
+                row_id: next.row.id.clone(),
+                column_name: next.column.name.clone(),
+            };
+            self.focused_cell = Some(position.clone());
+            self.selected_row_ids = vec![position.row_id.clone()];
+            self.last_clicked_row_id = Some(position.row_id);
         }
     }
 
