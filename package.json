@@ -1,6 +1,6 @@
 {
   "name": "ui-grid",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "scripts": {
     "ng": "ng",
     "clean:start-cache": "rm -rf .angular/cache node_modules/.vite projects/ui-grid-vanilla/node_modules/.vite",

@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid-vanilla",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Vanilla DOM wrapper for the Rust/WASM-backed @ornery/ui-grid-core custom element",
   "publishConfig": {
     "access": "public"
@@ -16,7 +16,7 @@
     }
   },
   "dependencies": {
-    "@ornery/ui-grid-core": "1.0.5"
+    "@ornery/ui-grid-core": "1.0.6"
   },
   "devDependencies": {
     "happy-dom": "^20.9.0",
