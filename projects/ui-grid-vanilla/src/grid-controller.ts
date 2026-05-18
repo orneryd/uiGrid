@@ -1511,7 +1511,15 @@ export class VanillaGridController {
   }
 
   setViewportWidth(width: number): void {
-    this.viewportWidth = Math.round(width);
+    // Under-estimate by a couple pixels: the body viewport's `overflow-x:
+    // auto` plus sub-pixel rounding on the host's box (border, padding,
+    // theme-applied transforms) means measuring the host's clientWidth
+    // tends to be ~1-2px wider than the actual track-renderable width.
+    // Without the margin a horizontal scrollbar appears by default even
+    // when columns nominally fit. Floor instead of round so we never
+    // round up over the actual width.
+    const adjusted = Math.max(0, Math.floor(width) - 2);
+    this.viewportWidth = adjusted;
   }
 
   getViewportWidth(): number {

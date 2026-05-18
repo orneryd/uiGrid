@@ -611,6 +611,14 @@ export function patchExistingRows(
       !(focusedMoved && focusedTouchesRow);
 
     if (canSkip) {
+      // Even though we're skipping the per-cell DOM patch, the row's
+      // framework-rendered slots must persist past the upcoming `flush()`.
+      // `flush()` diffs `pendingCellSlots` against `lastCellSlots`; without
+      // carrying the row's slots forward, every unchanged row in a structural
+      // patch pass would emit a spurious `cellSlotsChanged removed` event,
+      // tearing down framework wrappers' projected views (Angular embedded
+      // views, React portals) that already match the DOM.
+      el.frameworkSlots.carryRowCells(row.id);
       continue;
     }
 

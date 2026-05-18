@@ -261,6 +261,24 @@ export class FrameworkSlotBridge {
     });
   }
 
+  /**
+   * Carry forward every previously-known cell slot for `rowId` into the
+   * current pending set. Used by the structural patch path when a row's
+   * fingerprint matches the previous render's: `stageCell` would normally
+   * re-record the slot during cell rendering, but the fingerprint
+   * short-circuit skips the render pass for unchanged rows. Without this,
+   * `flush()` would diff pending (missing the row's slots) against last
+   * (containing them) and emit a spurious `removed` for every cell of the
+   * unchanged row, destroying the framework wrappers' projected content.
+   */
+  carryRowCells(rowId: string): void {
+    for (const [slotName, slot] of this.lastCellSlots) {
+      if (slot.rowId === rowId) {
+        this.pendingCellSlots.set(slotName, slot);
+      }
+    }
+  }
+
   stageExpandableRow(row: GridRow, rowIndex: number): void {
     const slotName = expandableRowSlotName(row);
     this.pendingExpandableRowSlots.set(slotName, {

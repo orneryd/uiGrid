@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SORT_DIRECTIONS } from './grid.constants';
 import { buildGridPipeline } from './grid.core.pipeline';
-import { BuildGridPipelineContext, GridColumnDef, GridOptions, GridRecord, SortState } from './grid.models';
+import { BuildGridPipelineContext } from './grid.core.types';
+import { GridColumnDef, GridOptions, GridRecord } from './grid.models';
 
 const wasmRunnerPath = fileURLToPath(
   new URL('./grid.core.pipeline.wasm-runner.mjs', import.meta.url),
@@ -46,10 +47,8 @@ function makeBaseContext(overrides: Partial<BuildGridPipelineContext> = {}): Bui
     enableSorting: true,
     enableFiltering: true,
     enableGrouping: false,
-    // No `rowIdentity` callback (subprocess strips it) and no
-    // `rowIdField`. TS falls through to `${options.id}-${rowIndex}`. Rust
-    // does the same when neither override is configured.
-    rowIdField: undefined,
+    // No `rowIdentity` callback configured (subprocess strips it anyway). TS
+    // and Rust both fall through to `${options.id}-${rowIndex}` in that case.
     ...(overrides.options ?? {}),
   };
   return {
@@ -97,8 +96,8 @@ describe('grid.core.pipeline wasm parity', () => {
     );
     // r1 (200), r3 (300), r4 (150) → sorted desc by revenue → r3, r1, r4.
     expect(wasm.visibleRows.map((r) => r.id)).toEqual(ts.visibleRows.map((r) => r.id));
-    // Without rowIdentity / rowIdField configured, both implementations use
-    // the `${options.id}-${rowIndex}` fallback. r1=g-0 (rev=200),
+    // Without rowIdentity configured, both implementations use the
+    // `${options.id}-${rowIndex}` fallback. r1=g-0 (rev=200),
     // r2=g-1 (Pilot, filtered out), r3=g-2 (rev=300), r4=g-3 (rev=150).
     // Sorted desc by revenue: r3, r1, r4 → g-2, g-0, g-3.
     expect(ts.visibleRows.map((r) => r.id)).toEqual(['g-2', 'g-0', 'g-3']);
@@ -115,10 +114,6 @@ describe('grid.core.pipeline wasm parity', () => {
         columnDefs: makeColumns(),
         enableSorting: true,
         enablePagination: true,
-        // No `rowIdentity` callback (subprocess strips it) and no
-    // `rowIdField`. TS falls through to `${options.id}-${rowIndex}`. Rust
-    // does the same when neither override is configured.
-    rowIdField: undefined,
       },
     });
     const ts = buildGridPipeline(context);
@@ -139,10 +134,6 @@ describe('grid.core.pipeline wasm parity', () => {
         columnDefs: makeColumns(),
         enableSorting: true,
         enableGrouping: true,
-        // No `rowIdentity` callback (subprocess strips it) and no
-    // `rowIdField`. TS falls through to `${options.id}-${rowIndex}`. Rust
-    // does the same when neither override is configured.
-    rowIdField: undefined,
       },
     });
     const ts = buildGridPipeline(context);

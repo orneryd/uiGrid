@@ -354,7 +354,7 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
       text-decoration: none;
       cursor: pointer;
       transition:
-        transform 160ms ease,
+        filter 160ms ease,
         box-shadow 160ms ease;
       background: linear-gradient(
         135deg,
@@ -366,10 +366,15 @@ function createInfiniteRows(start: number, count: number): GridRecord[] {
       box-shadow: 0 12px 24px rgba(8, 39, 61, 0.18);
     }
 
+    // \`transform\` on hover promotes the button to its own compositing
+    // layer, which makes the grid's sticky filter strip flicker as
+    // Chromium repaints the surrounding stacking context. Use
+    // \`filter: brightness\` for the same visual feedback without
+    // forcing a new compositor layer.
     .demo-link:hover,
     .demo-button:hover,
     .scenario-button:hover {
-      transform: translateY(-1px);
+      filter: brightness(1.06);
     }
 
     .demo-link-secondary,

@@ -187,6 +187,13 @@ export class WebComponentsComponent {
   //     Angular's compiler eats native <template> as ng-template) ────────
   private static readonly STATUS_PILL_TEMPLATE = `<span class="status-pill status-pill-{{valueLower}}">{{value}}</span>`;
 
+  // Mirrors the Angular harness's <ng-template #renewalDateCell> visually.
+  // The vanilla slot path is interpolation-only (no event binding) — the
+  // host wires up a delegated `change` listener to persist the picked date
+  // back into the row and re-render via setData().
+  private static readonly RENEWAL_DATE_TEMPLATE =
+    `<input type="date" class="browser-harness__date-picker" value="{{value}}" />`;
+
   private static readonly EXPANDABLE_ROW_TEMPLATE =
     `<article class="detail-card">` +
     `<strong>{{row.name}}</strong>` +
@@ -245,6 +252,11 @@ export class WebComponentsComponent {
   ] as const;
   private demoGridApi: UiGridApi | null = null;
   private disposeDemoInfinite: (() => void) | null = null;
+  // Persistent rows for the templated demo so a date-picker change survives
+  // the next render. Keyed by row id; mutated in place when the user picks
+  // a new date and then re-published via setData().
+  private templatedRows: GridRecord[] = createHarnessRows();
+  private disposeTemplatedDateChange: (() => void) | null = null;
   private readonly primaryColumnDefs = [
     {
       name: 'name',
@@ -309,9 +321,16 @@ export class WebComponentsComponent {
     },
     {
       name: 'revenue',
+      displayName: 'Revenue',
       align: 'end',
       width: 'minmax(9rem, 0.7fr)',
       filter: { condition: FILTER_CONDITIONS.greaterThan },
+    },
+    {
+      name: 'renewalDate',
+      displayName: 'Renewal',
+      type: 'date',
+      width: 'minmax(11rem, 0.9fr)',
     },
     {
       name: 'owner',
@@ -397,7 +416,7 @@ export class WebComponentsComponent {
           id: 'web-components-demo-templated',
           title: 'Web Components Demo: Templated',
           emptyMessage: 'No rows match the current filters.',
-          dataJson: JSON.stringify(createHarnessRows()),
+          dataJson: JSON.stringify(this.templatedRows),
           columnDefsJson: JSON.stringify(this.templatedColumnDefs),
           rowHeight: 46,
           virtualizationThreshold: 1,
@@ -621,6 +640,9 @@ export class WebComponentsComponent {
   <template slot="cell-status" ngNonBindable>
     <span class="status-pill status-pill-{{valueLower}}">{{value}}</span>
   </template>
+  <template slot="cell-renewalDate" ngNonBindable>
+    <input type="date" class="browser-harness__date-picker" value="{{value}}" />
+  </template>
 </ui-grid-element>
 
 <script type="module">
@@ -826,10 +848,12 @@ export class WebComponentsComponent {
       this.disposePrimaryBenchmark?.();
       this.disposePrimarySelection?.();
       this.disposePrimarySelectionBatch?.();
+      this.disposeTemplatedDateChange?.();
       this.disposePrimaryVisibleRows = null;
       this.disposePrimaryBenchmark = null;
       this.disposePrimarySelection = null;
       this.disposePrimarySelectionBatch = null;
+      this.disposeTemplatedDateChange = null;
       this.primaryGridApi = null;
       if (this.tradingIntervalId !== null) {
         clearInterval(this.tradingIntervalId);
@@ -991,16 +1015,48 @@ export class WebComponentsComponent {
     }
     const el = this.demoGridRef().nativeElement;
     this.clearSlotTemplates(el);
+    this.disposeTemplatedDateChange?.();
+    this.disposeTemplatedDateChange = null;
     const mode = this.mode();
     if (mode === 'expandable') {
       this.injectSlotTemplate(el, 'expandable-row', WebComponentsComponent.EXPANDABLE_ROW_TEMPLATE);
     } else if (mode === 'templated') {
       this.injectSlotTemplate(el, 'cell-status', WebComponentsComponent.STATUS_PILL_TEMPLATE);
+      this.injectSlotTemplate(
+        el,
+        'cell-renewalDate',
+        WebComponentsComponent.RENEWAL_DATE_TEMPLATE,
+      );
+      this.disposeTemplatedDateChange = this.bindTemplatedDateChange(el);
     } else if (mode === 'trading') {
       for (const [slotName, markup] of WebComponentsComponent.TRADING_TEMPLATES) {
         this.injectSlotTemplate(el, slotName, markup);
       }
     }
+  }
+
+  // The slot template path is interpolation-only, so the date-picker is
+  // a real <input> with no event binding. Walk up to the body cell to
+  // recover the row id, write the new value back into the row, then
+  // re-publish via setData() so the grid re-renders.
+  private bindTemplatedDateChange(el: WebComponentGridElement): () => void {
+    const onChange = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.type !== 'date') {
+        return;
+      }
+      const cell = target.closest<HTMLElement>('.body-cell');
+      if (!cell) return;
+      const rowId = cell.getAttribute('data-row-id');
+      const colName = cell.getAttribute('data-col-name');
+      if (!rowId || colName !== 'renewalDate') return;
+      const row = this.templatedRows.find((r) => String(r['id']) === rowId);
+      if (!row) return;
+      row['renewalDate'] = target.value;
+      el.setData(this.templatedRows);
+    };
+    el.addEventListener('change', onChange);
+    return () => el.removeEventListener('change', onChange);
   }
 
   private syncInfiniteLoop(): void {

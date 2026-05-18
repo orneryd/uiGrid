@@ -41,14 +41,10 @@
   font: inherit;
 }
 
-// The expand toggle sits AFTER .cell-content in the flex row so it hugs the
-// trailing edge of the primary cell (typically the customer/name column),
-// keeping the cell content left-aligned and the disclosure chevron on the
-// right. The tree toggle stays on the leading edge because tree indentation
-// reads left-to-right.
-.cell-shell > .row-toggle-expand {
-  margin-inline-start: auto;
-}
+// Both expand and tree toggles sit BEFORE .cell-content so the disclosure
+// chevron is on the leading edge of the primary cell, in front of the row
+// label. Tree indentation also reads left-to-right, which keeps the two
+// toggle styles visually consistent.
 
 .toggle-icon {
   width: var(--ui-grid-toggle-icon-size);

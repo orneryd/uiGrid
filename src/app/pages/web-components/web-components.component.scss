@@ -83,14 +83,18 @@
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 160ms ease,
+    filter 160ms ease,
     box-shadow 160ms ease;
 }
 
+// `transform` on hover promotes the button to its own compositing layer,
+// which makes the grid's sticky filter strip flicker as Chromium repaints
+// the surrounding stacking context. Use `filter: brightness` instead — it
+// gives similar visual feedback without forcing a new compositor layer.
 .demo-link:hover,
 .demo-button:hover,
 .scenario-button:hover {
-  transform: translateY(-1px);
+  filter: brightness(1.06);
 }
 
 .demo-link,

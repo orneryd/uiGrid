@@ -60,7 +60,7 @@ function normalizeShapeForCompare(value: unknown): unknown {
 
 describe('grid.core.state wasm parity', () => {
   it('matches buildGridSavedState across full and minimal contexts', { timeout: 30000 }, () => {
-    const cases = [
+    const cases: Parameters<typeof buildGridSavedState>[0][] = [
       {
         columnOrder: ['name', 'status'],
         activeFilters: { status: 'Active' },
@@ -110,7 +110,7 @@ describe('grid.core.state wasm parity', () => {
       {
         expandable: { r1: true, r2: false, __proto__: true } as Record<string, boolean>,
         treeView: { r1: true } as Record<string, boolean>,
-        pinning: { name: 'left', __proto__: 'left', status: 'invalid' } as Record<string, 'left' | 'right'>,
+        pinning: { name: 'left', __proto__: 'left', status: 'invalid' } as unknown as Record<string, 'left' | 'right'>,
       },
       {
         pagination: { paginationCurrentPage: -1, paginationPageSize: -5 },

@@ -345,44 +345,35 @@ describe('row selection + expand patch correctness', () => {
     expect(r1Cell.getAttribute('data-focused')).toBe('true');
   });
 
-  it('expand toggle attaches to the first data column (not the selection checkbox column) and renders to the right of cell content', async () => {
-    // Regression test for the visual bug shown in the user's screenshot:
-    // when both enableRowSelection and enableExpandable were on, the
-    // expand toggle was rendering inside the selectionRowHeaderCol cell
-    // (column index 0), to the LEFT of the row checkbox. The fix
-    // teaches isGridPrimaryColumn() to skip the synthetic selection
-    // column so the toggle attaches to the actual first data column.
-    // The toggle itself moved to AFTER `.cell-content` so it hugs the
-    // trailing edge of the cell.
+  it('expand toggle attaches to the first data column (not the selection checkbox column) and renders to the left of cell content', async () => {
+    // Regression test for the visual bug where the expand toggle
+    // rendered inside the selectionRowHeaderCol cell (column index 0).
+    // isGridPrimaryColumn() now skips the synthetic selection column so
+    // the toggle attaches to the actual first data column. The toggle
+    // sits BEFORE `.cell-content` so the disclosure chevron hugs the
+    // leading edge of the cell, matching the tree-toggle convention.
     const options = selectionExpandOptions();
     const { shadow } = await mountGrid(options);
 
-    // The selection-checkbox cell must NOT contain a row-toggle-expand
-    // button — that bug was the visible artefact in the screenshot.
     const selectionCellR1 = shadow.querySelector<HTMLElement>(
       '.body-cell[data-row="r1"][data-column="selectionRowHeaderCol"]',
     );
     expect(selectionCellR1).not.toBeNull();
     expect(selectionCellR1!.querySelector('.row-toggle-expand')).toBeNull();
 
-    // The first data column ('name') hosts the expand toggle.
     const nameCellR1 = cellIn(shadow, 'r1', 'name');
     const expandToggle = nameCellR1.querySelector<HTMLElement>('.row-toggle-expand');
     expect(expandToggle).not.toBeNull();
 
-    // Inside the cell-shell the toggle must come AFTER .cell-content so
-    // it sits on the trailing edge of the cell. Compare via DOM order:
-    // expandToggle.compareDocumentPosition vs .cell-content.
+    // Inside the cell-shell the toggle must come BEFORE .cell-content
+    // so it sits on the leading edge of the cell. DOCUMENT_POSITION_FOLLOWING
+    // (0x04) means cellContent is AFTER expandToggle.
     const cellContent = nameCellR1.querySelector<HTMLElement>('.cell-content')!;
-    // DOCUMENT_POSITION_PRECEDING (0x02) means cellContent is BEFORE
-    // expandToggle in the document — i.e. expand toggle comes after
-    // the content, on the right.
-    const expectedPreceding = Node.DOCUMENT_POSITION_PRECEDING;
-    expect(expandToggle!.compareDocumentPosition(cellContent) & expectedPreceding).toBe(
-      expectedPreceding,
+    const expectedFollowing = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(expandToggle!.compareDocumentPosition(cellContent) & expectedFollowing).toBe(
+      expectedFollowing,
     );
 
-    // Sanity-check selection still works even though expand toggle moved.
     const selectionCheckbox = selectionCellR1!.querySelector<HTMLElement>(
       '.ui-grid-selection-row-header-buttons',
     );
