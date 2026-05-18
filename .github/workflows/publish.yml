@@ -157,6 +157,9 @@ jobs:
           echo "@ornery/ui-grid-vanilla@$VERSION was not available on npm in time" >&2
           exit 1
 
+      - name: Build the Vanilla package (for type resolution)
+        run: npm run build:vanilla
+
       - name: Build the React package
         run: npm run build --prefix projects/ui-grid-react
 
