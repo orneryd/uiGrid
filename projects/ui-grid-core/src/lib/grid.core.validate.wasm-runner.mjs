@@ -32,6 +32,10 @@ async function main() {
       return wasm.run_grid_cell_validators_js(payload.input);
     case 'validateAllGridRows':
       return wasm.validate_all_grid_rows_js(payload.input);
+    case 'setGridValidator':
+      return wasm.set_grid_validator_js(payload.input);
+    case 'getGridValidator':
+      return wasm.get_grid_validator_js(payload.input);
     default:
       throw new Error(`Unknown wasm validate command: ${payload.command}`);
   }

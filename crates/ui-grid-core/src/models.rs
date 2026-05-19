@@ -102,6 +102,14 @@ pub struct GridColumnDef {
     pub sort: Option<GridSortDescriptor>,
     #[serde(default)]
     pub filter: Option<GridFilterDescriptor>,
+    /// Internal — set by the wasm bridge when the canonical TS column
+    /// has a `sortingAlgorithm` callback. The Rust sorter cannot run JS
+    /// closures, so when this flag is true `guess_sort_kind` returns
+    /// `SortKind::DeferToHost` and `sort_grid_rows` leaves the rows in
+    /// input order. The bridge then re-sorts via the original JS
+    /// callback for those columns only. Hidden from JSON output.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub has_sorting_algorithm: bool,
 }
 
 impl Default for GridColumnDef {
@@ -129,6 +137,7 @@ impl Default for GridColumnDef {
             align: None,
             sort: None,
             filter: None,
+            has_sorting_algorithm: false,
         }
     }
 }

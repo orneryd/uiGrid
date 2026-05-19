@@ -20,6 +20,33 @@ pub enum GridExporterColumnType {
     Visible,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GridExporterRowType {
+    All,
+    Visible,
+    Selected,
+}
+
+/// Resolve the output filename. Mirrors the TS helper of the same name —
+/// callers that have a static filename string get it back; callers with
+/// nothing get the supplied fallback. JS callers that source the filename
+/// from a callback are expected to evaluate the callback host-side
+/// before invoking this helper, since closures don't cross the wasm
+/// boundary. The `row_type` / `col_type` arguments are accepted so the
+/// signature shape matches the canonical TS call site.
+pub fn resolve_exporter_filename(
+    filename: Option<&str>,
+    fallback: &str,
+    _row_type: GridExporterRowType,
+    _col_type: GridExporterColumnType,
+) -> String {
+    match filename {
+        Some(value) if !value.is_empty() => value.to_string(),
+        _ => fallback.to_string(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GridExporterOptions {
@@ -150,6 +177,41 @@ pub fn header_label(column: &GridColumnDef) -> String {
         .display_name
         .clone()
         .unwrap_or_else(|| titleize(&column.name))
+}
+
+/// Mirrors TS `GridHeaderTemplateContext`: the column plus its resolved
+/// display label, packaged for `headerRenderer` callbacks. The serialized
+/// shape is `{ $implicit, value, column }` — the `$implicit` key matches
+/// Angular template-context conventions and is what consumer code in the
+/// vanilla / Angular / React adapters reads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GridHeaderTemplateContext {
+    #[serde(rename = "$implicit")]
+    pub implicit: String,
+    pub value: String,
+    pub column: GridColumnDef,
+}
+
+/// Build a header-template context for `column`. Pairs with
+/// [`format_grid_header_display_value`] which honours an optional
+/// JS-side `headerRenderer` callback (handled host-side via the wasm
+/// bridge — Rust returns the `value` string verbatim).
+pub fn build_grid_header_context(column: &GridColumnDef) -> GridHeaderTemplateContext {
+    let value = header_label(column);
+    GridHeaderTemplateContext {
+        implicit: value.clone(),
+        value,
+        column: column.clone(),
+    }
+}
+
+/// Resolve the header display string for `context`. The TS counterpart
+/// can invoke a JS `column.headerRenderer` callback; closures don't
+/// cross the wasm boundary, so the Rust port returns the resolved label
+/// directly. The wasm bridge wrapper checks for a function-typed
+/// `headerRenderer` host-side and runs it before falling back here.
+pub fn format_grid_header_display_value(context: &GridHeaderTemplateContext) -> String {
+    context.value.clone()
 }
 
 pub fn build_grid_export_context<'a>(

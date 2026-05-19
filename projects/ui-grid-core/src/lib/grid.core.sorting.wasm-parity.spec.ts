@@ -1,11 +1,26 @@
 /// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { SORT_DIRECTIONS } from './grid.constants';
 import { sortGridRows } from './grid.core.sorting';
 import { GridColumnDef, GridOptions, GridRow, SortState } from './grid.models';
+// In-process wasm-web import for the sortingAlgorithm callback case —
+// subprocess argv runners drop function-typed properties via JSON.stringify,
+// so the deferred-sort flag would never surface through that path.
+import * as wasmModule from '../../../../dist/ui-grid-wasm-web/ui_grid_wasm.js';
+
+const wasmBinaryPath = fileURLToPath(
+  new URL('../../../../dist/ui-grid-wasm-web/ui_grid_wasm_bg.wasm', import.meta.url),
+);
+
+beforeAll(async () => {
+  await (wasmModule as unknown as { default: (input: ArrayBuffer) => Promise<unknown> }).default(
+    readFileSync(wasmBinaryPath).buffer as ArrayBuffer,
+  );
+});
 
 const wasmRunnerPath = fileURLToPath(
   new URL('./grid.core.sorting.wasm-runner.mjs', import.meta.url),
@@ -119,6 +134,49 @@ describe('grid.core.sorting wasm parity', () => {
       }).map((r) => r.id);
       expect(wasm).toEqual(ts);
     }
+  });
+
+  it('defers to host when a column declares a sortingAlgorithm callback', { timeout: 30000 }, () => {
+    // Column with a JS sortingAlgorithm callback. The Rust core can't
+    // invoke JS closures, so the wasm shim flags the column with
+    // has_sorting_algorithm=true and the sorter returns rows in input
+    // order (`SortKind::DeferToHost`). The TS sortGridRows path uses
+    // the callback directly so it produces a fully sorted result.
+    const options: GridOptions = { id: 'g', data: [], columnDefs: [] };
+    const reverseAlpha = (left: unknown, right: unknown) => {
+      const ls = String(left ?? '');
+      const rs = String(right ?? '');
+      if (ls < rs) return 1;
+      if (ls > rs) return -1;
+      return 0;
+    };
+    const columns = [col('name', { sortingAlgorithm: reverseAlpha })];
+    const rows = [
+      row('r1', { name: 'Charlie' }),
+      row('r2', { name: 'Alpha' }),
+      row('r3', { name: 'Bravo' }),
+    ];
+    const sortState: SortState = { columnName: 'name', direction: SORT_DIRECTIONS.asc };
+
+    const ts = sortGridRows(rows, columns, options, sortState).map((r) => r.id);
+    // TS uses the callback; reverseAlpha sorts desc → r1 (Charlie),
+    // r3 (Bravo), r2 (Alpha).
+    expect(ts).toEqual(['r1', 'r3', 'r2']);
+
+    const wasm = (
+      wasmModule as unknown as {
+        sort_grid_rows_js: (input: unknown) => Array<{ id: string }>;
+      }
+    ).sort_grid_rows_js({
+      // Pass live columns array — the wasm shim uses Reflect.get to
+      // detect function-typed sortingAlgorithm before serde drops it.
+      rows: serializeRows(rows),
+      columns,
+      options,
+      sortState,
+    });
+    // Wasm defers to the host: stable sort with all-equal compare → input order preserved.
+    expect(wasm.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']);
   });
 
   it('handles nullish values consistently (push to end on asc)', { timeout: 30000 }, () => {

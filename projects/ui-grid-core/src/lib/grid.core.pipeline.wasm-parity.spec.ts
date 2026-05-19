@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { SORT_DIRECTIONS } from './grid.constants';
-import { buildGridPipeline } from './grid.core.pipeline';
+import {
+  buildGridPipeline,
+  clearGridPipelineRowsCache,
+  getCachedGridPipelineRows,
+} from './grid.core.pipeline';
 import { BuildGridPipelineContext } from './grid.core.types';
 import { GridColumnDef, GridOptions, GridRecord } from './grid.models';
 
@@ -123,6 +127,44 @@ describe('grid.core.pipeline wasm parity', () => {
     );
     expect(wasm.visibleRows.map((r) => r.id)).toEqual(ts.visibleRows.map((r) => r.id));
     expect(wasm.totalItems).toBe(ts.totalItems);
+  });
+
+  it('matches getCachedGridPipelineRows shape across the cache shim', { timeout: 30000 }, () => {
+    // Reset both caches so the call below is a fresh miss in each impl.
+    clearGridPipelineRowsCache();
+    const context = makeBaseContext();
+    const ts = getCachedGridPipelineRows(context);
+    const wasm = runWasm<Array<{ id: string; index: number; height: number }>>(
+      'getCachedGridPipelineRows',
+      context,
+    );
+    expect(wasm.length).toBe(ts.length);
+    expect(wasm.map((r) => r.id)).toEqual(ts.map((r) => r.id));
+    expect(wasm.map((r) => r.index)).toEqual(ts.map((r) => r.index));
+    expect(wasm.map((r) => r.height)).toEqual(ts.map((r) => r.height));
+
+    // A second call with the same context returns identical rows in TS
+    // (cache hit) and identical shape over the wasm shim (cache miss
+    // across the boundary, but the rebuilt rows must match).
+    const tsAgain = getCachedGridPipelineRows(context);
+    const wasmAgain = runWasm<Array<{ id: string }>>(
+      'getCachedGridPipelineRows',
+      context,
+    );
+    expect(tsAgain.map((r) => r.id)).toEqual(ts.map((r) => r.id));
+    expect(wasmAgain.map((r) => r.id)).toEqual(wasm.map((r) => r.id));
+
+    // clearGridPipelineRowsCache is a no-op shape-wise but must not throw
+    // and must leave the next call producing the same rows again.
+    clearGridPipelineRowsCache();
+    runWasm<null>('clearGridPipelineRowsCache', null);
+    const tsAfterClear = getCachedGridPipelineRows(context);
+    const wasmAfterClear = runWasm<Array<{ id: string }>>(
+      'getCachedGridPipelineRows',
+      context,
+    );
+    expect(tsAfterClear.map((r) => r.id)).toEqual(ts.map((r) => r.id));
+    expect(wasmAfterClear.map((r) => r.id)).toEqual(wasm.map((r) => r.id));
   });
 
   it('matches grouped pipeline', { timeout: 30000 }, () => {

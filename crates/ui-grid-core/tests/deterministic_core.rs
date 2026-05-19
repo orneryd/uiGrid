@@ -62,6 +62,7 @@ fn base_columns() -> Vec<GridColumnDef> {
                 condition: Some(FilterCondition::Contains),
                 ..Default::default()
             }),
+            has_sorting_algorithm: false,
         },
         GridColumnDef {
             name: "status".to_string(),
@@ -90,6 +91,7 @@ fn base_columns() -> Vec<GridColumnDef> {
                 condition: Some(FilterCondition::Contains),
                 ..Default::default()
             }),
+            has_sorting_algorithm: false,
         },
         GridColumnDef {
             name: "revenue".to_string(),
@@ -118,6 +120,7 @@ fn base_columns() -> Vec<GridColumnDef> {
                 condition: Some(FilterCondition::GreaterThanOrEqual),
                 ..Default::default()
             }),
+            has_sorting_algorithm: false,
         },
     ]
 }

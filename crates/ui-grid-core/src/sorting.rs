@@ -1,7 +1,7 @@
 use crate::{
     constants::SortDirection,
     models::{GridColumnDef, GridOptions, GridRow, SortState},
-    row_sorter::{compare_values, guess_sort_kind},
+    row_sorter::{SortKind, compare_values, guess_sort_kind},
     utils::get_cell_value,
 };
 
@@ -33,6 +33,13 @@ pub fn sort_grid_rows(
             .map(|row| row.entity.clone())
             .collect::<Vec<_>>(),
     );
+    // Column has a JS `sortingAlgorithm` callback the Rust core can't
+    // invoke — leave rows in input order so the wasm bridge can re-sort
+    // host-side. Skipping the sort entirely is a clarity win (and saves
+    // a stable-sort pass that would only return Equal for every pair).
+    if matches!(kind, SortKind::DeferToHost) {
+        return rows.to_vec();
+    }
     let mut sorted = rows.to_vec();
     sorted.sort_by(|left, right| {
         let left_value = get_cell_value(&left.entity, column);

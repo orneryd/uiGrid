@@ -908,12 +908,35 @@ export const buildGridCellContext: typeof tsDisplay.buildGridCellContext = (...a
 export const formatGridCellDisplayValue: typeof tsDisplay.formatGridCellDisplayValue = (...args) =>
   tsDisplay.formatGridCellDisplayValue(...args);
 
-export const buildGridHeaderContext: typeof tsExport.buildGridHeaderContext = (...args) =>
-  tsExport.buildGridHeaderContext(...args);
+export const buildGridHeaderContext: typeof tsExport.buildGridHeaderContext = (column) =>
+  withWasm(
+    (wasm) =>
+      wasm.build_grid_header_context_js({ column: normalizeColumnForWasm(column) }) as ReturnType<
+        typeof tsExport.buildGridHeaderContext
+      >,
+    () => tsExport.buildGridHeaderContext(column),
+  );
 
 export const formatGridHeaderDisplayValue: typeof tsExport.formatGridHeaderDisplayValue = (
-  ...args
-) => tsExport.formatGridHeaderDisplayValue(...args);
+  context,
+) => {
+  // Function-typed `headerRenderer` runs host-side — closures don't
+  // survive the wasm boundary. Static / undefined cases delegate to the
+  // wasm shim for parity coverage; if the wasm runtime isn't loaded
+  // the TS impl is the fallback.
+  if (typeof context.column.headerRenderer === 'function') {
+    return context.column.headerRenderer(context);
+  }
+  return withWasm(
+    (wasm) =>
+      wasm.format_grid_header_display_value_js({
+        $implicit: context.$implicit,
+        value: context.value,
+        column: normalizeColumnForWasm(context.column),
+      }),
+    () => tsExport.formatGridHeaderDisplayValue(context),
+  );
+};
 
 export const buildGridPipeline: typeof tsPipeline.buildGridPipeline = (context) =>
   tsPipeline.buildGridPipeline(context);
@@ -1502,7 +1525,30 @@ export const headerLabel: typeof tsExport.headerLabel = (column) =>
 export const buildGridCsv = tsExport.buildGridCsv;
 export const resolveGridExporterOptions = tsExport.resolveGridExporterOptions;
 export const filterExporterColumns = tsExport.filterExporterColumns;
-export const resolveExporterFilename = tsExport.resolveExporterFilename;
+export const resolveExporterFilename: typeof tsExport.resolveExporterFilename = (
+  filename,
+  fallback,
+  rowType,
+  colType,
+) => {
+  // Function-valued filenames are evaluated host-side and never cross
+  // the wasm boundary (closures don't survive the bridge). Static and
+  // undefined cases delegate to the wasm shim for parity coverage; if
+  // the wasm runtime isn't loaded the TS impl is the fallback.
+  if (typeof filename === 'function') {
+    return filename(rowType, colType);
+  }
+  return withWasm(
+    (wasm) =>
+      wasm.resolve_exporter_filename_js({
+        filename: typeof filename === 'string' ? filename : undefined,
+        fallback,
+        rowType,
+        colType,
+      }),
+    () => tsExport.resolveExporterFilename(filename, fallback, rowType, colType),
+  );
+};
 export const GRID_EXPORTER_CONSTANTS = tsExport.GRID_EXPORTER_CONSTANTS;
 export const buildGridPdfDocDefinition = tsExport.buildGridPdfDocDefinition;
 export const calculateGridPdfColumnWidths = tsExport.calculateGridPdfColumnWidths;

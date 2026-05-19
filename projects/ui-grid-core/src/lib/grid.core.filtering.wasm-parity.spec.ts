@@ -7,6 +7,8 @@ import { FILTER_CONDITIONS } from './grid.constants';
 import {
   clearGridFilterReasons,
   matchesGridRowFilters,
+  matchesGridRowPreparedFilters,
+  prepareGridColumnFilters,
 } from './grid.core.filtering';
 import { GridColumnDef, GridOptions, GridRow } from './grid.models';
 
@@ -122,6 +124,70 @@ describe('grid.core.filtering wasm parity', () => {
       );
       expect(wasm.matches).toBe(c.expected);
     }
+  });
+
+  it('matches matchesGridRowsPreparedFilters across the batch shim', { timeout: 30000 }, () => {
+    const options: GridOptions = { id: 'g', data: [], columnDefs: [] };
+    const columns = [
+      col('name', { filter: { condition: FILTER_CONDITIONS.contains } }),
+      col('status', { filter: { condition: FILTER_CONDITIONS.exact } }),
+      col('revenue', {
+        type: 'number',
+        filter: { condition: FILTER_CONDITIONS.greaterThan },
+      }),
+    ];
+    const activeFilters = { name: 'Alp', revenue: '150' };
+
+    const inputRows = [
+      makeRow('r1', { name: 'Alpha', status: 'Active', revenue: 200 }),
+      makeRow('r2', { name: 'Beta', status: 'Active', revenue: 200 }),
+      makeRow('r3', { name: 'Alpha', status: 'Pilot', revenue: 100 }),
+      makeRow('r4', { name: 'Alpha', status: 'Active', revenue: 250 }),
+    ];
+
+    // Seed every row with a stale `filter:status` reason. The batch shim
+    // mirrors `matchesGridRowFilters`'s contract — it clears stale
+    // `filter:<col>` reasons for columns that no longer have an active
+    // filter, then evaluates prepared specs. Both implementations should
+    // arrive at the same matches + reasons set.
+    for (const row of inputRows) row.setThisRowInvisible('filter:status');
+
+    const tsRows = inputRows.map((r) => {
+      const cloned = makeRow(r.id, r.entity as Record<string, unknown>);
+      cloned.setThisRowInvisible('filter:status');
+      return cloned;
+    });
+    const tsMatches = tsRows.map((row) =>
+      matchesGridRowFilters(row, columns, options, activeFilters),
+    );
+
+    const wasm = runWasm<{
+      rows: Array<{ invisibleReasons: string[]; visible: boolean }>;
+      matches: boolean[];
+    }>('matchesGridRowsPreparedFilters', {
+      rows: inputRows.map(serializeRow),
+      columns,
+      options,
+      activeFilters,
+    });
+
+    expect(wasm.matches).toEqual(tsMatches);
+    expect(wasm.rows.map((r) => [...r.invisibleReasons].sort())).toEqual(
+      tsRows.map((r) => [...r.invisibleReasons].sort()),
+    );
+
+    // Also verify the prepared helper produces identical results when the
+    // caller has already cleared stale reasons (mirroring the pipeline's
+    // own usage).
+    const tsRowsPrepared = inputRows.map((r) =>
+      makeRow(r.id, r.entity as Record<string, unknown>),
+    );
+    const prepared = prepareGridColumnFilters(columns, activeFilters);
+    expect(prepared.length).toBe(2);
+    const preparedMatches = tsRowsPrepared.map((row) =>
+      matchesGridRowPreparedFilters(row, prepared),
+    );
+    expect(preparedMatches).toEqual(tsMatches);
   });
 
   it('matches clearGridFilterReasons (drops only filter:* reasons)', { timeout: 30000 }, () => {

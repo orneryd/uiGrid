@@ -15,6 +15,11 @@ pub enum SortKind {
     Alpha,
     Date,
     Boolean,
+    /// Column has a custom JS `sortingAlgorithm` callback that the Rust
+    /// engine can't invoke. The pipeline leaves rows in input order; the
+    /// wasm bridge re-sorts using the host-side callback after the Rust
+    /// pipeline completes.
+    DeferToHost,
 }
 
 fn compare_nulls(left: &Value, right: &Value) -> Option<Ordering> {
@@ -137,6 +142,12 @@ fn looks_like_number_string(value: &str) -> bool {
 }
 
 pub fn guess_sort_kind(column: &GridColumnDef, rows: &[GridRecord]) -> SortKind {
+    // Column has a JS `sortingAlgorithm` callback that the Rust engine
+    // can't invoke — defer to the host. The pipeline returns rows in
+    // input order; the wasm bridge re-sorts after deserialization.
+    if column.has_sorting_algorithm {
+        return SortKind::DeferToHost;
+    }
     if column.r#type == GridColumnType::Number {
         return SortKind::Number;
     }
@@ -170,6 +181,10 @@ pub fn compare_values(kind: SortKind, left: &Value, right: &Value) -> Ordering {
         SortKind::Alpha => compare_alpha(left, right),
         SortKind::Date => compare_date(left, right),
         SortKind::Boolean => compare_boolean(left, right),
+        // Deferred — Rust uses a stable sort, so returning Equal preserves
+        // the rows' original relative order. The wasm bridge will re-sort
+        // these rows host-side using the JS sortingAlgorithm callback.
+        SortKind::DeferToHost => Ordering::Equal,
     }
 }
 

@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::BTreeMap};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use ui_grid_core::{
@@ -12,13 +13,17 @@ use ui_grid_core::{
         parse_grid_edited_value, should_grid_edit_on_focus, stringify_grid_editor_value,
     },
     export::{
-        GridExporterColumnType, build_grid_csv, build_grid_excel_sheet_data,
-        build_grid_pdf_doc_definition, calculate_grid_pdf_column_widths, export_csv_rows,
-        filter_exporter_columns, format_grid_excel_field, format_grid_pdf_field, header_label,
-        resolve_grid_exporter_excel_options, resolve_grid_exporter_options,
-        resolve_grid_exporter_pdf_options,
+        GridExporterColumnType, GridExporterRowType, GridHeaderTemplateContext, build_grid_csv,
+        build_grid_excel_sheet_data, build_grid_header_context, build_grid_pdf_doc_definition,
+        calculate_grid_pdf_column_widths, export_csv_rows, filter_exporter_columns,
+        format_grid_excel_field, format_grid_header_display_value, format_grid_pdf_field,
+        header_label, resolve_exporter_filename, resolve_grid_exporter_excel_options,
+        resolve_grid_exporter_options, resolve_grid_exporter_pdf_options,
     },
-    filtering::{clear_grid_filter_reasons, matches_grid_row_filters},
+    filtering::{
+        clear_grid_filter_reasons, matches_grid_row_filters, matches_grid_row_prepared_filters,
+        prepare_grid_column_filters,
+    },
     grouping::build_grid_display_items,
     i18n::{
         GridI18nService, add_grid_i18n_locale, create_grid_i18n_service,
@@ -54,7 +59,9 @@ use ui_grid_core::{
         get_column_pin_direction, is_column_pinnable, is_pinning_enabled, pin_column_state,
         pinning_button_label,
     },
-    pipeline::build_grid_pipeline,
+    pipeline::{
+        build_grid_pipeline, clear_grid_pipeline_rows_cache, get_cached_grid_pipeline_rows,
+    },
     row_edit::{
         GridRowEditState, collect_grid_row_entities, create_grid_row_edit_state,
         is_grid_row_edit_timer_enabled, mark_grid_row_clean, mark_grid_row_dirty,
@@ -85,10 +92,11 @@ use ui_grid_core::{
     tree::{build_grid_rows, filter_and_flatten_grid_tree_rows, is_tree_enabled},
     utils::{get_cell_value, get_path_value, stringify_cell_value, titleize},
     validate::{
-        GridValidatorRegistry, clear_grid_cell_error, create_grid_validator_registry,
-        errors_field_for, get_grid_cell_error_messages, get_grid_cell_error_names,
-        invalid_field_for, is_grid_cell_invalid, run_grid_cell_validators, set_grid_cell_error,
-        set_grid_cell_invalid, set_grid_cell_valid, validate_all_grid_rows,
+        GridValidatorRegistry, HostValidatorMarker, clear_grid_cell_error,
+        create_grid_validator_registry, errors_field_for, get_grid_cell_error_messages,
+        get_grid_cell_error_names, invalid_field_for, is_grid_cell_invalid,
+        run_grid_cell_validators, set_grid_cell_error, set_grid_cell_invalid, set_grid_cell_valid,
+        validate_all_grid_rows,
     },
     viewmodel::{
         can_grid_expand_rows, can_grid_move_columns, grid_cell_indent, grid_column_width,
@@ -492,6 +500,25 @@ struct MatchesGridRowFiltersInput {
 struct MatchesGridRowFiltersResult {
     row: GridRow,
     matches: bool,
+}
+
+/// Batch input for the prepared-filter fast path. Mirrors the TS pipeline's
+/// `prepare → match-per-row` shape so the wasm boundary doesn't have to
+/// re-parse regexes for each row.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MatchesGridRowsPreparedFiltersInput {
+    rows: Vec<GridRow>,
+    columns: Vec<GridColumnDef>,
+    options: GridOptions,
+    active_filters: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MatchesGridRowsPreparedFiltersResult {
+    rows: Vec<GridRow>,
+    matches: Vec<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -913,6 +940,9 @@ fn sort_kind_tag(kind: SortKind) -> &'static str {
         SortKind::Alpha => "alpha",
         SortKind::Date => "date",
         SortKind::Boolean => "boolean",
+        // Bridge label so callers can identify columns whose ordering
+        // must be re-sorted host-side using the original JS callback.
+        SortKind::DeferToHost => "deferToHost",
     }
 }
 
@@ -1081,6 +1111,32 @@ fn collect_row_identity_overrides(
     }
 }
 
+/// Walk the raw JS `columns` (or `options.columnDefs`) and mark each
+/// parsed column with `has_sorting_algorithm = true` when the source JS
+/// column has a function-typed `sortingAlgorithm` field. The Rust sorter
+/// reads this flag to emit `SortKind::DeferToHost` so the row order is
+/// preserved for the bridge to re-sort host-side.
+fn flag_columns_with_host_sort(raw_columns: &JsValue, parsed_columns: &mut [GridColumnDef]) {
+    if !raw_columns.is_object() {
+        return;
+    }
+    let array: js_sys::Array = match raw_columns.clone().dyn_into() {
+        Ok(array) => array,
+        Err(_) => return,
+    };
+    for (index, column) in parsed_columns.iter_mut().enumerate() {
+        let raw = array.get(index as u32);
+        if !raw.is_object() {
+            continue;
+        }
+        let sorter = js_sys::Reflect::get(&raw, &JsValue::from_str("sortingAlgorithm"))
+            .unwrap_or(JsValue::UNDEFINED);
+        if sorter.is_function() {
+            column.has_sorting_algorithm = true;
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub fn build_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
     // Forward `options.rowIdentity` callback through to the Rust core via
@@ -1088,10 +1144,13 @@ pub fn build_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
     // the contract.
     let raw_options =
         js_sys::Reflect::get(&context, &JsValue::from_str("options")).unwrap_or(JsValue::UNDEFINED);
+    let raw_columns =
+        js_sys::Reflect::get(&context, &JsValue::from_str("columns")).unwrap_or(JsValue::UNDEFINED);
     let mut parsed: BuildGridPipelineContext = from_js(context)?;
     if let Some(overrides) = collect_row_identity_overrides(&raw_options, &parsed.options) {
         parsed.options.row_identity_overrides = Some(overrides);
     }
+    flag_columns_with_host_sort(&raw_columns, &mut parsed.columns);
     let result = build_grid_pipeline(&parsed);
     to_js(&result)
 }
@@ -1123,6 +1182,33 @@ pub fn build_pipeline_from_cached_static_context_js(context: JsValue) -> Result<
 #[wasm_bindgen]
 pub fn build_grid_pipeline_js(context: JsValue) -> Result<JsValue, JsValue> {
     build_pipeline_js(context)
+}
+
+/// Cache lookup variant of `build_grid_rows`. Returns the cached
+/// `Vec<GridRow>` when the input identity matches the previous call;
+/// otherwise rebuilds. Mirrors TS `getCachedGridPipelineRows`.
+///
+/// Note: across the wasm boundary every call deserializes a fresh context,
+/// so the raw-pointer identity comparison the underlying cache uses will
+/// almost always miss — the cache only delivers value when callers from
+/// inside Rust (e.g. the egui adapter) reuse a stable context across
+/// pipeline passes. The shim is exposed for symmetry with the TS API.
+#[wasm_bindgen]
+pub fn get_cached_grid_pipeline_rows_js(context: JsValue) -> Result<JsValue, JsValue> {
+    let raw_options =
+        js_sys::Reflect::get(&context, &JsValue::from_str("options")).unwrap_or(JsValue::UNDEFINED);
+    let mut parsed: BuildGridPipelineContext = from_js(context)?;
+    if let Some(overrides) = collect_row_identity_overrides(&raw_options, &parsed.options) {
+        parsed.options.row_identity_overrides = Some(overrides);
+    }
+    let rows = get_cached_grid_pipeline_rows(&parsed);
+    to_js(&rows)
+}
+
+/// Drop the rows cache. Mirrors TS `clearGridPipelineRowsCache`.
+#[wasm_bindgen]
+pub fn clear_grid_pipeline_rows_cache_js() {
+    clear_grid_pipeline_rows_cache();
 }
 
 // Row searcher
@@ -1308,6 +1394,50 @@ pub fn run_grid_cell_validators_js(input: JsValue) -> Result<JsValue, JsValue> {
         row_entity: input.row_entity,
         failures,
     })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetGridValidatorInput {
+    registry: GridValidatorRegistry,
+    name: String,
+    message_template: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetGridValidatorInput {
+    registry: GridValidatorRegistry,
+    name: String,
+}
+
+/// Register a consumer validator's message template on the Rust side
+/// of the registry. Mirrors TS `GridValidatorRegistry.setValidator` for
+/// the parts that survive the wasm boundary — the validator function
+/// itself stays JS-side and is invoked through the host bridge. Returns
+/// the mutated registry.
+#[wasm_bindgen]
+pub fn set_grid_validator_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: SetGridValidatorInput = from_js(input)?;
+    input
+        .registry
+        .set_validator(input.name, input.message_template);
+    to_js(&input.registry)
+}
+
+/// Look up a validator by name. Returns a [`HostValidatorMarker`] when
+/// the name is known (built-in or consumer-registered), or an error
+/// matching TS `Invalid validator name: <name>` for unknowns. The
+/// marker tells the bridge whether Rust can run the check (`built_in:
+/// true`) or the host must invoke its registered callback.
+#[wasm_bindgen]
+pub fn get_grid_validator_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: GetGridValidatorInput = from_js(input)?;
+    let marker: HostValidatorMarker = input
+        .registry
+        .get_validator(&input.name)
+        .map_err(|error| JsValue::from_str(&error))?;
+    to_js(&marker)
 }
 
 #[wasm_bindgen]
@@ -2491,6 +2621,51 @@ pub fn header_label_js(input: JsValue) -> Result<String, JsValue> {
     Ok(header_label(&input.column))
 }
 
+/// Build a header-template context for the given column. The serialized
+/// shape mirrors TS `GridHeaderTemplateContext`: `{ $implicit, value,
+/// column }`. JS callers with a `headerRenderer` evaluate it host-side
+/// against this context after deserialization.
+#[wasm_bindgen]
+pub fn build_grid_header_context_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: HeaderLabelInput = from_js(input)?;
+    let ctx = build_grid_header_context(&input.column);
+    to_js(&ctx)
+}
+
+/// Resolve the header display string. Closures can't cross the wasm
+/// boundary, so this returns the resolved `value`; the bridge wrapper
+/// runs `column.headerRenderer` host-side when present.
+#[wasm_bindgen]
+pub fn format_grid_header_display_value_js(input: JsValue) -> Result<String, JsValue> {
+    let ctx: GridHeaderTemplateContext = from_js(input)?;
+    Ok(format_grid_header_display_value(&ctx))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveExporterFilenameInput {
+    #[serde(default)]
+    filename: Option<String>,
+    fallback: String,
+    row_type: GridExporterRowType,
+    col_type: GridExporterColumnType,
+}
+
+/// Resolve the output filename. JS callers with a function-typed
+/// `filename` resolve it host-side and pass the resulting string here;
+/// callers with a static string get it through; callers with nothing
+/// get the supplied fallback. Mirrors TS `resolveExporterFilename`.
+#[wasm_bindgen]
+pub fn resolve_exporter_filename_js(input: JsValue) -> Result<String, JsValue> {
+    let input: ResolveExporterFilenameInput = from_js(input)?;
+    Ok(resolve_exporter_filename(
+        input.filename.as_deref(),
+        &input.fallback,
+        input.row_type,
+        input.col_type,
+    ))
+}
+
 #[wasm_bindgen]
 pub fn clear_grid_filter_reasons_js(row: JsValue) -> Result<JsValue, JsValue> {
     let mut row: GridRow = from_js(row)?;
@@ -2513,9 +2688,54 @@ pub fn matches_grid_row_filters_js(input: JsValue) -> Result<JsValue, JsValue> {
     })
 }
 
+/// Prepared-filter fast path: parse column filter specs once, then evaluate
+/// every row against the prepared specs. Returns parallel `rows` (mutated
+/// invisibility reasons) and `matches` arrays. Callers with no active
+/// filters should bypass this entirely. Mirrors the TS
+/// `prepareGridColumnFilters` + `matchesGridRowPreparedFilters` pair.
+#[wasm_bindgen]
+pub fn matches_grid_rows_prepared_filters_js(input: JsValue) -> Result<JsValue, JsValue> {
+    let mut input: MatchesGridRowsPreparedFiltersInput = from_js(input)?;
+    if !input.options.enable_filtering {
+        let matches: Vec<bool> = input.rows.iter().map(|row| row.visible).collect();
+        return to_js(&MatchesGridRowsPreparedFiltersResult {
+            rows: input.rows,
+            matches,
+        });
+    }
+
+    let prepared = prepare_grid_column_filters(&input.columns, &input.active_filters);
+    let mut matches = Vec::with_capacity(input.rows.len());
+    for row in input.rows.iter_mut() {
+        // Clear stale reasons for columns whose filter is no longer active.
+        if !row.invisible_reasons.is_empty() {
+            for column in &input.columns {
+                let key = format!("filter:{}", column.name);
+                let active = input
+                    .active_filters
+                    .get(&column.name)
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .is_some();
+                if !active && row.invisible_reasons.contains(&key) {
+                    row.clear_this_row_invisible(&key);
+                }
+            }
+        }
+        matches.push(matches_grid_row_prepared_filters(row, &prepared));
+    }
+    to_js(&MatchesGridRowsPreparedFiltersResult {
+        rows: input.rows,
+        matches,
+    })
+}
+
 #[wasm_bindgen]
 pub fn sort_grid_rows_js(input: JsValue) -> Result<JsValue, JsValue> {
-    let input: SortRowsInput = from_js(input)?;
+    let raw_columns =
+        js_sys::Reflect::get(&input, &JsValue::from_str("columns")).unwrap_or(JsValue::UNDEFINED);
+    let mut input: SortRowsInput = from_js(input)?;
+    flag_columns_with_host_sort(&raw_columns, &mut input.columns);
     to_js(&sort_grid_rows(
         &input.rows,
         &input.columns,

@@ -1,23 +1,89 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 
 use crate::models::{GridColumnDef, GridLabels, GridRecord};
+
+/// Marker returned from [`GridValidatorRegistry::get_validator`]. Rust
+/// cannot return a `dyn Fn` to JS, so callers receive a record telling
+/// the bridge whether the named validator is one of the built-ins
+/// (Rust runs the check synchronously) or a consumer registration
+/// (the host must invoke its callback to evaluate the rule).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostValidatorMarker {
+    pub name: String,
+    pub built_in: bool,
+}
+
+/// A consumer-registered validator's message template. The actual
+/// validator function lives in the host language (JS for web, native
+/// for egui) — closures can't cross the wasm boundary, so the Rust
+/// registry only retains enough metadata to surface error messages and
+/// answer `has(name)` lookups. The host bridge runs the actual check
+/// and reports invalid via [`set_grid_cell_error`].
+///
+/// `message_template` may include the literal substring `"THRESHOLD"`,
+/// which is replaced with the validator argument's stringified form to
+/// match the built-in `minLength` / `maxLength` shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisteredValidatorMessage {
+    pub message_template: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridValidatorRegistry {
     labels: GridLabels,
+    /// Consumer-registered validator name → message template. Mutated
+    /// via [`GridValidatorRegistry::set_validator`] which mirrors the
+    /// TS `setValidator` mutation surface. Validator functions remain
+    /// host-side; the registry only stores message metadata so error
+    /// surfacing works without crossing the wasm boundary.
+    #[serde(default)]
+    extras: BTreeMap<String, RegisteredValidatorMessage>,
 }
 
 pub fn create_grid_validator_registry(labels: &GridLabels) -> GridValidatorRegistry {
     GridValidatorRegistry {
         labels: labels.clone(),
+        extras: BTreeMap::new(),
     }
 }
 
 impl GridValidatorRegistry {
     pub fn has(&self, name: &str) -> bool {
-        matches!(name, "required" | "minLength" | "maxLength")
+        matches!(name, "required" | "minLength" | "maxLength") || self.extras.contains_key(name)
+    }
+
+    /// Register a consumer validator's message template. Mirrors the TS
+    /// `GridValidatorRegistry.setValidator` mutation entry point — the
+    /// actual validator function lives host-side and is invoked through
+    /// the wasm bridge.
+    pub fn set_validator(&mut self, name: impl Into<String>, message_template: impl Into<String>) {
+        self.extras.insert(
+            name.into(),
+            RegisteredValidatorMessage {
+                message_template: message_template.into(),
+            },
+        );
+    }
+
+    /// Mirror of TS `GridValidatorRegistry.getValidator` — the Rust
+    /// counterpart cannot return a closure, so consumers asking for a
+    /// validator by name receive a marker [`HostValidatorMarker`]
+    /// indicating the host must run the check. The error path matches
+    /// TS: an unknown name produces `Invalid validator name: <name>`.
+    pub fn get_validator(&self, name: &str) -> Result<HostValidatorMarker, String> {
+        if self.has(name) {
+            Ok(HostValidatorMarker {
+                name: name.to_string(),
+                built_in: matches!(name, "required" | "minLength" | "maxLength"),
+            })
+        } else {
+            Err(format!("Invalid validator name: {name}"))
+        }
     }
 
     pub fn get_message(&self, name: &str, argument: &Value) -> String {
@@ -31,7 +97,15 @@ impl GridValidatorRegistry {
                 .labels
                 .validate_max_length
                 .replace("THRESHOLD", &value_to_string(argument)),
-            _ => String::new(),
+            other => self
+                .extras
+                .get(other)
+                .map(|entry| {
+                    entry
+                        .message_template
+                        .replace("THRESHOLD", &value_to_string(argument))
+                })
+                .unwrap_or_default(),
         }
     }
 

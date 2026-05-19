@@ -212,14 +212,14 @@ Each item below already exists in TypeScript. The work is **porting the existing
 
 ### Batch 1 — Rust core correctness + parity tests
 
-- [ ] `filtering`: add `prepare_grid_column_filters` + `matches_grid_row_prepared_filters` + wasm shims; pipeline switched to prepared variant
-- [ ] `pipeline`: implement identity-keyed `rowsCache` (`get_cached_grid_pipeline_rows`, `clear_grid_pipeline_rows_cache`) + `reset_filter_reasons` helper + wasm shims
+- [x] `filtering`: add `prepare_grid_column_filters` + `matches_grid_row_prepared_filters` + wasm shims; pipeline switched to prepared variant
+- [x] `pipeline`: implement identity-keyed `rowsCache` (`get_cached_grid_pipeline_rows`, `clear_grid_pipeline_rows_cache`) + `reset_filter_reasons` helper + wasm shims
 - [x] `identity`: replace `row_id_field` with `rowIdentity` JS callback bridge; remove the bypass in `grid.core.wasm-bridge.ts`
 - [x] `state`: skip-serialize empty Vec/BTreeMap/Option fields in `GridSavedState` so empty-input round-trips produce `{}` (not `{sort:null, pagination:null, ...}`)
-- [ ] `row-sorter`: emit `SortKind::DeferToHost` for columns with `sortingAlgorithm`; wasm bridge falls back to TS sort for those
-- [ ] `export.resolveExporterFilename` ported to Rust
-- [ ] `export.buildGridHeaderContext` + `formatGridHeaderDisplayValue` ported to Rust
-- [ ] `validate.GridValidatorRegistry.setValidator/getValidator` bridged through wasm callback
+- [x] `row-sorter`: emit `SortKind::DeferToHost` for columns with `sortingAlgorithm`; wasm bridge falls back to TS sort for those
+- [x] `export.resolveExporterFilename` ported to Rust
+- [x] `export.buildGridHeaderContext` + `formatGridHeaderDisplayValue` ported to Rust
+- [x] `validate.GridValidatorRegistry.setValidator/getValidator` bridged through wasm callback
 - [x] `row-state`: align Rust return-shape with TS `{expanded, nextExpandedRows / nextExpandedTreeRows}` (was Rust tuple)
 - [x] `edit`: align Rust return-shape with TS `{editingCell, editingValue}` (was tuple); `findNextGridCell` returns `{row, column}` (was `GridCellPosition`); `enableCellEditOnFocus` is now tri-state `Option<bool>` so column override of false correctly opts out when options enable focus-edit
 - [x] `row_searcher`: `guess_condition` now emits a literal-substring regex for default contains (was emitting `Comparator(Contains)` which silently matched everything in `run_column_filter`'s comparator branch — TS-parity bug)
