@@ -30,6 +30,15 @@ pub struct GridTheme {
     pub control_hover_background: Color32,
     pub control_active_background: Color32,
     pub group_background: Color32,
+    /// Background fill applied to every cell of a selected row.
+    /// Mirrors the TS `--ui-grid-row-selected-bg` CSS variable.
+    /// Painted underneath any pin / row-edit tints.
+    pub row_selected_background: Color32,
+    /// Accent strip painted on the leading edge of selected rows so
+    /// the selected state is visible even on themes whose
+    /// `row_selected_background` is subtle. Mirrors the TS
+    /// `--ui-grid-row-selected-indicator` CSS variable.
+    pub row_selected_indicator: Color32,
     /// Border drawn around cells whose row's `$$invalid<col>` flag is
     /// true (set by validators). Mirrors the TS `--ui-grid-cell-invalid-border`
     /// CSS variable.
@@ -73,6 +82,8 @@ impl GridTheme {
             control_hover_background: rgba(37, 99, 235, 18),
             control_active_background: rgba(37, 99, 235, 32),
             group_background: hex(0xec, 0xef, 0xf3),
+            row_selected_background: rgba(37, 99, 235, 38),
+            row_selected_indicator: hex(0x25, 0x63, 0xeb),
             cell_invalid_border: hex(0xdc, 0x26, 0x26),
             cell_invalid_background: rgba(220, 38, 38, 18),
             row_dirty_background: rgba(245, 158, 11, 28),
@@ -109,6 +120,8 @@ impl GridTheme {
             control_hover_background: rgba(103, 232, 249, 20),
             control_active_background: rgba(103, 232, 249, 36),
             group_background: hex(0x0f, 0x31, 0x40),
+            row_selected_background: rgba(103, 232, 249, 60),
+            row_selected_indicator: hex(0x67, 0xe8, 0xf9),
             cell_invalid_border: hex(0xff, 0x6b, 0x6b),
             cell_invalid_background: rgba(255, 107, 107, 40),
             row_dirty_background: rgba(245, 158, 11, 50),
@@ -145,6 +158,8 @@ impl GridTheme {
             control_hover_background: rgba(93, 255, 154, 18),
             control_active_background: rgba(93, 255, 154, 32),
             group_background: hex(0x0d, 0x1e, 0x14),
+            row_selected_background: rgba(93, 255, 154, 60),
+            row_selected_indicator: hex(0x5d, 0xff, 0x9a),
             cell_invalid_border: hex(0xff, 0x6b, 0x6b),
             cell_invalid_background: rgba(255, 107, 107, 36),
             row_dirty_background: rgba(245, 158, 11, 50),
@@ -181,6 +196,8 @@ impl GridTheme {
             control_hover_background: rgba(20, 128, 74, 18),
             control_active_background: rgba(20, 128, 74, 32),
             group_background: hex(0xe7, 0xf8, 0xea),
+            row_selected_background: rgba(20, 128, 74, 38),
+            row_selected_indicator: hex(0x14, 0x80, 0x4a),
             cell_invalid_border: hex(0xb9, 0x1c, 0x1c),
             cell_invalid_background: rgba(185, 28, 28, 18),
             row_dirty_background: rgba(180, 83, 9, 28),

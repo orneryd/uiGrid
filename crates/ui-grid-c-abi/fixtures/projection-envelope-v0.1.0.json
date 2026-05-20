@@ -101,7 +101,7 @@
         "groupExpand": "chevronRight",
         "treeCollapse": "chevronDown",
         "treeExpand": "chevronRight",
-        "expandDetail": "chevronDown",
+        "expandDetail": "chevronRight",
         "collapseDetail": "chevronDown",
         "dragHandle": "grip",
         "moveLeft": "chevronLeft",

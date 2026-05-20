@@ -9,7 +9,7 @@ pub use column_ext::{
 pub use grid_theme::{GridTheme, GridThemePreset, THEME_PRESETS};
 pub use grid_widget::{
     EguiGrid, EguiGridEvent, EguiGridEventKind, GridEmptyStateContext, GridExpandableRowContext,
-    GridGroupRowAction, GridGroupRowContext,
+    GridGroupRowAction, GridGroupRowContext, GridSelectionCheckboxContext,
 };
 pub use ui_grid_core::exporter_registry::{
     GridExportResult, GridExportScope, GridExporter, GridRegisteredExportContext,

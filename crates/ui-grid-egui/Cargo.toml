@@ -12,7 +12,7 @@ rust-version.workspace = true
 authors.workspace = true
 
 [dependencies]
-ui-grid-core = { path = "../ui-grid-core", version = "0.1.10" }
+ui-grid-core = { path = "../ui-grid-core", version = "1.0.6" }
 egui = { workspace = true }
 # `datepicker` is needed at lib level so date-typed cells get a proper
 # DatePickerButton editor without requiring consumers to opt-in. Adds

@@ -1,5 +1,94 @@
 # Changelog
 
+## rust-v1.0.6 — 2026-05-20
+
+Rust core + `ui-grid-egui` adapter reach functional parity with the canonical TypeScript engine and the vanilla web component. The web suite (Angular / React / Web Components) is unchanged; this release scopes to `ui-grid-core`, `ui-grid-egui`, and `ui-grid-c-abi`. Wasm-parity specs lock the contract in so any future Rust-side drift is caught against TS.
+
+### Added — Rust core (parity ports of existing TS APIs)
+
+- **`rowIdentity` JS callback bridge** — closures can't cross the wasm boundary via serde, so `build_grid_rows_js`, `build_pipeline_js`, and `resolve_grid_row_id_js` now pluck the JS callback off the live `JsValue` and pre-resolve identities (recursively, for tree mode) into `row_identity_overrides` before deserialization. Rust drops the `row_id_field` lookup entirely; TS drops the bridge bypass in `grid.core.wasm-bridge.ts`.
+- **Identity-cached `buildGridRows`** — mirrors the TS `rowsCache` keyed on `(data, options, hidden, expanded, rowSize)` reference identity. Public surface: `get_cached_grid_pipeline_rows`, `clear_grid_pipeline_rows_cache`. Cache is cleared on `mark_dirty()` and at the start of `run_grid_benchmark` so stale entries from recycled allocator addresses can't cause false hits.
+- **Prepared-filter fast path** — `prepare_grid_column_filters` (per-column, once) + `matches_grid_row_prepared_filters` (per-row, no allocation), with wasm shims so JS callers can opt in. Pipeline now uses the prepared variant.
+- **Async validators** — `RunGridCellValidatorsRunner::{Pending, Ready}` and `run_grid_cell_validators_async` mirror the TS `Promise<string[]>` shape without pulling in a Rust async runtime. Hosts step the runner manually or call `run_to_completion`.
+- **`GridValidatorRegistry.set_validator` / `get_validator`** bridged through wasm with `HostValidatorMarker` + `RegisteredValidatorMessage`. Closures stay JS-side; the bridge calls back into JS for non-built-in validators while Rust's built-in `required` / `minLength` / `maxLength` short-circuit locally.
+- **`KeyOverrideSpec`** — Rust analog of TS `GridKeyEventOverride`. `GridOptions::key_down_overrides: Vec<KeyOverrideSpec>` lets consumers opt out of any built-in keydown (Ctrl+A, F2, Home/End, Space, etc.). Match supports `key_code`, `key`, and modifier combinations.
+- **`SortKind::DeferToHost`** — `guess_sort_kind` returns this variant for columns with `sortingAlgorithm`. The wasm bridge falls back to TS sort for those columns only; columns without a custom algorithm continue sorting in Rust.
+- **Generic exporter registry** — new `crates/ui-grid-core/src/exporter_registry.rs` with `register_grid_exporter` / `unregister_grid_exporter` / `export_grid` and a thread-safe `OnceLock<RwLock<HashMap<String, Arc<dyn GridExporter>>>>`. `GridExportScope::{Visible, All, Selected}`, `GridRegisteredExportContext`, `GridExportResult`, `GridExporter` trait. Built-in CSV exporter auto-registered via `init_default_grid_exporters` so `export_grid("csv", ctx)` works without setup.
+- **`run_grid_benchmark`** — host-agnostic Rust analog of TS `gridApi.core.benchmark(iterations) -> Promise<GridBenchmarkResult>`. Returns `{iterations, total_ms, average_ms, visible_rows, rendered_items}`. Egui demo wires it to a Benchmark button.
+- **`resolve_exporter_filename`, `build_grid_header_context`, `format_grid_header_display_value`** ported from TS so Rust hosts (egui) compute exporter filenames and templated header values identically to the web suite.
+- **Column-width persistence in `GridSavedState`** — `column_width_overrides: BTreeMap<String, String>` mirrors the TS `columnWidthOverrides` (gated by `saveWidths`). Save / restore round-trips the user's resize state across hosts.
+- **`has_sorting_algorithm` flag on `GridColumnDef`** — set by the wasm bridge so Rust can detect sorting-algorithm columns without seeing the JS callback.
+
+### Added — Egui adapter (vanilla web-component feature parity)
+
+- **Row selection chrome** — synthetic `selectionRowHeaderCol` injected when `enable_row_selection` + `enable_row_header_selection` are on. Per-row checkbox + select-all header. Width auto-scales to `2 × icon_width` (theme-driven) so the column stays narrow regardless of egui style overrides. Synthetic column is excluded from drag-reorder and the data-column min-width floor.
+- **Selection interactions** — Ctrl/Cmd-click adds to selection (additive); plain click is single-select; Shift-click extends to range. `Ctrl+A` selects all selectable rows; `Space` toggles the focused row. Drag-paint multi-row selection: press a row, drag across other rows — every row whose rect contains the pointer becomes the endpoint, the anchor→endpoint range is selected. `enableFullRowSelection`, `noUnselect`, `modifierKeysToMultiSelect`, `enableSelectionBatchEvent` honored.
+- **Validation chrome** — invalid cells (rows whose `$$invalid<col>` flag is set by `runGridCellValidators`) get a red border + tinted background. Hover shows the joined error messages tooltip via `get_grid_cell_error_messages`. `enable_select_all` honoured; the select-all checkbox auto-disables when no rows are selectable.
+- **Row-edit lifecycle decoration** — `mark_row_dirty`, `mark_row_saving`, `mark_row_clean`, `mark_row_error` paint the row with theme-supplied tints (`row_dirty_background`, `row_saving_background`, `row_error_background`). Mutually-exclusive priority: error > saving > dirty.
+- **Grid-level renderer hooks**:
+  - `with_group_row_renderer(fn)` — caller paints the entire group row, returns `GridGroupRowAction` (defaults: `None`, returns `Toggle` when chevron is clicked).
+  - `with_expandable_row_renderer(fn)` — caller paints the entire detail row.
+  - `with_empty_state_renderer(fn)` — caller paints the empty state when filters knock all rows out.
+  - `with_selection_checkbox_renderer(fn)` — caller replaces both the per-row and select-all checkboxes (`ctx.row = Some(...)` for per-row, `ctx.is_header = true` for select-all).
+- **Per-column hooks on `EguiColumnExt`**:
+  - `with_filter_renderer(fn)` — replace the default filter `TextEdit` with any control (dropdown, range slider, etc.). Mutate `&mut String` and return `true` to re-run the pipeline.
+  - `with_header_controls_renderer(fn)` — caller paints the sort / group / pin / move chrome; signals intent by pushing `EguiHeaderAction::{ToggleGrouping, CycleSort, PinLeft, PinRight, Unpin, MoveLeft, MoveRight}`.
+  - `with_cell_editor(fn)` — replace the default editor; returns `true` when the value changed.
+  - `with_cell_renderer(fn)` — full custom cell paint.
+  - `with_formatter(fn)` — string formatter applied before the default label paints.
+- **Editor input-type switching** — date columns use `egui_extras::DatePickerButton` (jiff `Date`), boolean columns use a checkbox, numeric columns use a numeric `TextEdit`. Hosts can still override via `with_cell_editor`.
+- **Keyboard navigation** — Arrow keys / Tab / Shift-Tab move focus; Enter and `F2` begin edit; `Home` / `End` jump to row start/end; `Ctrl+Home` / `Ctrl+End` to first/last row; first-character keypress on a focused cell begins edit pre-seeded with that character.
+- **Pagination chrome** — range label `M – N of total`, page-size combo reads `paginationPageSizes` from options, prev/next visually disabled at edges (in addition to the click guard).
+- **Column auto-fit on resize-handle double-click** — double-clicking the resize gripper measures the header label + visible cell content via `egui::Fonts::layout_no_wrap` and writes the result into `column_widths`. Reserves 28px per visible header control (sort / group / pin) so the title isn't clobbered.
+- **`column_widths` overrides synced from drag-resize** — each header cell's actual rendered width is captured back into the shared `column_widths` map after the user releases the pointer, so the outer scroll-area / pinned-region width math tracks the real table width and there's no empty scrollable space.
+- **Pin / unpin preserves column widths** — pre-fit pass on first paint measures every column without a declared width or override and stores the result in the shared `column_widths` map; all four table layouts (unpinned single + pinned left / center / right) consult the same map, so widths survive pin/unpin.
+- **Group / expand / tree chevron lands on the first data column** — `primary_data_column_index` skips the synthetic selection column so the leading control doesn't paint inside the checkbox cell when row selection + expandable / tree are on at the same time.
+- **Header label truncation** — labels render inside a rect bounded by the controls' left edge, with `Label::truncate()` so titles ellipsise instead of being clobbered by sort / group / pin chrome.
+- **Filter input "clear" button** — inline ✕ when the active filter is non-empty.
+- **Save / restore state with `column_widths`** — `EguiGrid::column_width_overrides()` reader + `set_column_width_override` writer; round-trips through `GridSavedState`.
+- **Theme fields for selection + validation + row-edit chrome** — `GridTheme` gained `row_selected_background`, `row_selected_indicator`, `cell_invalid_border`, `cell_invalid_background`, `row_dirty_background`, `row_saving_background`, `row_error_background`. Populated across all four presets (default light/dark, wireframe light/dark). Mirrors the TS `--ui-grid-*` CSS variables.
+- **Custom selection-checkbox context** — new `GridSelectionCheckboxContext { row, options, theme, enabled, is_header }` for the new selection-checkbox renderer hook.
+- **Group / expandable / empty-state contexts** — `GridGroupRowContext`, `GridExpandableRowContext`, `GridEmptyStateContext` give renderer closures access to the row/group, options, columns, theme, and (for groups) the collapsed flag.
+- **Header / cell / filter contexts** — `GridHeaderControlsContext`, `GridCellContext`, `GridFilterContext` give per-column renderer closures access to the column, labels, icons, theme, and (for headers) sort direction / pin direction / capability flags.
+
+### Added — `ui-grid-c-abi`
+
+- **Stable C-facing ABI** — opaque engine lifecycle + JSON / MessagePack transport helpers + projection / state APIs; native hosts can drive the shared engine without embedding Rust types directly.
+- **C++ wrapper** — `ui-grid-cpp` with RAII engine management, typed sort/group/pin command builders, JSON and MessagePack helpers.
+- **LVGL native prototype** — `ui-grid-lvgl` adapter with theme/column extension headers and an SDL-backed demo.
+
+### Changed
+
+- **`expand_detail` icon default flipped to `chevronRight`** — collapsed → right / expanded → down, matching the tree-toggle convention. The C-ABI fixture `projection-envelope-v0.1.0.json` was regenerated.
+- **`GridSavedState` round-trips** — empty `Vec` / `BTreeMap` / `Option` fields are now skipped during serialization so empty-input round-trips produce `{}` instead of `{sort: null, pagination: null, columnOrder: [], …}`. Matches TS shape.
+- **`row_state` / `edit` return shapes** aligned with TS:
+  - `ToggleGridRowExpandedResult` / `ToggleGridTreeRowExpandedResult` are named-field structs (was tuples → `[bool, {…}]`).
+  - `clear_grid_edit_session` returns a `ClearGridEditSessionResult` struct (was a tuple).
+  - `find_next_grid_cell` returns `FindNextGridCellResult { row, column }` (was just `GridCellPosition`; TS callers expect resolved row + column).
+  - `enable_cell_edit_on_focus` is now `Option<bool>` so a column with `Some(false)` correctly opts out even when grid-level focus-edit is on.
+- **`row_searcher::guess_condition`** now emits a literal-substring regex for the default contains case. Previously emitted `Comparator(Contains)`, but `run_column_filter` had no `Contains` arm in the comparator branch — it fell through to `_ => true`, so the filter silently matched every row. Tree filtering, pipeline filtering, and the row-searcher contains test were all visibly wrong before.
+- **`tree::resolve_row_id`** now honours `options.row_identity_overrides`, the hidden serde field populated by the wasm bridge from the JS `rowIdentity` callback.
+- **Demo app expanded** — exercises every new feature behind a toolbar toggle: row selection, validation, row-edit save/discard, grouping, tree view, expandable, pinning, infinite scroll, theme switching across all four presets, generic exporter registry (placeholder PDF), benchmark probe button, auto-fit button, custom group / expandable / empty-state renderers.
+
+### Fixed — Rust core
+
+- **`tree::resolve_row_id`** ignored the `rowIdentity` callback in tree mode; the bridge now seeds `row_identity_overrides` and tree resolution honours it.
+- **`row-sorter`** silently fell through for `sortingAlgorithm` columns; `SortKind::DeferToHost` now flags those for the wasm bridge to handle.
+- **`state` shape drift** between Rust and TS round-trips (above).
+- **Wasm-parity coverage** — added 14 new `*.wasm-parity.spec.ts` files (tree, grouping, pagination, pinning, filtering, sorting, viewmodel, identity, row-state, edit, pipeline, state, infinite-scroll, display) so any future Rust-side bug is caught against the canonical TS implementation.
+
+### Fixed — Egui adapter
+
+- **Pinning no longer grows the last column** — the 3-table pinned layout (left / center / right) sized each region from `count × 176px` and the center table's last column used `Column::remainder()`, which silently expanded to fill leftover space whenever a column was pinned. Region widths now come from the actual declared column widths, and `draw_table` accepts a `fill_remainder` flag that's `true` only for the unpinned single-table layout.
+- **Pin / unpin no longer resets columns to a 120px scrunched fallback** — egui_extras keeps its column widths inside a private per-table `TableState` keyed by `id_salt`, so widths measured in the unpinned table were lost when a column moved into the pinned region (and vice versa). The pre-fit pass on first paint stores measurements in the shared `column_widths` map, so all four table layouts agree on widths.
+- **Drag-resize syncs back to the outer layout** — egui_extras' built-in resize handle widened the header cell but the outer scroll-area's `min_width` (computed from `column_widths`) didn't follow. The grid now captures each header cell's actual rendered width back into `column_widths` on pointer release.
+- **Double-click on the resize handle now auto-fits the column** — egui_extras 0.34.1's built-in dblclick check reads the response under `ui.id().with("resize_column").with(i)` but the actual handle is registered under `state_id.with("resize_column").with(i)`, so the IDs never match. We read the response under the correct id, run our own `auto_fit_column`, and call `TableBuilder::reset()` so the new override takes effect immediately.
+- **Drag-paint multi-row selection across rows** — egui only fires `response.dragged()` on the cell that received the press, so dragging across rows never expanded the selection past the anchor. Replaced with a pointer-rect hit test on every cell during an active drag-paint session.
+- **Selection chrome no longer hides the expand chevron under selection + expandable** — leading-controls path now uses `primary_data_column_index` so the chevron lands on the first data column instead of the synthetic checkbox cell.
+- **Header label truncates with ellipsis instead of being clobbered by controls** — controls render right-to-left first; the label renders inside a rect bounded by the controls' left edge with `Label::truncate()`.
+- **Synthetic selection column drag-reorder disabled** — the column is now excluded from both drag-source and drop-target paths.
+- **Selection checkbox centred on every theme** — replaced the hardcoded 30px column with `2 × icon_width` so theme overrides to `Style::spacing.icon_width` flow through, and centred the checkbox via `scope_builder + centered_and_justified` instead of `horizontal_centered`.
+
 ## v1.0.6 — 2026-05-18
 
 ### Added

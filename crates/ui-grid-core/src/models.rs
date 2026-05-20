@@ -206,7 +206,10 @@ impl Default for GridIcons {
             group_expand: GridIcon::ChevronRight,
             tree_collapse: GridIcon::ChevronDown,
             tree_expand: GridIcon::ChevronRight,
-            expand_detail: GridIcon::ChevronDown,
+            // Collapsed → right-facing chevron (toggles to expanded);
+            // expanded → down-facing chevron (toggles back to
+            // collapsed). Mirrors the tree-toggle convention.
+            expand_detail: GridIcon::ChevronRight,
             collapse_detail: GridIcon::ChevronDown,
             drag_handle: GridIcon::Grip,
             move_left: GridIcon::ChevronLeft,

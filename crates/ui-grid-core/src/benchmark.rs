@@ -37,6 +37,14 @@ pub fn run_grid_benchmark(
         return None;
     }
 
+    // Drop any stale rows-cache entry up front. The cache keys on
+    // raw-pointer identity which is only sound when the same context
+    // reference is reused across calls; a fresh benchmark invocation
+    // builds a new context on the stack, so a residual cache entry
+    // from a prior call could either falsely hit (stale data) or
+    // never hit because the address differs.
+    crate::pipeline::clear_grid_pipeline_rows_cache();
+
     let mut total_ms = 0.0_f64;
     let mut last_visible = 0usize;
     let mut last_rendered = 0usize;

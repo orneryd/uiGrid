@@ -482,9 +482,45 @@ pub struct GridEmptyStateContext<'a> {
     pub theme: &'a GridTheme,
 }
 
+/// Context passed to a custom selection-checkbox renderer registered
+/// via [`EguiGrid::with_selection_checkbox_renderer`]. The renderer
+/// paints a checkbox-equivalent control inside the synthetic
+/// `selectionRowHeaderCol` cell. `row` is `None` for the header
+/// (select-all) cell and `Some(row)` for per-row cells. Mutating the
+/// `&mut bool` (and returning `true`) flips the row's selection (or
+/// triggers select-all on the header).
+pub struct GridSelectionCheckboxContext<'a> {
+    pub row: Option<&'a ui_grid_core::models::GridRow>,
+    pub options: &'a GridOptions,
+    pub theme: &'a GridTheme,
+    /// `true` when the cell should accept input. Mirrors the TS
+    /// disabled-state for rows whose `enable_selection` is `false` or
+    /// the select-all header when `enable_select_all` is `false`.
+    pub enabled: bool,
+    /// `true` when this is the header (select-all) cell. Mutually
+    /// exclusive with `row.is_some()`; provided for renderer clarity.
+    pub is_header: bool,
+}
+
 type GroupRowRenderer = Box<dyn FnMut(&mut Ui, &GridGroupRowContext<'_>) -> GridGroupRowAction>;
 type ExpandableRowRenderer = Box<dyn FnMut(&mut Ui, &GridExpandableRowContext<'_>)>;
 type EmptyStateRenderer = Box<dyn FnMut(&mut Ui, &GridEmptyStateContext<'_>)>;
+/// Returns `true` when the user toggled the checkbox; the grid then
+/// applies the selection mutation. Mirrors the egui idiom of
+/// "widget changed".
+type SelectionCheckboxRenderer =
+    Box<dyn FnMut(&mut Ui, &GridSelectionCheckboxContext<'_>, &mut bool) -> bool>;
+
+/// Parse a `"<n>px"` width string into a `f32`. Returns `None` for
+/// non-pixel widths (`"50%"`, `"minmax(...)"`, `"auto"`, etc.) — the
+/// table-column wiring then falls through to `Column::auto()` or
+/// `Column::remainder()` so the column still stretches with the
+/// viewport.
+fn parse_pixel_width(raw: &str) -> Option<f32> {
+    let trimmed = raw.trim();
+    let stripped = trimmed.strip_suffix("px").unwrap_or(trimmed);
+    stripped.trim().parse::<f32>().ok().filter(|v| *v > 0.0)
+}
 
 /// Synthetic column the grid prepends to render the row-selection
 /// checkbox. Mirrors the TS `selectionRowHeaderCol` sentinel — the
@@ -492,15 +528,22 @@ type EmptyStateRenderer = Box<dyn FnMut(&mut Ui, &GridEmptyStateContext<'_>)>;
 /// CSV exporter to skip the synthetic column.
 pub const SELECTION_ROW_HEADER_COL_NAME: &str = "selectionRowHeaderCol";
 
-/// Width (in egui logical pixels) of the synthetic checkbox column.
-/// Matches the default the TS host renders when
-/// `selectionRowHeaderWidth` is unset.
-const SELECTION_ROW_HEADER_COL_WIDTH: f32 = 30.0;
+/// Compute the synthetic checkbox column's width as 2× the actual
+/// rendered checkbox width. egui's empty-label `Checkbox` paints a
+/// square `icon_width` × `icon_width` glyph; doubling that gives a
+/// column with one checkbox-width of breathing room split evenly on
+/// each side, which keeps the checkbox visually centred regardless
+/// of theme overrides to `spacing.icon_width`.
+fn selection_row_header_col_width(style: &egui::Style) -> f32 {
+    (style.spacing.icon_width * 2.0).max(24.0)
+}
 
 /// Build the synthetic checkbox column. The column is marked pinned-left
 /// so it stays anchored to the leading edge regardless of user pin
-/// state. Sort / filter / group / pin chrome is suppressed.
-fn build_selection_row_header_column() -> GridColumnDef {
+/// state. Sort / filter / group / pin chrome is suppressed; width is
+/// fixed to twice the rendered checkbox width so the column doesn't
+/// expand under `Column::auto()` and the checkbox sits centred.
+fn build_selection_row_header_column(width_px: f32) -> GridColumnDef {
     GridColumnDef {
         name: SELECTION_ROW_HEADER_COL_NAME.to_string(),
         display_name: Some(String::new()),
@@ -511,6 +554,7 @@ fn build_selection_row_header_column() -> GridColumnDef {
         enable_grouping: false,
         enable_pinning: false,
         pinned_left: true,
+        width: Some(format!("{}px", width_px.round() as i32)),
         ..GridColumnDef::default()
     }
 }
@@ -522,6 +566,17 @@ fn build_selection_row_header_column() -> GridColumnDef {
 fn should_show_selection_row_header(options: &GridOptions) -> bool {
     options.enable_row_selection.unwrap_or(false)
         && options.enable_row_header_selection.unwrap_or(true)
+}
+
+/// Returns the index of the primary data column — the first column
+/// that hosts the leading controls (tree indent + expand chevron).
+/// Skips the synthetic `selectionRowHeaderCol` so chrome doesn't
+/// land on the checkbox cell. Mirrors TS `is_grid_primary_column`.
+fn primary_data_column_index(columns: &[GridColumnDef]) -> usize {
+    columns
+        .iter()
+        .position(|col| col.name != SELECTION_ROW_HEADER_COL_NAME)
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone)]
@@ -636,6 +691,12 @@ pub struct EguiGrid {
     group_row_renderer: Option<GroupRowRenderer>,
     expandable_row_renderer: Option<ExpandableRowRenderer>,
     empty_state_renderer: Option<EmptyStateRenderer>,
+    /// Optional override for the synthetic selection-column checkbox.
+    /// Lives at grid level (not per-column) because the synthetic
+    /// `selectionRowHeaderCol` has no `EguiColumnExt` entry — the
+    /// column is injected by the grid itself, so the renderer hook
+    /// has to live alongside the injection point.
+    selection_checkbox_renderer: Option<SelectionCheckboxRenderer>,
 }
 
 impl Default for EguiGrid {
@@ -679,6 +740,7 @@ impl EguiGrid {
             group_row_renderer: None,
             expandable_row_renderer: None,
             empty_state_renderer: None,
+            selection_checkbox_renderer: None,
         }
     }
 
@@ -710,6 +772,21 @@ impl EguiGrid {
         renderer: impl FnMut(&mut Ui, &GridEmptyStateContext<'_>) + 'static,
     ) -> Self {
         self.empty_state_renderer = Some(Box::new(renderer));
+        self
+    }
+
+    /// Replace the default selection-checkbox painter for the synthetic
+    /// `selectionRowHeaderCol`. The closure runs for both per-row cells
+    /// (`ctx.row = Some(...)`) and the header select-all cell
+    /// (`ctx.is_header = true`); mutating the `&mut bool` and returning
+    /// `true` toggles the row's selection (or triggers select-all on
+    /// the header). Useful for hosts that want a styled checkbox or a
+    /// non-checkbox selection control (e.g. a star, an icon button).
+    pub fn with_selection_checkbox_renderer(
+        mut self,
+        renderer: impl FnMut(&mut Ui, &GridSelectionCheckboxContext<'_>, &mut bool) -> bool + 'static,
+    ) -> Self {
+        self.selection_checkbox_renderer = Some(Box::new(renderer));
         self
     }
 
@@ -902,12 +979,31 @@ impl EguiGrid {
             return;
         };
         let header_text = header_label(column);
-        let mut max_width = ctx.fonts_mut(|fonts| {
+        // Header label width — the visible title.
+        let header_label_width = ctx.fonts_mut(|fonts| {
             fonts
                 .layout_no_wrap(header_text, egui::FontId::default(), egui::Color32::WHITE)
                 .size()
                 .x
         });
+        // Header controls reserve — sort / group / pin chrome sits to
+        // the right of the label and would clobber the title under
+        // `Column::auto()` measurement (which only reads the label
+        // width). Reserve ~28px per visible control + a trailing
+        // spacer. Mirrors the visual budget the right-to-left
+        // layout consumes at paint time.
+        let mut header_controls_reserve = 0.0_f32;
+        let column_sort_enabled = column.sortable && column.enable_sorting;
+        if column_sort_enabled {
+            header_controls_reserve += 28.0;
+        }
+        if column.enable_grouping {
+            header_controls_reserve += 28.0;
+        }
+        if column.enable_pinning {
+            header_controls_reserve += 28.0;
+        }
+        let mut max_width = header_label_width + header_controls_reserve;
         for row in &self.cached_result.visible_rows {
             let text = format_grid_cell_display_value(row, column);
             if text.is_empty() {
@@ -1323,9 +1419,18 @@ impl EguiGrid {
     }
 
     /// Mark the data pipeline as dirty so it re-runs on the next frame.
-    /// Call this after mutating `GridOptions::data` externally (e.g. live data updates).
+    /// Call this after mutating `GridOptions::data` externally (e.g.
+    /// live data updates).
+    ///
+    /// Also clears the rows cache: the cache keys on raw pointer
+    /// equality of `data` / `options` / hidden / expanded refs, but
+    /// hosts that reassign `options.data` from a fresh `Vec` may hit
+    /// stale cache entries when the allocator recycles the same
+    /// address. Clearing on `mark_dirty` keeps the cache useful for
+    /// the in-frame benchmark loop without poisoning live-update flows.
     pub fn mark_dirty(&mut self) {
         self.pipeline_dirty = true;
+        ui_grid_core::pipeline::clear_grid_pipeline_rows_cache();
     }
 
     pub fn show(
@@ -1354,7 +1459,8 @@ impl EguiGrid {
                 .iter()
                 .any(|column| column.name == SELECTION_ROW_HEADER_COL_NAME)
         {
-            ordered_columns.insert(0, build_selection_row_header_column());
+            let width = selection_row_header_col_width(ui.style());
+            ordered_columns.insert(0, build_selection_row_header_column(width));
         }
 
         self.handle_keyboard_navigation(ui, options, &ordered_columns);
@@ -1363,6 +1469,38 @@ impl EguiGrid {
         if ordered_columns.is_empty() {
             ui.label("No columns defined.");
             return;
+        }
+
+        // Pre-fit any column that has neither a declared `column.width`
+        // nor an existing `column_widths` override. egui_extras keeps
+        // its column widths inside a private per-table `TableState`
+        // keyed by `id_salt`, so widths measured in the unpinned table
+        // are lost when a column moves into the pinned (left/right) or
+        // back to the center table. Carrying the measured width in our
+        // own shared `column_widths` map keeps every region in sync —
+        // pin / unpin no longer resets the column to the "scrunched
+        // narrow" fallback. Mirrors the TS contract where the grid
+        // measures every column on first paint.
+        let needs_pre_fit: Vec<String> = ordered_columns
+            .iter()
+            .filter(|column| {
+                column.name != SELECTION_ROW_HEADER_COL_NAME
+                    && !self.column_widths.contains_key(&column.name)
+                    && column
+                        .width
+                        .as_deref()
+                        .and_then(parse_pixel_width)
+                        .is_none()
+            })
+            .map(|column| column.name.clone())
+            .collect();
+        for name in needs_pre_fit {
+            self.auto_fit_column(
+                ui.ctx(),
+                &ordered_columns,
+                &name,
+                theme.cell_padding_x * 2.0,
+            );
         }
 
         let total_items = self.cached_result.total_items;
@@ -1379,9 +1517,27 @@ impl EguiGrid {
             }
         }
         let has_pinned = !left_columns.is_empty() || !right_columns.is_empty();
-        const COL_W: f32 = 176.0;
-        let left_w = left_columns.len() as f32 * COL_W;
-        let right_w = right_columns.len() as f32 * COL_W;
+        // Compute each region's pixel width from the *actual* declared
+        // column widths (overrides → column.width → fallback). The
+        // previous `COL_W = 176.0 * count` heuristic over-allocated for
+        // narrow columns (e.g. the synthetic 30px checkbox column),
+        // which was previously masked by the center table's
+        // `Column::remainder()` last column eating the slack. Now that
+        // pinning doesn't grow the last column, the gap is exposed.
+        let region_width = |cols: &[GridColumnDef]| -> f32 {
+            cols.iter()
+                .map(|column| {
+                    self.column_widths
+                        .get(&column.name)
+                        .and_then(|raw| parse_pixel_width(raw))
+                        .or_else(|| column.width.as_deref().and_then(parse_pixel_width))
+                        .unwrap_or(120.0)
+                })
+                .sum()
+        };
+        let left_w = region_width(&left_columns);
+        let right_w = region_width(&right_columns);
+        let center_declared_w = region_width(&center_columns);
 
         egui::Frame::new()
             .fill(theme.surface)
@@ -1400,9 +1556,26 @@ impl EguiGrid {
                     egui::ScrollArea::horizontal()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            ui.set_min_width(
-                                (ordered_columns.len() as f32 * COL_W).max(ui.available_width()),
-                            );
+                            // Sum the per-column declared widths; for
+                            // auto-sized columns assume a sensible
+                            // floor (80px). Use the larger of that
+                            // sum and `ui.available_width()` so the
+                            // table grows with the viewport when the
+                            // declared widths are narrower than the
+                            // window.
+                            let declared_sum: f32 = ordered_columns
+                                .iter()
+                                .map(|column| {
+                                    self.column_widths
+                                        .get(&column.name)
+                                        .and_then(|raw| parse_pixel_width(raw))
+                                        .or_else(|| {
+                                            column.width.as_deref().and_then(parse_pixel_width)
+                                        })
+                                        .unwrap_or(120.0)
+                                })
+                                .sum();
+                            ui.set_min_width(declared_sum.max(ui.available_width()));
                             self.draw_table(
                                 ui,
                                 options,
@@ -1413,6 +1586,7 @@ impl EguiGrid {
                                 true,
                                 None,
                                 None,
+                                true,
                                 true,
                             );
                         });
@@ -1446,6 +1620,7 @@ impl EguiGrid {
                                     Some("grid_left_table"),
                                     Some(stored_offset),
                                     false,
+                                    false,
                                 ) && (out - stored_offset).abs() > 0.5
                                 {
                                     new_offset = out;
@@ -1464,8 +1639,7 @@ impl EguiGrid {
                                     .auto_shrink([false, false])
                                     .min_scrolled_width(0.0)
                                     .show(ui, |ui| {
-                                        let inner_w =
-                                            (center_columns.len() as f32 * COL_W).max(center_w);
+                                        let inner_w = center_declared_w.max(center_w);
                                         ui.set_min_width(inner_w);
                                         if let Some(out) = self.draw_table(
                                             ui,
@@ -1478,6 +1652,7 @@ impl EguiGrid {
                                             Some("grid_center_table"),
                                             Some(stored_offset),
                                             true,
+                                            false,
                                         ) && (out - stored_offset).abs() > 0.5
                                         {
                                             new_offset = out;
@@ -1503,6 +1678,7 @@ impl EguiGrid {
                                     true,
                                     Some("grid_right_table"),
                                     Some(stored_offset),
+                                    false,
                                     false,
                                 ) && (out - stored_offset).abs() > 0.5
                                 {
@@ -1943,6 +2119,7 @@ impl EguiGrid {
         id_salt: Option<&str>,
         scroll_offset_y: Option<f32>,
         scroll_bar_visible: bool,
+        fill_remainder: bool,
     ) -> Option<f32> {
         let show_filters = options.enable_filtering;
         let label_row_h = theme.header_padding_y + 20.0;
@@ -1953,6 +2130,40 @@ impl EguiGrid {
         };
 
         let resizable = options.enable_column_resizing;
+
+        // Double-click on the resize handle auto-fits the column to
+        // its widest cell + header label (mirrors the TS contract).
+        // egui_extras 0.34's built-in dblclick detection in
+        // `TableBuilder::header()` checks `ui.id().with("resize_column")`
+        // but the actual interact id used to register the resize handle
+        // response is `state_id.with("resize_column")` (where state_id =
+        // ui.id().with(id_salt)). The IDs don't match, so the built-in
+        // path never fires. Re-read the resize-handle response under
+        // the *correct* id and route to our existing `auto_fit_column`.
+        let table_state_id = match id_salt {
+            Some(salt) => ui.id().with(egui::Id::new(salt)),
+            None => ui.id().with(egui::Id::new("__table_state")),
+        };
+        let mut auto_fit_index: Option<usize> = None;
+        for (i, _) in columns.iter().enumerate() {
+            let resize_id = table_state_id.with("resize_column").with(i);
+            if let Some(resp) = ui.ctx().read_response(resize_id)
+                && resp.double_clicked()
+            {
+                auto_fit_index = Some(i);
+                break;
+            }
+        }
+        let auto_fit_requested = if let Some(i) = auto_fit_index
+            && let Some(column) = columns.get(i)
+        {
+            let column_name = column.name.clone();
+            self.auto_fit_column(ui.ctx(), columns, &column_name, theme.cell_padding_x * 2.0);
+            true
+        } else {
+            false
+        };
+
         let mut table = TableBuilder::new(ui)
             .striped(false)
             .vscroll(vscroll)
@@ -1962,6 +2173,16 @@ impl EguiGrid {
         if let Some(salt) = id_salt {
             table = table.id_salt(salt);
         }
+        if auto_fit_requested {
+            // Drop egui_extras' persisted column widths so our newly
+            // written `column_widths` override (translated to
+            // `Column::initial(effective)` below) actually takes effect
+            // on this frame. Without this, `TableState::load` keeps the
+            // prior widths via `Size::exact(prev_width)` and our
+            // override is ignored until the user otherwise pokes the
+            // table.
+            table.reset();
+        }
         if let Some(offset) = scroll_offset_y {
             table = table.vertical_scroll_offset(offset);
         }
@@ -1970,19 +2191,102 @@ impl EguiGrid {
                 table.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
         }
 
-        for _ in columns {
-            table = table.column(Column::initial(176.0).resizable(resizable).clip(true));
+        // Column sizing precedence:
+        //   1. `column_widths` override (set by auto-fit / drag-resize /
+        //      restore-state) — fixed pixel width, resizable.
+        //   2. `column.width` declared on the model (e.g. "180px") —
+        //      fixed pixel width, resizable.
+        //   3. `Column::auto()` — sized to content, resizable.
+        // The last column always uses `remainder()` so the table
+        // expands to fill the available width when the window is wider
+        // than the sum of fixed columns. Mirrors the TS contract where
+        // the body subgrid stretches across the viewport.
+        //
+        // The primary data column carries the expand / tree-toggle
+        // chevron when those features are on. The chevron is drawn
+        // outside the cell-content path so `Column::auto()` won't
+        // measure it; bump the column's min-width to reserve space
+        // for it (24px icon + 12px padding ≈ 36px), so the column
+        // visibly grows to fit the leading control when toggles are
+        // active.
+        let last_index = columns.len().saturating_sub(1);
+        let primary_index = primary_data_column_index(columns);
+        let leading_controls_active = options.enable_expandable || options.enable_tree_view;
+        for (index, column) in columns.iter().enumerate() {
+            let is_synthetic_selection = column.name == SELECTION_ROW_HEADER_COL_NAME;
+            let override_px = self
+                .column_widths
+                .get(&column.name)
+                .and_then(|raw| parse_pixel_width(raw));
+            let column_px = if override_px.is_some() {
+                override_px
+            } else {
+                column.width.as_deref().and_then(parse_pixel_width)
+            };
+
+            // Synthetic selection column wants its declared narrow width
+            // (≈ 2× checkbox glyph) without the data-column 80px floor.
+            let primary_min: f32 = if is_synthetic_selection {
+                0.0
+            } else if index == primary_index && leading_controls_active {
+                160.0
+            } else {
+                80.0
+            };
+
+            let table_column = if let Some(px) = column_px {
+                let effective = px.max(primary_min);
+                let mut col = Column::initial(effective).resizable(resizable).clip(true);
+                if is_synthetic_selection {
+                    // Lock the synthetic column to its computed width;
+                    // letting the user resize it would defeat the
+                    // checkbox-only sizing contract.
+                    col = col.at_least(effective).at_most(effective).resizable(false);
+                }
+                col
+            } else if index == last_index && fill_remainder {
+                // Only the unpinned (single-table) layout uses
+                // `remainder` to fill the viewport. In the pinned 3-table
+                // layout each region is sized to the sum of its columns,
+                // so a `remainder` last column would silently grow to
+                // eat any leftover space when the user pins another
+                // column elsewhere — that's the "pinning makes the last
+                // column wider" bug. Fall through to `auto` instead.
+                Column::remainder()
+                    .at_least(primary_min)
+                    .resizable(resizable)
+                    .clip(true)
+            } else {
+                Column::auto()
+                    .at_least(primary_min)
+                    .resizable(resizable)
+                    .clip(true)
+            };
+            table = table.column(table_column);
         }
 
         let has_mixed_heights = display_items
             .iter()
             .any(|item| !matches!(item, DisplayItem::Row(_)));
 
+        // Captures the actual rendered width of each header cell so we
+        // can sync drag-resize back into `column_widths`. egui_extras
+        // owns the live width inside its private `TableState`; without
+        // this pass the user can drag a column wider but the outer
+        // scroll-area / pinned-region width math (which reads
+        // `column_widths`) keeps the prior value, leaving empty
+        // scrollable space to the right of the table. Synthetic
+        // selection column is skipped because its width is fixed.
+        let mut measured_widths: Vec<(String, f32)> = Vec::with_capacity(columns.len());
+
         let body_output = table
             .header(header_height, |mut header| {
                 for col in columns.iter() {
                     header.col(|ui| {
                         let rect = ui.max_rect();
+                        if col.name != SELECTION_ROW_HEADER_COL_NAME {
+                            measured_widths.push((col.name.clone(), rect.width()));
+                        }
                         let pin_direction = get_column_pin_direction(&self.pinned_columns, col);
                         let header_background = if pin_direction == PinDirection::None {
                             theme.header_background
@@ -2110,6 +2414,28 @@ impl EguiGrid {
             self.dragged_column = None;
         }
 
+        // Sync measured header widths back into `column_widths`. Catches
+        // user drag-resize (egui_extras' built-in handle widens the
+        // header cell but doesn't touch our map) and the auto-fit
+        // dblclick path (`Column::initial(effective)` → measured rect
+        // confirms the new width). 1px tolerance avoids thrash from
+        // sub-pixel rounding. Skipped during an active resize drag so
+        // we don't flood the override map with intermediate widths.
+        let pointer_held = ui.input(|i| i.pointer.any_down());
+        if !pointer_held {
+            for (name, width) in measured_widths {
+                let prior = self
+                    .column_widths
+                    .get(&name)
+                    .and_then(|raw| parse_pixel_width(raw))
+                    .unwrap_or(0.0);
+                if (prior - width).abs() > 1.0 {
+                    self.column_widths
+                        .insert(name, format!("{}px", width.round() as i32));
+                }
+            }
+        }
+
         if vscroll {
             Some(body_output.state.offset.y)
         } else {
@@ -2121,6 +2447,14 @@ impl EguiGrid {
         if !self.pipeline_dirty {
             return;
         }
+
+        // Drop the rows cache before every refresh. The cache keys on
+        // raw-pointer identity, which is unsound for stack-constructed
+        // contexts and Vecs that reuse freed addresses. Production
+        // refreshes always need a fresh pipeline run; the cache only
+        // earns its keep inside the in-frame benchmark loop, where
+        // the same context is fed N times in succession.
+        ui_grid_core::pipeline::clear_grid_pipeline_rows_cache();
 
         let grid_options = GridOptions {
             grouping: if options.enable_grouping && !self.group_by_columns.is_empty() {
@@ -2187,7 +2521,11 @@ impl EguiGrid {
         theme: &GridTheme,
         header_row_rect: egui::Rect,
     ) -> egui::Id {
-        let can_move = can_grid_move_columns(options);
+        // The synthetic checkbox column is anchored to the leading
+        // edge and never participates in drag-reorder — neither as a
+        // drag source nor as a drop target.
+        let is_synthetic_selection = column.name == SELECTION_ROW_HEADER_COL_NAME;
+        let can_move = can_grid_move_columns(options) && !is_synthetic_selection;
 
         // Drop-zone painting / drop handling for THIS column when another column is being dragged.
         // We paint the indicator BEFORE the content so children render on top.
@@ -2292,21 +2630,14 @@ impl EguiGrid {
         };
         let mut controls_left_x: Option<f32> = None;
 
+        // Layout strategy: reserve space for the controls first
+        // (right-to-left), THEN draw the label into whatever's left
+        // with truncation so a narrow column shows the title with an
+        // ellipsis instead of letting the label clobber the controls.
         ui.horizontal(|ui| {
-            ui.add_space(theme.header_padding_x);
-
-            let label_response = ui.add(
-                egui::Label::new(
-                    egui::RichText::new(&label_text)
-                        .color(theme.cell_color)
-                        .strong(),
-                )
-                .sense(egui::Sense::hover()),
-            );
-            label_response.widget_info(|| {
-                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &label_text)
-            });
-
+            // Right-to-left scope draws controls from the trailing
+            // edge inward. We measure where they end and use that as
+            // the label's max-width.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(theme.header_padding_x);
 
@@ -2456,6 +2787,40 @@ impl EguiGrid {
                 controls_left_x = Some(ui.min_rect().min.x);
             });
 
+            // Now allocate the remaining space (between leading
+            // padding and the controls' left edge) for the label,
+            // and draw it with truncation so an overcrowded column
+            // shows an ellipsis instead of overflowing into the
+            // controls.
+            let row_rect = ui.max_rect();
+            let label_left = row_rect.min.x + theme.header_padding_x;
+            let label_right = controls_left_x
+                .map(|x| x - theme.header_padding_x)
+                .unwrap_or(row_rect.max.x);
+            let label_rect = egui::Rect::from_min_max(
+                egui::pos2(label_left, row_rect.min.y),
+                egui::pos2(label_right.max(label_left), row_rect.max.y),
+            );
+            let label_response = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(label_rect), |ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&label_text)
+                                    .color(theme.cell_color)
+                                    .strong(),
+                            )
+                            .truncate()
+                            .sense(egui::Sense::hover()),
+                        )
+                    })
+                    .inner
+                })
+                .inner;
+            label_response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &label_text)
+            });
+
             HeaderRowLayout {
                 label_id: label_response.id,
                 controls_left_x: controls_left_x.unwrap_or(label_response.rect.max.x),
@@ -2482,28 +2847,68 @@ impl EguiGrid {
             .iter()
             .any(|id| id == &row_item.row.id);
         let bg = if is_selected {
-            theme.accent_tint(30)
+            theme.row_selected_background
         } else {
             theme.surface
         };
         ui.painter().rect_filled(rect, 0.0, bg);
+        if is_selected {
+            // Match the data-row leading-edge indicator stripe so the
+            // selection chrome reads consistently across the synthetic
+            // checkbox column and the data columns.
+            let stripe = egui::Rect::from_min_size(
+                egui::pos2(rect.min.x, rect.min.y),
+                Vec2::new(3.0, rect.height()),
+            );
+            ui.painter()
+                .rect_filled(stripe, 0.0, theme.row_selected_indicator);
+        }
         let bottom = egui::Rect::from_min_size(
             egui::pos2(rect.min.x, rect.max.y - 1.0),
             Vec2::new(rect.width(), 1.0),
         );
         ui.painter().rect_filled(bottom, 0.0, theme.border_color);
 
-        let response = ui
-            .horizontal_centered(|ui| {
-                ui.add_space(theme.cell_padding_x);
-                ui.add_enabled(
-                    row_item.row.enable_selection,
-                    egui::Checkbox::new(&mut is_selected.clone(), ""),
+        let mut state = is_selected;
+        let toggled = if let Some(renderer) = self.selection_checkbox_renderer.as_mut() {
+            let context = GridSelectionCheckboxContext {
+                row: Some(&row_item.row),
+                options,
+                theme,
+                enabled: row_item.row.enable_selection,
+                is_header: false,
+            };
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                ui.with_layout(
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                    |ui| renderer(ui, &context, &mut state),
                 )
+                .inner
             })
-            .inner;
+            .inner
+        } else {
+            // Centre the checkbox in both axes against the cell's full
+            // rect — `horizontal_centered` only centred vertically, which
+            // left the checkbox left-aligned even after the column was
+            // narrowed to its content width.
+            let response = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.add_enabled(
+                                row_item.row.enable_selection,
+                                egui::Checkbox::new(&mut state, ""),
+                            )
+                        },
+                    )
+                    .inner
+                })
+                .inner;
+            response.clicked()
+        };
 
-        if response.clicked() && row_item.row.enable_selection {
+        if toggled && row_item.row.enable_selection {
             let row_id = row_item.row.id.clone();
             // Checkbox is conceptually an additive toggle — a click on
             // one row's checkbox should never wipe out the rest of the
@@ -2546,17 +2951,48 @@ impl EguiGrid {
         let select_all_enabled = options.enable_select_all.unwrap_or(true);
         let batch_events = options.enable_selection_batch_event.unwrap_or(true);
 
-        let response = ui
-            .horizontal(|ui| {
-                ui.add_space(theme.header_padding_x);
-                ui.add_enabled(
-                    select_all_enabled,
-                    egui::Checkbox::new(&mut all_selected.clone(), ""),
-                )
-            })
-            .inner;
+        // Centre the select-all checkbox horizontally against the
+        // header cell — matches the per-row checkbox cell so the
+        // chrome reads as one column.
+        let header_rect = ui.max_rect();
+        let mut state = all_selected;
+        let (toggled, response_id) = if let Some(renderer) =
+            self.selection_checkbox_renderer.as_mut()
+        {
+            let context = GridSelectionCheckboxContext {
+                row: None,
+                options,
+                theme,
+                enabled: select_all_enabled,
+                is_header: true,
+            };
+            let response_id = ui.id().with("selection_row_header_select_all");
+            let toggled = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(header_rect), |ui| {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| renderer(ui, &context, &mut state),
+                    )
+                    .inner
+                })
+                .inner;
+            (toggled, response_id)
+        } else {
+            let response = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(header_rect), |ui| {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.add_enabled(select_all_enabled, egui::Checkbox::new(&mut state, ""))
+                        },
+                    )
+                    .inner
+                })
+                .inner;
+            (response.clicked(), response.id)
+        };
 
-        if response.clicked() && select_all_enabled {
+        if toggled && select_all_enabled {
             let initial = self.selected_row_ids.clone();
             self.selected_row_ids = if all_selected {
                 Vec::new()
@@ -2567,8 +3003,8 @@ impl EguiGrid {
         }
 
         HeaderRowLayout {
-            label_id: response.id,
-            controls_left_x: response.rect.max.x,
+            label_id: response_id,
+            controls_left_x: header_rect.max.x,
         }
     }
 
@@ -2889,7 +3325,7 @@ impl EguiGrid {
         let is_selected = self.selected_row_ids.contains(&row_item.row.id);
         let pin_direction = get_column_pin_direction(&self.pinned_columns, column);
         let bg = if is_selected {
-            theme.accent_tint(30)
+            theme.row_selected_background
         } else if pin_direction != PinDirection::None {
             theme.pinned_row_background
         } else if row_index.is_multiple_of(2) {
@@ -2898,6 +3334,20 @@ impl EguiGrid {
             theme.row_odd
         };
         ui.painter().rect_filled(rect, 0.0, bg);
+
+        // Selected-row leading-edge indicator strip — paints a 3px
+        // accent column on the leading edge so the selected state is
+        // visible regardless of how subtle the row background tint is.
+        // Honours the theme-supplied colour so themes can disable the
+        // stripe by setting it to transparent.
+        if is_selected {
+            let stripe = egui::Rect::from_min_size(
+                egui::pos2(rect.min.x, rect.min.y),
+                Vec2::new(3.0, rect.height()),
+            );
+            ui.painter()
+                .rect_filled(stripe, 0.0, theme.row_selected_indicator);
+        }
 
         // Row-edit lifecycle tint. The flags are mutually-exclusive in
         // practice (row state machine: clean → dirty → saving → clean
@@ -2980,7 +3430,13 @@ impl EguiGrid {
         // Render cell content
         ui.add_space(theme.cell_padding_x);
 
-        let expand_icon_rect = if col_index == 0 {
+        // Render leading controls (tree indent + expand chevron) on
+        // the primary data column. When the synthetic selection-row-
+        // header column is prepended at index 0 the primary column is
+        // index 1; otherwise it's 0. Mirrors `is_grid_primary_column`
+        // in core/viewmodel.rs.
+        let primary_col_index = primary_data_column_index(columns);
+        let expand_icon_rect = if col_index == primary_col_index {
             self.draw_row_leading_controls(ui, options, row_item, theme)
         } else {
             None
@@ -3021,9 +3477,13 @@ impl EguiGrid {
                 }
             }
 
-            // Drag-paint multi-row selection. On drag start, anchor on
-            // this row; on subsequent drags, recompute the range from
-            // anchor → row currently under the pointer. Gated on the
+            // Drag-paint multi-row selection. On drag start the cell
+            // under the press becomes the anchor. While a press is held
+            // (any cell — egui only sets `dragged()` on the cell that
+            // received the press, so we re-check pointer hits on every
+            // cell every frame), the row whose rect contains the
+            // pointer becomes the drag-paint endpoint. The selection is
+            // recomputed as the anchor→endpoint range. Gated on the
             // grid's row-selection flag so non-selecting consumers
             // never see selection state mutate from a stray drag.
             if options.enable_row_selection.unwrap_or(false) {
@@ -3034,28 +3494,38 @@ impl EguiGrid {
                     self.selected_row_ids = vec![row_item.row.id.clone()];
                     self.last_clicked_row_id = Some(row_item.row.id.clone());
                     self.emit_selection_event(&initial, batch_events);
-                } else if response.dragged()
-                    && let Some(anchor) = self.drag_paint_anchor.clone()
-                {
-                    let rows = &self.cached_result.visible_rows;
-                    let start = rows.iter().position(|r| r.id == anchor);
-                    let end = rows.iter().position(|r| r.id == row_item.row.id);
-                    if let (Some(s), Some(e)) = (start, end) {
-                        let (from, to) = if s <= e { (s, e) } else { (e, s) };
-                        let next: Vec<String> = rows[from..=to]
-                            .iter()
-                            .filter(|r| r.enable_selection)
-                            .map(|r| r.id.clone())
-                            .collect();
-                        if next != self.selected_row_ids {
-                            let initial = self.selected_row_ids.clone();
-                            let batch_events = options.enable_selection_batch_event.unwrap_or(true);
-                            self.selected_row_ids = next;
-                            self.emit_selection_event(&initial, batch_events);
+                } else if let Some(anchor) = self.drag_paint_anchor.clone() {
+                    // Anchor exists ⇒ a drag-paint session is active.
+                    // Treat this row as the endpoint when the pointer
+                    // is over our rect AND the press is still held.
+                    let pointer_held = ui.input(|i| i.pointer.any_down());
+                    let pointer_over =
+                        ui.input(|i| i.pointer.hover_pos().is_some_and(|p| rect.contains(p)));
+                    if pointer_held && pointer_over {
+                        let rows = &self.cached_result.visible_rows;
+                        let start = rows.iter().position(|r| r.id == anchor);
+                        let end = rows.iter().position(|r| r.id == row_item.row.id);
+                        if let (Some(s), Some(e)) = (start, end) {
+                            let (from, to) = if s <= e { (s, e) } else { (e, s) };
+                            let next: Vec<String> = rows[from..=to]
+                                .iter()
+                                .filter(|r| r.enable_selection)
+                                .map(|r| r.id.clone())
+                                .collect();
+                            if next != self.selected_row_ids {
+                                let initial = self.selected_row_ids.clone();
+                                let batch_events =
+                                    options.enable_selection_batch_event.unwrap_or(true);
+                                self.selected_row_ids = next;
+                                self.emit_selection_event(&initial, batch_events);
+                            }
                         }
                     }
-                } else if response.drag_stopped() {
-                    self.drag_paint_anchor = None;
+                    if !pointer_held {
+                        // Pointer was released — clear the anchor so
+                        // subsequent clicks don't re-trigger drag-paint.
+                        self.drag_paint_anchor = None;
+                    }
                 }
             }
 
