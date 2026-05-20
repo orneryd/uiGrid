@@ -94,6 +94,10 @@ pub struct DemoApp {
     enable_expandable: bool,
     enable_tree_view: bool,
     enable_pagination: bool,
+    /// Toggles row selection + the synthetic checkbox column that
+    /// `EguiGrid::show` injects when both `enable_row_selection` and
+    /// `enable_row_header_selection` are set.
+    enable_row_selection: bool,
     use_custom_header_controls: bool,
     serialized_state: Option<String>,
     export_preview: Option<ExportPreview>,
@@ -106,7 +110,7 @@ impl DemoApp {
         let language = DemoLanguage::English;
         let columns = columns_for_dataset(dataset);
         let options = build_options(
-            dataset, &columns, language, false, true, false, false, false,
+            dataset, &columns, language, false, true, false, false, false, false,
         );
         let theme_preset = GridThemePreset::DefaultDark;
 
@@ -124,6 +128,7 @@ impl DemoApp {
             enable_expandable: false,
             enable_tree_view: false,
             enable_pagination: false,
+            enable_row_selection: false,
             use_custom_header_controls: false,
             serialized_state: None,
             export_preview: None,
@@ -161,6 +166,7 @@ impl DemoApp {
             self.enable_expandable,
             self.enable_tree_view,
             self.enable_pagination,
+            self.enable_row_selection,
         );
         self.column_ext = build_column_extensions(self.use_custom_header_controls);
         self.grid.reset();
@@ -177,6 +183,7 @@ fn build_options(
     enable_expandable: bool,
     enable_tree_view: bool,
     enable_pagination: bool,
+    enable_row_selection: bool,
 ) -> GridOptions {
     GridOptions {
         id: "demo-grid".to_string(),
@@ -193,6 +200,13 @@ fn build_options(
         enable_expandable: enable_expandable && !enable_tree_view,
         enable_tree_view,
         enable_cell_edit: true,
+        // Selection chrome — when on, the grid prepends a synthetic
+        // checkbox column and renders a select-all checkbox in its
+        // header. Mirrors the TS contract.
+        enable_row_selection: enable_row_selection.then_some(true),
+        enable_row_header_selection: enable_row_selection.then_some(true),
+        enable_select_all: enable_row_selection.then_some(true),
+        enable_selection_batch_event: enable_row_selection.then_some(true),
         tree_children_field: Some("children".to_string()),
         row_id_field: Some("id".to_string()),
         ..GridOptions::default()
@@ -431,6 +445,16 @@ impl eframe::App for DemoApp {
                     .checkbox(
                         &mut self.enable_pinning,
                         self.language.text("Pinning", "Fijacion"),
+                    )
+                    .changed()
+                {
+                    options_changed = true;
+                }
+
+                if ui
+                    .checkbox(
+                        &mut self.enable_row_selection,
+                        self.language.text("Selection", "Seleccion"),
                     )
                     .changed()
                 {

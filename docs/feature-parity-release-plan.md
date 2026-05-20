@@ -241,20 +241,20 @@ Each item below already exists in TypeScript. The work is **porting the existing
 
 ### Batch 2 — Egui adapter: selection, validate, row-edit
 
-- [ ] Checkbox-column injection when row selection + header selection are on
-- [ ] Select-all header checkbox
-- [ ] Ctrl/Cmd-click toggle (additive) selection
-- [ ] Drag-paint multi-row selection
-- [ ] Ctrl+A select-all binding
-- [ ] Space binding toggles focused row
-- [ ] `enableFullRowSelection` / `noUnselect` / `modifierKeysToMultiSelect` honored
-- [ ] Single-vs-batch selection events per `enableSelectionBatchEvent`
-- [ ] Validation: red border on invalid cells
-- [ ] Validation: error tooltip on hover
-- [ ] Row-edit: dirty/saving/error tints applied during cell paint
+- [x] Checkbox-column injection when row selection + header selection are on
+- [x] Select-all header checkbox
+- [x] Ctrl/Cmd-click toggle (additive) selection
+- [x] Drag-paint multi-row selection
+- [x] Ctrl+A select-all binding
+- [x] Space binding toggles focused row
+- [x] `enableFullRowSelection` / `noUnselect` / `modifierKeysToMultiSelect` honored
+- [x] Single-vs-batch selection events per `enableSelectionBatchEvent`
+- [x] Validation: red border on invalid cells
+- [x] Validation: error tooltip on hover
+- [x] Row-edit: dirty/saving/error tints applied during cell paint
 - [ ] Demo: validate column with length rule
 - [ ] Demo: Save / Discard buttons exercising row-edit lifecycle
-- [ ] Demo: checkbox-column toggle
+- [x] Demo: checkbox-column toggle
 
 ### Batch 3 — Egui adapter: keys, filters, pagination, renderer hooks
 

@@ -32,6 +32,7 @@ use ui_grid_core::{
         serialize_grid_saved_state, serialize_grid_saved_state_with,
     },
     utils::get_cell_value,
+    validate::{get_grid_cell_error_messages, is_grid_cell_invalid},
     viewmodel::{
         can_grid_move_columns, grid_expand_toggle_label_for_row, grid_filter_placeholder,
         grid_group_disclosure_icon, grid_group_disclosure_label, grid_grouping_button_icon,
@@ -422,6 +423,55 @@ pub struct EguiGridEvent {
     pub kind: EguiGridEventKind,
 }
 
+/// Modifier keys held during a row click. The grid widget reads these
+/// off `egui::InputState::modifiers` and translates them into selection
+/// semantics (range-extend on Shift, additive toggle on Cmd/Ctrl).
+#[derive(Debug, Clone, Copy, Default)]
+struct RowClickModifiers {
+    shift: bool,
+    /// `true` when Cmd is held on Mac or Ctrl on other platforms — egui
+    /// abstracts both as `modifiers.command`.
+    toggle: bool,
+}
+
+/// Synthetic column the grid prepends to render the row-selection
+/// checkbox. Mirrors the TS `selectionRowHeaderCol` sentinel — the
+/// same name is used by `viewmodel::is_grid_primary_column` and the
+/// CSV exporter to skip the synthetic column.
+pub const SELECTION_ROW_HEADER_COL_NAME: &str = "selectionRowHeaderCol";
+
+/// Width (in egui logical pixels) of the synthetic checkbox column.
+/// Matches the default the TS host renders when
+/// `selectionRowHeaderWidth` is unset.
+const SELECTION_ROW_HEADER_COL_WIDTH: f32 = 30.0;
+
+/// Build the synthetic checkbox column. The column is marked pinned-left
+/// so it stays anchored to the leading edge regardless of user pin
+/// state. Sort / filter / group / pin chrome is suppressed.
+fn build_selection_row_header_column() -> GridColumnDef {
+    GridColumnDef {
+        name: SELECTION_ROW_HEADER_COL_NAME.to_string(),
+        display_name: Some(String::new()),
+        sortable: false,
+        filterable: false,
+        enable_sorting: false,
+        enable_filtering: false,
+        enable_grouping: false,
+        enable_pinning: false,
+        pinned_left: true,
+        ..GridColumnDef::default()
+    }
+}
+
+/// True when the grid options enable both row selection and the
+/// row-header (checkbox) chrome. The TS contract is that
+/// `enable_row_header_selection` defaults to `true`, so a host that
+/// merely sets `enable_row_selection` opts in to the chrome.
+fn should_show_selection_row_header(options: &GridOptions) -> bool {
+    options.enable_row_selection.unwrap_or(false)
+        && options.enable_row_header_selection.unwrap_or(true)
+}
+
 #[derive(Debug, Clone)]
 pub enum EguiGridEventKind {
     SortChanged {
@@ -456,6 +506,15 @@ pub enum EguiGridEventKind {
     SelectionChanged {
         selected_ids: Vec<String>,
     },
+    /// Multi-row selection delta. Emitted when more than one row's
+    /// selection state changed in a single interaction (Shift-click
+    /// range, drag-paint, Ctrl+A select-all). Mirrors the TS
+    /// `rowSelectionChangedBatch` event gated by
+    /// `options.enableSelectionBatchEvent` (default `true`). Single-row
+    /// changes still fire `SelectionChanged` as before.
+    SelectionChangedBatch {
+        selected_ids: Vec<String>,
+    },
     ColumnPinned {
         column: String,
         direction: PinDirection,
@@ -486,6 +545,15 @@ pub struct EguiGrid {
     focused_cell: Option<GridCellPosition>,
     selected_row_ids: Vec<String>,
     last_clicked_row_id: Option<String>,
+    /// Drag-paint multi-row selection anchor. Set on the row where the
+    /// pointer was first pressed; cleared on release. Mirrors the TS
+    /// vanilla `mousedown` → `mousemove` → `mouseup` selection drag.
+    drag_paint_anchor: Option<String>,
+    /// Validator registry used to resolve consumer-registered error
+    /// messages. Built lazily from `options.labels` on first paint and
+    /// kept around so message-template lookups don't allocate per
+    /// invalid-cell tooltip.
+    validator_registry: ui_grid_core::validate::GridValidatorRegistry,
     column_order: Vec<String>,
     pinned_columns: PinnedColumnState,
     dragged_column: Option<String>,
@@ -519,6 +587,10 @@ impl EguiGrid {
             focused_cell: None,
             selected_row_ids: Vec::new(),
             last_clicked_row_id: None,
+            drag_paint_anchor: None,
+            validator_registry: ui_grid_core::validate::create_grid_validator_registry(
+                &ui_grid_core::models::GridLabels::default(),
+            ),
             column_order: Vec::new(),
             pinned_columns: PinnedColumnState::new(),
             dragged_column: None,
@@ -528,6 +600,13 @@ impl EguiGrid {
 
     pub fn result(&self) -> &PipelineResult {
         &self.cached_result
+    }
+
+    /// Read the current selection as a slice of row ids. Useful for
+    /// hosts that want to display a count or apply bulk operations
+    /// without subscribing to every `SelectionChanged` event.
+    pub fn selected_row_ids(&self) -> &[String] {
+        &self.selected_row_ids
     }
 
     pub fn drain_events(&mut self) -> Vec<EguiGridEvent> {
@@ -861,7 +940,25 @@ impl EguiGrid {
         theme: &GridTheme,
     ) {
         self.sync_column_state(columns);
-        let ordered_columns = self.resolve_columns(columns);
+        // Refresh the validator registry from the host's labels so
+        // tooltip messages pick up consumer overrides. Cheap — the
+        // registry is just labels + a small extras map.
+        self.validator_registry =
+            ui_grid_core::validate::create_grid_validator_registry(&options.labels);
+        let mut ordered_columns = self.resolve_columns(columns);
+
+        // Inject the synthetic selection-row-header column before the
+        // first user-defined column. Mirrors the TS injection — the
+        // sentinel name is recognised throughout the core (viewmodel,
+        // exporter, save-state) so other features handle it correctly
+        // without further changes.
+        if should_show_selection_row_header(options)
+            && !ordered_columns
+                .iter()
+                .any(|column| column.name == SELECTION_ROW_HEADER_COL_NAME)
+        {
+            ordered_columns.insert(0, build_selection_row_header_column());
+        }
 
         self.handle_keyboard_navigation(ui, options, &ordered_columns);
         self.refresh_pipeline(options, &ordered_columns);
@@ -1042,9 +1139,53 @@ impl EguiGrid {
                 i.key_pressed(Key::ArrowLeft),
                 i.key_pressed(Key::ArrowRight),
                 i.modifiers.shift,
+                i.key_pressed(Key::Space),
+                i.modifiers.command && i.key_pressed(Key::A),
             )
         });
-        let (tab, enter, escape, up, down, left, right, shift) = input;
+        let (tab, enter, escape, up, down, left, right, shift, space, select_all) = input;
+
+        // Ctrl+A / Cmd+A — select every selectable row, gated by
+        // `enable_row_selection` and `enable_select_all` (both default
+        // off / on respectively to mirror the TS contract). Skips
+        // entirely while editing so the shortcut doesn't steal text
+        // selection behaviour from the editor.
+        if select_all && self.edit_session.is_none() {
+            if options.enable_row_selection.unwrap_or(false)
+                && options.enable_select_all.unwrap_or(true)
+            {
+                let initial = self.selected_row_ids.clone();
+                let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+                self.selected_row_ids = self
+                    .cached_result
+                    .visible_rows
+                    .iter()
+                    .filter(|row| row.enable_selection)
+                    .map(|row| row.id.clone())
+                    .collect();
+                self.emit_selection_event(&initial, batch_events);
+            }
+            return;
+        }
+
+        // Space — toggle the focused row's selection. Mirrors the
+        // keyboard contract used by the vanilla web component.
+        if space
+            && self.edit_session.is_none()
+            && options.enable_row_selection.unwrap_or(false)
+            && let Some(ref focused) = self.focused_cell
+        {
+            let row_id = focused.row_id.clone();
+            self.handle_row_click(
+                options,
+                &row_id,
+                RowClickModifiers {
+                    shift: false,
+                    toggle: true, // Space is conceptually an additive toggle.
+                },
+            );
+            return;
+        }
 
         if escape && self.edit_session.is_some() {
             self.edit_session = None;
@@ -1524,6 +1665,12 @@ impl EguiGrid {
         column_ext: Option<&mut EguiColumnExt>,
         theme: &GridTheme,
     ) -> HeaderRowLayout {
+        // Synthetic checkbox column — render a select-all checkbox in
+        // place of the usual sort / filter / pin chrome. Mirrors the
+        // vanilla web component's behaviour for `selectionRowHeaderCol`.
+        if column.name == SELECTION_ROW_HEADER_COL_NAME {
+            return self.draw_select_all_header(ui, options, theme);
+        }
         let label_text = header_label(column);
         let can_sort = options.enable_sorting && column.sortable && column.enable_sorting;
         let can_group = options.enable_grouping && column.enable_grouping;
@@ -1710,6 +1857,114 @@ impl EguiGrid {
         .inner
     }
 
+    /// Render the per-row selection checkbox shown in the synthetic
+    /// `selectionRowHeaderCol`. Toggles route through the shared event
+    /// helper so they emit single vs. batch events consistently with
+    /// the rest of the selection chrome. Rows with
+    /// `enable_selection: false` render a disabled checkbox.
+    fn draw_row_selection_checkbox(
+        &mut self,
+        ui: &mut Ui,
+        options: &GridOptions,
+        row_item: &RowItem,
+        theme: &GridTheme,
+    ) {
+        let rect = ui.max_rect();
+        let is_selected = self
+            .selected_row_ids
+            .iter()
+            .any(|id| id == &row_item.row.id);
+        let bg = if is_selected {
+            theme.accent_tint(30)
+        } else {
+            theme.surface
+        };
+        ui.painter().rect_filled(rect, 0.0, bg);
+        let bottom = egui::Rect::from_min_size(
+            egui::pos2(rect.min.x, rect.max.y - 1.0),
+            Vec2::new(rect.width(), 1.0),
+        );
+        ui.painter().rect_filled(bottom, 0.0, theme.border_color);
+
+        let response = ui
+            .horizontal_centered(|ui| {
+                ui.add_space(theme.cell_padding_x);
+                ui.add_enabled(
+                    row_item.row.enable_selection,
+                    egui::Checkbox::new(&mut is_selected.clone(), ""),
+                )
+            })
+            .inner;
+
+        if response.clicked() && row_item.row.enable_selection {
+            let row_id = row_item.row.id.clone();
+            // Checkbox is conceptually an additive toggle — a click on
+            // one row's checkbox should never wipe out the rest of the
+            // selection. The shared handler treats `toggle: true` that
+            // way regardless of the host modifier state.
+            self.handle_row_click(
+                options,
+                &row_id,
+                RowClickModifiers {
+                    shift: false,
+                    toggle: true,
+                },
+            );
+        }
+    }
+
+    /// Render the select-all checkbox shown in the header of the
+    /// synthetic `selectionRowHeaderCol`. Toggling selects every
+    /// visible (post-filter / post-paginate) selectable row, or clears
+    /// the selection if every visible row is already selected. Honors
+    /// `enable_select_all`; when disabled, the checkbox is rendered
+    /// non-interactive at its current state.
+    fn draw_select_all_header(
+        &mut self,
+        ui: &mut Ui,
+        options: &GridOptions,
+        theme: &GridTheme,
+    ) -> HeaderRowLayout {
+        let selectable: Vec<&str> = self
+            .cached_result
+            .visible_rows
+            .iter()
+            .filter(|row| row.enable_selection)
+            .map(|row| row.id.as_str())
+            .collect();
+        let all_selected = !selectable.is_empty()
+            && selectable
+                .iter()
+                .all(|id| self.selected_row_ids.iter().any(|s| s == *id));
+        let select_all_enabled = options.enable_select_all.unwrap_or(true);
+        let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+
+        let response = ui
+            .horizontal(|ui| {
+                ui.add_space(theme.header_padding_x);
+                ui.add_enabled(
+                    select_all_enabled,
+                    egui::Checkbox::new(&mut all_selected.clone(), ""),
+                )
+            })
+            .inner;
+
+        if response.clicked() && select_all_enabled {
+            let initial = self.selected_row_ids.clone();
+            self.selected_row_ids = if all_selected {
+                Vec::new()
+            } else {
+                selectable.iter().map(|id| (*id).to_string()).collect()
+            };
+            self.emit_selection_event(&initial, batch_events);
+        }
+
+        HeaderRowLayout {
+            label_id: response.id,
+            controls_left_x: response.rect.max.x,
+        }
+    }
+
     fn draw_filter_input(
         &mut self,
         ui: &mut Ui,
@@ -1887,6 +2142,16 @@ impl EguiGrid {
         }
         let column = &columns[col_index];
 
+        // Synthetic checkbox column — render the per-row checkbox and
+        // bail before the regular cell-content path. Editing / focus
+        // chrome is suppressed here; selection toggles flow through the
+        // shared event helper so the batch / single distinction is
+        // preserved.
+        if column.name == SELECTION_ROW_HEADER_COL_NAME {
+            self.draw_row_selection_checkbox(ui, options, row_item, theme);
+            return;
+        }
+
         let rect = ui.max_rect();
 
         let is_selected = self.selected_row_ids.contains(&row_item.row.id);
@@ -1901,6 +2166,24 @@ impl EguiGrid {
             theme.row_odd
         };
         ui.painter().rect_filled(rect, 0.0, bg);
+
+        // Row-edit lifecycle tint. The flags are mutually-exclusive in
+        // practice (row state machine: clean → dirty → saving → clean
+        // or → error), but priority is error > saving > dirty so a
+        // failed save wins the visual. Painted on top of the base row
+        // bg so selection / pin tints stay visible underneath.
+        let row_edit_tint = if row_item.row.is_error {
+            Some(theme.row_error_background)
+        } else if row_item.row.is_saving {
+            Some(theme.row_saving_background)
+        } else if row_item.row.is_dirty {
+            Some(theme.row_dirty_background)
+        } else {
+            None
+        };
+        if let Some(tint) = row_edit_tint {
+            ui.painter().rect_filled(rect, 0.0, tint);
+        }
 
         let bottom = egui::Rect::from_min_size(
             egui::pos2(rect.min.x, rect.max.y - 1.0),
@@ -1946,6 +2229,22 @@ impl EguiGrid {
             );
         }
 
+        // Validation chrome — red tint + border around invalid cells.
+        // The `$$invalid<col>` flag is set on the row entity by the
+        // validators; reading it here keeps the chrome a presentation
+        // concern with no extra state on the widget.
+        let cell_invalid = is_grid_cell_invalid(&row_item.row.entity, column);
+        if cell_invalid {
+            ui.painter()
+                .rect_filled(rect, 0.0, theme.cell_invalid_background);
+            ui.painter().rect_stroke(
+                rect.shrink(1.0),
+                0.0,
+                egui::Stroke::new(1.5, theme.cell_invalid_border),
+                egui::StrokeKind::Inside,
+            );
+        }
+
         // Render cell content
         ui.add_space(theme.cell_padding_x);
 
@@ -1971,8 +2270,62 @@ impl EguiGrid {
             let response = ui.interact(
                 rect,
                 ui.id().with(("row_cell", row_index, col_index)),
-                egui::Sense::click(),
+                // Drag-sense enables drag-paint multi-row selection.
+                egui::Sense::click_and_drag(),
             );
+
+            // Validation tooltip — show the joined error messages on
+            // hover when the cell is invalid. Mirrors the TS contract
+            // wired into vanilla / Angular / React headers.
+            if cell_invalid {
+                let messages = get_grid_cell_error_messages(
+                    &row_item.row.entity,
+                    column,
+                    &self.validator_registry,
+                );
+                if !messages.is_empty() {
+                    let tooltip = messages.join("\n");
+                    response.clone().on_hover_text(&tooltip);
+                }
+            }
+
+            // Drag-paint multi-row selection. On drag start, anchor on
+            // this row; on subsequent drags, recompute the range from
+            // anchor → row currently under the pointer. Gated on the
+            // grid's row-selection flag so non-selecting consumers
+            // never see selection state mutate from a stray drag.
+            if options.enable_row_selection.unwrap_or(false) {
+                if response.drag_started() {
+                    self.drag_paint_anchor = Some(row_item.row.id.clone());
+                    let initial = self.selected_row_ids.clone();
+                    let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+                    self.selected_row_ids = vec![row_item.row.id.clone()];
+                    self.last_clicked_row_id = Some(row_item.row.id.clone());
+                    self.emit_selection_event(&initial, batch_events);
+                } else if response.dragged()
+                    && let Some(anchor) = self.drag_paint_anchor.clone()
+                {
+                    let rows = &self.cached_result.visible_rows;
+                    let start = rows.iter().position(|r| r.id == anchor);
+                    let end = rows.iter().position(|r| r.id == row_item.row.id);
+                    if let (Some(s), Some(e)) = (start, end) {
+                        let (from, to) = if s <= e { (s, e) } else { (e, s) };
+                        let next: Vec<String> = rows[from..=to]
+                            .iter()
+                            .filter(|r| r.enable_selection)
+                            .map(|r| r.id.clone())
+                            .collect();
+                        if next != self.selected_row_ids {
+                            let initial = self.selected_row_ids.clone();
+                            let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+                            self.selected_row_ids = next;
+                            self.emit_selection_event(&initial, batch_events);
+                        }
+                    }
+                } else if response.drag_stopped() {
+                    self.drag_paint_anchor = None;
+                }
+            }
 
             if expand_icon_rect.is_some() {
                 let toggle_label = if options.enable_tree_view {
@@ -1996,23 +2349,30 @@ impl EguiGrid {
                     .is_some_and(|icon_rect| click_pos.is_some_and(|pos| icon_rect.contains(pos)));
 
                 if hit_expand {
-                    // Toggle expansion and select the row, but don't focus the cell
+                    // Toggle expansion and select the row, but don't focus the cell.
                     self.toggle_row_expansion(options, row_item);
-                    self.selected_row_ids = vec![row_item.row.id.clone()];
-                    self.last_clicked_row_id = Some(row_item.row.id.clone());
-                    self.events.push(EguiGridEvent {
-                        kind: EguiGridEventKind::SelectionChanged {
-                            selected_ids: self.selected_row_ids.clone(),
-                        },
-                    });
+                    if options.enable_row_selection.unwrap_or(false) {
+                        let initial = self.selected_row_ids.clone();
+                        let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+                        self.selected_row_ids = vec![row_item.row.id.clone()];
+                        self.last_clicked_row_id = Some(row_item.row.id.clone());
+                        self.emit_selection_event(&initial, batch_events);
+                    }
                 } else {
                     // Normal cell click — commit any in-progress edit, select row, focus cell
                     if self.edit_session.is_some() {
                         self.commit_edit(options, columns);
                     }
 
-                    let shift = ui.input(|i| i.modifiers.shift);
-                    self.handle_row_click(&row_item.row.id, shift);
+                    let modifiers = ui.input(|i| RowClickModifiers {
+                        shift: i.modifiers.shift,
+                        // Treat Ctrl on non-Mac and Cmd on Mac as the
+                        // "additive multi-select" modifier — egui exposes
+                        // `mac_cmd` for Cmd/Super on Mac and `ctrl` for
+                        // the platform-conventional ctrl-key elsewhere.
+                        toggle: i.modifiers.command,
+                    });
+                    self.handle_row_click(options, &row_item.row.id, modifiers);
 
                     self.focused_cell = Some(GridCellPosition {
                         row_id: row_item.row.id.clone(),
@@ -2189,35 +2549,109 @@ impl EguiGrid {
         }
     }
 
-    fn handle_row_click(&mut self, row_id: &str, shift: bool) {
-        if shift && let Some(ref last) = self.last_clicked_row_id {
+    fn handle_row_click(
+        &mut self,
+        options: &GridOptions,
+        row_id: &str,
+        modifiers: RowClickModifiers,
+    ) {
+        // Selection feature flags. Defaults match TS:
+        //   enableRowSelection ? false                  (off unless opted in)
+        //   modifierKeysToMultiSelect ? false           (Shift / Cmd extend by default)
+        //   noUnselect ? false                          (clicks can deselect)
+        //   enableSelectionBatchEvent ? true            (multi-row events emit batch)
+        if !options.enable_row_selection.unwrap_or(false) {
+            return;
+        }
+        let modifier_keys_to_multi_select = options.modifier_keys_to_multi_select.unwrap_or(false);
+        let no_unselect = options.no_unselect.unwrap_or(false);
+        let batch_events = options.enable_selection_batch_event.unwrap_or(true);
+
+        // Shift-range extend. When `modifier_keys_to_multi_select` is on
+        // the user must hold Shift to extend; that's already what the
+        // condition models, so the gate is consistent in both modes.
+        let initial = self.selected_row_ids.clone();
+        if modifiers.shift
+            && let Some(ref last) = self.last_clicked_row_id
+        {
             let rows = &self.cached_result.visible_rows;
             let start = rows.iter().position(|r| r.id == *last);
             let end = rows.iter().position(|r| r.id == row_id);
             if let (Some(s), Some(e)) = (start, end) {
                 let (from, to) = if s <= e { (s, e) } else { (e, s) };
                 self.selected_row_ids = rows[from..=to].iter().map(|r| r.id.clone()).collect();
-                self.events.push(EguiGridEvent {
-                    kind: EguiGridEventKind::SelectionChanged {
-                        selected_ids: self.selected_row_ids.clone(),
-                    },
-                });
+                self.emit_selection_event(&initial, batch_events);
                 return;
             }
         }
 
-        if self.selected_row_ids.contains(&row_id.to_string()) {
-            self.selected_row_ids.retain(|id| id != row_id);
+        // Cmd/Ctrl additive toggle: leave existing selection alone, just
+        // flip this row. When `modifier_keys_to_multi_select` is on, the
+        // user MUST hold the modifier to keep multi-row state — without
+        // it, additive toggles aren't allowed and the click collapses to
+        // single-select.
+        let already_selected = self.selected_row_ids.iter().any(|id| id == row_id);
+        if modifiers.toggle {
+            if already_selected {
+                if !no_unselect {
+                    self.selected_row_ids.retain(|id| id != row_id);
+                }
+            } else {
+                self.selected_row_ids.push(row_id.to_string());
+            }
+            self.last_clicked_row_id = Some(row_id.to_string());
+            self.emit_selection_event(&initial, batch_events);
+            return;
+        }
+
+        // Plain click. With `modifier_keys_to_multi_select` set, every
+        // unmodified click collapses to single-select. Without it, the
+        // legacy behaviour persists: clicking a selected row toggles it
+        // off (unless `noUnselect`), clicking a different row replaces
+        // the selection with just that row.
+        if modifier_keys_to_multi_select {
+            self.selected_row_ids = vec![row_id.to_string()];
+        } else if already_selected {
+            if !no_unselect {
+                self.selected_row_ids.retain(|id| id != row_id);
+            }
         } else {
             self.selected_row_ids = vec![row_id.to_string()];
         }
         self.last_clicked_row_id = Some(row_id.to_string());
+        self.emit_selection_event(&initial, batch_events);
+    }
 
-        self.events.push(EguiGridEvent {
-            kind: EguiGridEventKind::SelectionChanged {
-                selected_ids: self.selected_row_ids.clone(),
-            },
-        });
+    /// Push the selection-changed event, choosing between the single-row
+    /// and batch variants based on the feature flag and the size of the
+    /// delta vs. the previous selection. When the change involves more
+    /// than one row id (typical for shift-range / Ctrl+A) the batch
+    /// variant fires; single-row toggles stay on the legacy event.
+    fn emit_selection_event(&mut self, previous: &[String], batch_events: bool) {
+        let next = &self.selected_row_ids;
+        let same: bool =
+            previous.len() == next.len() && previous.iter().all(|id| next.iter().any(|n| n == id));
+        if same {
+            return;
+        }
+        let symmetric_delta = previous
+            .iter()
+            .filter(|id| !next.iter().any(|n| n == *id))
+            .count()
+            + next
+                .iter()
+                .filter(|id| !previous.iter().any(|p| p == *id))
+                .count();
+        let kind = if batch_events && symmetric_delta > 1 {
+            EguiGridEventKind::SelectionChangedBatch {
+                selected_ids: next.clone(),
+            }
+        } else {
+            EguiGridEventKind::SelectionChanged {
+                selected_ids: next.clone(),
+            }
+        };
+        self.events.push(EguiGridEvent { kind });
     }
 
     fn draw_pagination(
