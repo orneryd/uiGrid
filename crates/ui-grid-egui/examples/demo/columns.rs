@@ -1,3 +1,4 @@
+use serde_json::{Map as JsonMap, Value};
 use ui_grid_core::models::{GridColumnDef, GridColumnType};
 
 fn col(name: &str, display: &str, col_type: GridColumnType, editable: bool) -> GridColumnDef {
@@ -18,10 +19,25 @@ fn col(name: &str, display: &str, col_type: GridColumnType, editable: bool) -> G
     }
 }
 
+/// Attach a min-length validator (built into the core registry) to a
+/// column. The grid runs this on every cell commit and stamps
+/// `$$invalid<col>` on the entity when the value is shorter than the
+/// threshold; the egui adapter's validation chrome paints the red
+/// border + tooltip from there.
+fn with_min_length(mut column: GridColumnDef, min: usize) -> GridColumnDef {
+    let mut validators = JsonMap::new();
+    validators.insert("minLength".to_string(), Value::Number((min as u64).into()));
+    column.validators = Some(validators);
+    column
+}
+
 pub fn flat_columns() -> Vec<GridColumnDef> {
     vec![
         col("account_id", "Account", GridColumnType::String, false),
-        col("owner", "Owner", GridColumnType::String, true),
+        // Owner gains a 3-character min-length rule so the demo can
+        // exercise the validation chrome end-to-end (red border + the
+        // joined tooltip on hover).
+        with_min_length(col("owner", "Owner", GridColumnType::String, true), 3),
         col("status", "Status", GridColumnType::String, true),
         col("manager", "Manager", GridColumnType::String, true),
         col("region", "Region", GridColumnType::String, true),

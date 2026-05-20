@@ -1,4 +1,5 @@
 use egui::Color32;
+use std::sync::Arc;
 use ui_grid_core::{
     constants::SortDirection,
     export::build_grid_export_payload,
@@ -6,7 +7,8 @@ use ui_grid_core::{
     pinning::PinDirection,
 };
 use ui_grid_egui::{
-    EguiColumnExt, EguiGrid, EguiHeaderAction, GridTheme, GridThemePreset, THEME_PRESETS,
+    EguiColumnExt, EguiGrid, EguiHeaderAction, GridExportResult, GridGroupRowAction,
+    GridRegisteredExportContext, GridTheme, GridThemePreset, THEME_PRESETS, register_grid_exporter,
 };
 
 use crate::columns::columns_for_dataset;
@@ -99,6 +101,9 @@ pub struct DemoApp {
     /// `enable_row_header_selection` are set.
     enable_row_selection: bool,
     use_custom_header_controls: bool,
+    /// Most recent benchmark result, displayed inline next to the
+    /// Benchmark button.
+    benchmark_result: Option<ui_grid_core::benchmark::GridBenchmarkResult>,
     serialized_state: Option<String>,
     export_preview: Option<ExportPreview>,
     trading: TradingState,
@@ -106,6 +111,27 @@ pub struct DemoApp {
 
 impl DemoApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        // Register a placeholder PDF exporter that emits a plain-text
+        // "PDF" payload. Production hosts swap in a real
+        // pdfMake-equivalent here; the registry shape is the same.
+        register_grid_exporter(
+            "pdf",
+            Arc::new(|ctx: &GridRegisteredExportContext<'_>| {
+                let mut body = String::from("[demo placeholder pdf]\n");
+                body.push_str(&format!("scope: {:?}\n", ctx.scope));
+                body.push_str(&format!("rows: {}\n", ctx.rows.len()));
+                for row in ctx.formatted_cells.iter() {
+                    body.push_str(&row.join(" | "));
+                    body.push('\n');
+                }
+                GridExportResult {
+                    filename: format!("{}.pdf", ctx.options.id),
+                    content: body.into_bytes(),
+                    mime_type: "application/pdf".to_string(),
+                }
+            }),
+        );
+
         let dataset = Dataset::Flat;
         let language = DemoLanguage::English;
         let columns = columns_for_dataset(dataset);
@@ -115,7 +141,79 @@ impl DemoApp {
         let theme_preset = GridThemePreset::DefaultDark;
 
         Self {
-            grid: EguiGrid::new(),
+            grid: EguiGrid::new()
+                // Custom group renderer — emits a chevron + label and
+                // a count badge. Returns Toggle on chevron click so the
+                // grid handles collapse state.
+                .with_group_row_renderer(|ui, ctx| {
+                    let chevron = if ctx.collapsed { "▶" } else { "▼" };
+                    let mut action = GridGroupRowAction::None;
+                    ui.horizontal(|ui| {
+                        ui.add_space(
+                            ctx.theme.cell_padding_x
+                                + ctx.group.depth as f32 * ctx.theme.group_indent_per_depth,
+                        );
+                        if ui
+                            .selectable_label(
+                                false,
+                                egui::RichText::new(chevron).color(ctx.theme.accent),
+                            )
+                            .clicked()
+                        {
+                            action = GridGroupRowAction::Toggle;
+                        }
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} = {} ({} rows)",
+                                ctx.group.field, ctx.group.label, ctx.group.count
+                            ))
+                            .strong()
+                            .color(ctx.theme.cell_color),
+                        );
+                    });
+                    action
+                })
+                // Custom expandable renderer — paints a structured
+                // detail card with a heading + key/value rows. Mirrors
+                // the templated detail card the vanilla demo exposes.
+                .with_expandable_row_renderer(|ui, ctx| {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new("Detail")
+                                .strong()
+                                .color(ctx.theme.accent),
+                        );
+                        for col in ctx.columns {
+                            let value =
+                                ui_grid_core::display::format_grid_cell_display_value(ctx.row, col);
+                            let label = col.display_name.as_deref().unwrap_or(&col.name);
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("{label}:"))
+                                        .color(ctx.theme.muted_color),
+                                );
+                                ui.label(egui::RichText::new(value).color(ctx.theme.cell_color));
+                            });
+                        }
+                    });
+                })
+                // Custom empty-state renderer — emphasis + descriptive
+                // text. Shows up when filters knock all rows out.
+                .with_empty_state_renderer(|ui, ctx| {
+                    ui.add_space(ctx.theme.cell_padding_y);
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new(&ctx.options.labels.empty_heading)
+                                .strong()
+                                .size(16.0)
+                                .color(ctx.theme.accent),
+                        );
+                        ui.label(
+                            egui::RichText::new(&ctx.options.labels.empty_description)
+                                .color(ctx.theme.muted_color),
+                        );
+                    });
+                }),
             options,
             columns,
             column_ext: build_column_extensions(false),
@@ -130,6 +228,7 @@ impl DemoApp {
             enable_pagination: false,
             enable_row_selection: false,
             use_custom_header_controls: false,
+            benchmark_result: None,
             serialized_state: None,
             export_preview: None,
             trading: TradingState::new(),
@@ -461,6 +560,100 @@ impl eframe::App for DemoApp {
                     options_changed = true;
                 }
 
+                // Row-edit lifecycle exercise — Save flips dirty rows
+                // through saving → clean, mirroring an async save that
+                // resolved successfully. Discard drops every row from
+                // the dirty / error sets so the chrome clears.
+                ui.separator();
+                let dirty_count = self.grid.row_edit_state().dirty_row_ids.len();
+                let dirty_label = if dirty_count > 0 {
+                    format!(
+                        "{} ({})",
+                        self.language.text("Save", "Guardar"),
+                        dirty_count
+                    )
+                } else {
+                    self.language.text("Save", "Guardar").to_string()
+                };
+                if ui
+                    .add_enabled(dirty_count > 0, egui::Button::new(dirty_label))
+                    .clicked()
+                {
+                    let dirty_ids: Vec<String> = self
+                        .grid
+                        .row_edit_state()
+                        .dirty_row_ids
+                        .iter()
+                        .cloned()
+                        .collect();
+                    for id in dirty_ids {
+                        // Single-pass simulate: saving immediately
+                        // resolves to clean. A real host would await a
+                        // future and call mark_row_clean / mark_row_error
+                        // depending on the result.
+                        self.grid.mark_row_saving(id.clone());
+                        self.grid.mark_row_clean(&id);
+                    }
+                }
+                if ui
+                    .add_enabled(
+                        dirty_count > 0,
+                        egui::Button::new(self.language.text("Discard", "Descartar")),
+                    )
+                    .clicked()
+                {
+                    let dirty_ids: Vec<String> = self
+                        .grid
+                        .row_edit_state()
+                        .dirty_row_ids
+                        .iter()
+                        .cloned()
+                        .collect();
+                    for id in dirty_ids {
+                        self.grid.mark_row_clean(&id);
+                    }
+                }
+
+                ui.separator();
+                if ui
+                    .button(self.language.text("Benchmark", "Benchmark"))
+                    .on_hover_text(self.language.text(
+                        "Run the pipeline 25 times and report averages",
+                        "Ejecuta el pipeline 25 veces y reporta promedios",
+                    ))
+                    .clicked()
+                {
+                    self.benchmark_result =
+                        self.grid.run_benchmark(&self.options, &self.columns, None);
+                }
+                if let Some(result) = self.benchmark_result {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{:.2} ms avg / {} iters / {} visible",
+                            result.average_ms, result.iterations, result.visible_rows
+                        ))
+                        .color(self.theme.muted_color),
+                    );
+                }
+
+                // Exercise the auto-fit measure — fits the first data
+                // column to the widest visible cell + header. The
+                // resulting width is stamped onto the grid's
+                // `column_width_overrides` so save/restore round-trips
+                // preserve it.
+                if !self.columns.is_empty()
+                    && ui
+                        .button(self.language.text("Auto-fit owner", "Auto-ajustar"))
+                        .on_hover_text(self.language.text(
+                            "Measure the widest cell + header in `owner`",
+                            "Mide la celda más ancha en `owner`",
+                        ))
+                        .clicked()
+                {
+                    self.grid
+                        .auto_fit_column(ui.ctx(), &self.columns, "owner", 24.0);
+                }
+
                 if ui
                     .checkbox(
                         &mut self.enable_tree_view,
@@ -701,6 +894,38 @@ impl eframe::App for DemoApp {
                 &self.theme,
             );
         });
+
+        // Drain grid events and react to `NeedLoadMoreData` by
+        // appending a synthetic batch to the current data set. Mirrors
+        // the TS demo's `needLoadMoreData` handler. Only fires when
+        // the host has actually opted in (via `infinite_scroll_down`)
+        // — the grid won't emit otherwise.
+        for event in self.grid.drain_events() {
+            if let ui_grid_egui::EguiGridEventKind::NeedLoadMoreData = event.kind {
+                let next_index = self.options.data.len();
+                let batch_size = 50;
+                for i in 0..batch_size {
+                    let idx = next_index + i;
+                    self.options.data.push(serde_json::json!({
+                        "id": format!("synthetic-{idx}"),
+                        "owner": format!("Synthetic {idx}"),
+                        "status": "Active",
+                        "manager": "Auto",
+                        "region": "Auto",
+                        "segment": "Auto",
+                        "revenue": 1000 + idx as i64,
+                        "seats": 10,
+                        "health": "Green",
+                        "enabled": true,
+                        "renewal": "2026-01-01",
+                        "last_touch": "2026-01-01",
+                        "plan": "Auto",
+                        "tier": "Auto",
+                    }));
+                }
+                self.grid.mark_dirty();
+            }
+        }
     }
 }
 

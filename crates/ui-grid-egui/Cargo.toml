@@ -14,7 +14,14 @@ authors.workspace = true
 [dependencies]
 ui-grid-core = { path = "../ui-grid-core", version = "0.1.10" }
 egui = { workspace = true }
-egui_extras = { workspace = true }
+# `datepicker` is needed at lib level so date-typed cells get a proper
+# DatePickerButton editor without requiring consumers to opt-in. Adds
+# `chrono` (used internally by egui_extras for the picker) but the
+# bytes-on-disk cost is small and it's already in the dev tree.
+egui_extras = { workspace = true, features = ["datepicker"] }
+# Used to parse / format `YYYY-MM-DD` strings around the egui_extras
+# DatePickerButton, which works with `jiff::civil::Date` types.
+jiff = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

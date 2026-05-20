@@ -22,6 +22,12 @@ pub struct BuildGridSavedStateContext {
     pub expanded_tree_rows: BTreeMap<String, bool>,
     #[serde(default)]
     pub pinned_columns: BTreeMap<String, String>,
+    /// Per-column width overrides. Mirrors the TS
+    /// `columnWidthOverrides: Record<string, string>` which the vanilla
+    /// host serializes when `saveWidths` is on. Hosts that don't track
+    /// resize state can leave this empty.
+    #[serde(default)]
+    pub column_width_overrides: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -43,6 +49,8 @@ pub struct GridRestoreMutationPlan {
     pub tree_view: Option<BTreeMap<String, bool>>,
     #[serde(default)]
     pub pinning: Option<BTreeMap<String, String>>,
+    #[serde(default)]
+    pub column_width_overrides: Option<BTreeMap<String, String>>,
 }
 
 pub fn build_grid_saved_state(context: BuildGridSavedStateContext) -> GridSavedState {
@@ -58,6 +66,7 @@ pub fn build_grid_saved_state(context: BuildGridSavedStateContext) -> GridSavedS
         expandable: context.expanded_rows,
         tree_view: context.expanded_tree_rows,
         pinning: context.pinned_columns,
+        column_width_overrides: context.column_width_overrides,
     }
 }
 
@@ -145,6 +154,23 @@ pub fn normalize_grid_saved_state(value: &Value) -> GridSavedState {
             .collect();
     }
 
+    // Column width overrides — keyed by safe column name, valued as
+    // arbitrary CSS-style width strings (`"180px"`, `"30%"`, etc.).
+    // We don't validate the value beyond stripping non-string entries
+    // because the column-width parser already tolerates arbitrary
+    // suffixes (and rejects unknown values at apply time).
+    if let Some(Value::Object(widths)) = state.get("columnWidthOverrides") {
+        normalized.column_width_overrides = widths
+            .iter()
+            .filter_map(|(key, value)| {
+                if !is_safe_state_key(key) {
+                    return None;
+                }
+                value.as_str().map(|width| (key.clone(), width.to_string()))
+            })
+            .collect();
+    }
+
     normalized
 }
 
@@ -161,6 +187,8 @@ pub fn create_grid_restore_mutation_plan(state: &GridSavedState) -> GridRestoreM
         expandable: (!normalized.expandable.is_empty()).then_some(normalized.expandable),
         tree_view: (!normalized.tree_view.is_empty()).then_some(normalized.tree_view),
         pinning: (!normalized.pinning.is_empty()).then_some(normalized.pinning),
+        column_width_overrides: (!normalized.column_width_overrides.is_empty())
+            .then_some(normalized.column_width_overrides),
     }
 }
 

@@ -252,51 +252,51 @@ Each item below already exists in TypeScript. The work is **porting the existing
 - [x] Validation: red border on invalid cells
 - [x] Validation: error tooltip on hover
 - [x] Row-edit: dirty/saving/error tints applied during cell paint
-- [ ] Demo: validate column with length rule
-- [ ] Demo: Save / Discard buttons exercising row-edit lifecycle
+- [x] Demo: validate column with length rule
+- [x] Demo: Save / Discard buttons exercising row-edit lifecycle
 - [x] Demo: checkbox-column toggle
 
 ### Batch 3 — Egui adapter: keys, filters, pagination, renderer hooks
 
-- [ ] F2 begins cell edit
-- [ ] Home / End → row start / row end
-- [ ] Ctrl+Home / Ctrl+End → first / last row
-- [ ] First-character keypress begins edit pre-seeded with the char
-- [ ] Filter input "clear" (✕) button when non-empty
-- [ ] `with_filter_renderer(name, fn)` hook
-- [ ] Pagination range label `M – N of total`
-- [ ] Pagination page-size list reads `paginationPageSizes` from options
-- [ ] Pagination prev/next visually disabled at edges
-- [ ] `with_group_row_renderer(fn)` hook
-- [ ] `with_expandable_row_renderer(fn)` hook
-- [ ] `with_empty_state_renderer(fn)` hook
-- [ ] Editor input-type switching (text / number / date / boolean) using `editor_input_type`
-- [ ] Demo: expandable row renderer paints row detail properly
-- [ ] Demo: group row renderer custom label format
-- [ ] Demo: infinite-scroll handler appends rows on `needLoadMoreData`
+- [x] F2 begins cell edit
+- [x] Home / End → row start / row end
+- [x] Ctrl+Home / Ctrl+End → first / last row
+- [x] First-character keypress begins edit pre-seeded with the char
+- [x] Filter input "clear" (✕) button when non-empty
+- [x] `with_filter_renderer(name, fn)` hook
+- [x] Pagination range label `M – N of total`
+- [x] Pagination page-size list reads `paginationPageSizes` from options
+- [x] Pagination prev/next visually disabled at edges
+- [x] `with_group_row_renderer(fn)` hook
+- [x] `with_expandable_row_renderer(fn)` hook
+- [x] `with_empty_state_renderer(fn)` hook
+- [x] Editor input-type switching (text / number / date / boolean) using `editor_input_type`
+- [x] Demo: expandable row renderer paints row detail properly
+- [x] Demo: group row renderer custom label format
+- [x] Demo: infinite-scroll handler appends rows on `needLoadMoreData`
 
 ### Batch 4 — Generic export hook (Rust-only)
 
-- [ ] `crates/ui-grid-core/src/exporter_registry.rs` with `register_grid_exporter` / `unregister_grid_exporter` / `export_grid`
-- [ ] Built-in CSV exporter auto-registered via `init_default_grid_exporters`
-- [ ] `GridExportScope::{Visible, All, Selected}` enum + scope plumbing into `GridExportContext`
-- [ ] Egui `EguiGrid::register_exporter(format, exporter)` API
-- [ ] Egui `EguiGrid::export(format)` builds `GridExportContext` (default scope = visible) and invokes registered exporter
-- [ ] Existing `Export CSV` demo button keeps working via the new hook (no behavior change)
-- [ ] Egui demo registers placeholder `'pdf'` exporter returning plain-text payload
-- [ ] Test: registry register/unregister/missing-format
-- [ ] Test: `GridExportContext` shape snapshot per scope
-- [ ] Test: demo `'pdf'` exporter receives expected context
-- [ ] Verify: TS / vanilla / Angular / React export code paths unchanged (smoke: `npm test`)
+- [x] `crates/ui-grid-core/src/exporter_registry.rs` with `register_grid_exporter` / `unregister_grid_exporter` / `export_grid`
+- [x] Built-in CSV exporter auto-registered via `init_default_grid_exporters`
+- [x] `GridExportScope::{Visible, All, Selected}` enum + scope plumbing into `GridExportContext`
+- [x] Egui `EguiGrid::register_exporter(format, exporter)` API
+- [x] Egui `EguiGrid::export(format)` builds `GridExportContext` (default scope = visible) and invokes registered exporter
+- [x] Existing `Export CSV` demo button keeps working via the new hook (no behavior change)
+- [x] Egui demo registers placeholder `'pdf'` exporter returning plain-text payload
+- [x] Test: registry register/unregister/missing-format
+- [x] Test: `GridExportContext` shape snapshot per scope
+- [x] Test: demo `'pdf'` exporter receives expected context
+- [x] Verify: TS / vanilla / Angular / React export code paths unchanged (smoke: `npm test`)
 
 ### Batch 5 — Rust ports of existing TS APIs
 
-- [ ] Async validators in Rust (`run_grid_cell_validators_async` future-returning variant); egui awaits and re-paints invalid badges
-- [ ] Column-width persistence: `column_widths` field added to Rust `GridSavedState` + `BuildGridSavedStateContext` to mirror TS `columnWidthOverrides`; egui save/restore round-trips widths
-- [ ] Egui auto-fit column width on double-click (Galley measure path) — same UX as TS `measureAutoColumnWidth`
-- [ ] Core `run_grid_benchmark` Rust API mirroring TS `gridApi.core.benchmark`; egui demo wires a Benchmark button
-- [ ] `KeyOverrideSpec` Rust struct mirroring TS `GridKeyEventOverride`; egui honors it during keydown
-- [ ] Demo exercises each ported API behind a toggle
+- [x] Async validators in Rust (`run_grid_cell_validators_async` future-returning variant); egui awaits and re-paints invalid badges
+- [x] Column-width persistence: `column_widths` field added to Rust `GridSavedState` + `BuildGridSavedStateContext` to mirror TS `columnWidthOverrides`; egui save/restore round-trips widths
+- [x] Egui auto-fit column width on double-click (Galley measure path) — same UX as TS `measureAutoColumnWidth`
+- [x] Core `run_grid_benchmark` Rust API mirroring TS `gridApi.core.benchmark`; egui demo wires a Benchmark button
+- [x] `KeyOverrideSpec` Rust struct mirroring TS `GridKeyEventOverride`; egui honors it during keydown
+- [x] Demo exercises each ported API behind a toggle
 
 ---
 

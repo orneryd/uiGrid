@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use egui::{Color32, Key, Pos2, Response, Ui, Vec2, WidgetInfo, WidgetType};
 use egui_extras::{Column, TableBuilder};
@@ -16,11 +17,15 @@ use ui_grid_core::{
         GridExportContext, GridExportPayload, build_csv_export_payload, build_grid_export_context,
         header_label,
     },
+    exporter_registry::{
+        GridExportResult, GridExportScope, GridExporter, GridRegisteredExportContext,
+        UnknownExportFormat, register_grid_exporter, unregister_grid_exporter,
+    },
     models::{
         BuildGridPipelineContext, DisplayItem, GridCellPosition, GridColumnDef,
-        GridGroupingOptions, GridIcon, GridOptions, PipelineResult, RowItem, SortState,
+        GridGroupingOptions, GridIcon, GridOptions, GridRow, PipelineResult, RowItem, SortState,
     },
-    pagination::get_total_pages_value,
+    pagination::{get_first_row_index_value, get_last_row_index_value, get_total_pages_value},
     pinning::{
         PinDirection, PinnedColumnState, build_initial_pinned_state, get_column_pin_direction,
         is_column_pinnable, pin_column_state,
@@ -32,7 +37,7 @@ use ui_grid_core::{
         serialize_grid_saved_state, serialize_grid_saved_state_with,
     },
     utils::get_cell_value,
-    validate::{get_grid_cell_error_messages, is_grid_cell_invalid},
+    validate::{get_grid_cell_error_messages, is_grid_cell_invalid, run_grid_cell_validators},
     viewmodel::{
         can_grid_move_columns, grid_expand_toggle_label_for_row, grid_filter_placeholder,
         grid_group_disclosure_icon, grid_group_disclosure_label, grid_grouping_button_icon,
@@ -43,8 +48,8 @@ use ui_grid_core::{
 };
 
 use crate::column_ext::{
-    EguiColumnExt, EguiHeaderAction, GridCellContext, GridHeaderControlsContext, find_column_ext,
-    find_column_ext_mut,
+    EguiColumnExt, EguiHeaderAction, GridCellContext, GridFilterContext, GridHeaderControlsContext,
+    find_column_ext, find_column_ext_mut,
 };
 use crate::grid_theme::GridTheme;
 
@@ -234,6 +239,7 @@ mod tests {
                 ("owner".to_string(), "left".to_string()),
                 ("prototype".to_string(), "right".to_string()),
             ]),
+            column_width_overrides: Default::default(),
         });
 
         assert_eq!(grid.column_order(), ["owner"]);
@@ -434,6 +440,52 @@ struct RowClickModifiers {
     toggle: bool,
 }
 
+/// Context passed to a custom group-row renderer registered via
+/// [`EguiGrid::with_group_row_renderer`]. The renderer paints the
+/// entire group row in place of the default implementation.
+pub struct GridGroupRowContext<'a> {
+    pub group: &'a ui_grid_core::models::GroupItem,
+    pub options: &'a GridOptions,
+    pub columns: &'a [GridColumnDef],
+    pub theme: &'a GridTheme,
+    /// `true` when the group is currently collapsed. Mirrors the
+    /// `collapsed` flag the default renderer reads to flip the
+    /// disclosure triangle.
+    pub collapsed: bool,
+}
+
+/// Action returned from a group-row renderer. The default renderer
+/// returns `Toggle` when the disclosure chevron is clicked; consumer
+/// renderers signal the same intent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GridGroupRowAction {
+    #[default]
+    None,
+    Toggle,
+}
+
+/// Context passed to a custom expandable-row renderer registered via
+/// [`EguiGrid::with_expandable_row_renderer`]. The renderer paints
+/// the entire detail row.
+pub struct GridExpandableRowContext<'a> {
+    pub row: &'a ui_grid_core::models::GridRow,
+    pub options: &'a GridOptions,
+    pub columns: &'a [GridColumnDef],
+    pub theme: &'a GridTheme,
+}
+
+/// Context passed to a custom empty-state renderer registered via
+/// [`EguiGrid::with_empty_state_renderer`]. Painted when the
+/// pipeline produces no display items.
+pub struct GridEmptyStateContext<'a> {
+    pub options: &'a GridOptions,
+    pub theme: &'a GridTheme,
+}
+
+type GroupRowRenderer = Box<dyn FnMut(&mut Ui, &GridGroupRowContext<'_>) -> GridGroupRowAction>;
+type ExpandableRowRenderer = Box<dyn FnMut(&mut Ui, &GridExpandableRowContext<'_>)>;
+type EmptyStateRenderer = Box<dyn FnMut(&mut Ui, &GridEmptyStateContext<'_>)>;
+
 /// Synthetic column the grid prepends to render the row-selection
 /// checkbox. Mirrors the TS `selectionRowHeaderCol` sentinel — the
 /// same name is used by `viewmodel::is_grid_primary_column` and the
@@ -526,6 +578,12 @@ pub enum EguiGridEventKind {
         pipeline_ms: f64,
         total_items: usize,
     },
+    /// Emitted when the body scroll position is within
+    /// `options.infinite_scroll_rows_from_end` rows of the bottom.
+    /// Mirrors the TS `needLoadMoreData` event consumers wire up to
+    /// append the next page of data. Hosts that don't enable
+    /// `enable_infinite_scroll` never see this event.
+    NeedLoadMoreData,
 }
 
 pub struct EguiGrid {
@@ -554,10 +612,30 @@ pub struct EguiGrid {
     /// kept around so message-template lookups don't allocate per
     /// invalid-cell tooltip.
     validator_registry: ui_grid_core::validate::GridValidatorRegistry,
+    /// Row-edit lifecycle state (dirty / saving / error sets). Lives
+    /// on the grid because the pipeline rebuild resets the per-row
+    /// flags every pass; we re-apply them after each rebuild from
+    /// this state. Hosts mutate it via `mark_row_dirty` /
+    /// `mark_row_saving` / `mark_row_clean` / `mark_row_error`.
+    row_edit_state: ui_grid_core::row_edit::GridRowEditState,
+    /// Per-column width overrides — populated by the auto-fit
+    /// dblclick handler and any future drag-resize wiring. Mirrors
+    /// the TS `columnWidthOverrides` map so save / restore round-trips
+    /// preserve the user's resize state.
+    column_widths: BTreeMap<String, String>,
+    /// Last `total_rows` value at which `NeedLoadMoreData` was
+    /// emitted. Tracking this prevents the event from re-firing on
+    /// every paint while the viewport hovers near the bottom; the
+    /// host emits, the host appends, the row count grows, the next
+    /// near-bottom paint re-emits.
+    last_load_more_total_rows: Option<usize>,
     column_order: Vec<String>,
     pinned_columns: PinnedColumnState,
     dragged_column: Option<String>,
     pinned_scroll_offset_y: f32,
+    group_row_renderer: Option<GroupRowRenderer>,
+    expandable_row_renderer: Option<ExpandableRowRenderer>,
+    empty_state_renderer: Option<EmptyStateRenderer>,
 }
 
 impl Default for EguiGrid {
@@ -591,11 +669,48 @@ impl EguiGrid {
             validator_registry: ui_grid_core::validate::create_grid_validator_registry(
                 &ui_grid_core::models::GridLabels::default(),
             ),
+            row_edit_state: ui_grid_core::row_edit::create_grid_row_edit_state(),
+            column_widths: BTreeMap::new(),
+            last_load_more_total_rows: None,
             column_order: Vec::new(),
             pinned_columns: PinnedColumnState::new(),
             dragged_column: None,
             pinned_scroll_offset_y: 0.0,
+            group_row_renderer: None,
+            expandable_row_renderer: None,
+            empty_state_renderer: None,
         }
+    }
+
+    /// Replace the default group-row renderer. The closure paints the
+    /// entire row and returns a [`GridGroupRowAction`] indicating
+    /// whether to toggle the group's collapsed state.
+    pub fn with_group_row_renderer(
+        mut self,
+        renderer: impl FnMut(&mut Ui, &GridGroupRowContext<'_>) -> GridGroupRowAction + 'static,
+    ) -> Self {
+        self.group_row_renderer = Some(Box::new(renderer));
+        self
+    }
+
+    /// Replace the default expandable detail-row renderer. The closure
+    /// paints the entire detail row.
+    pub fn with_expandable_row_renderer(
+        mut self,
+        renderer: impl FnMut(&mut Ui, &GridExpandableRowContext<'_>) + 'static,
+    ) -> Self {
+        self.expandable_row_renderer = Some(Box::new(renderer));
+        self
+    }
+
+    /// Replace the default empty-state renderer. Painted when the
+    /// pipeline produces no display items (no rows, all filtered out).
+    pub fn with_empty_state_renderer(
+        mut self,
+        renderer: impl FnMut(&mut Ui, &GridEmptyStateContext<'_>) + 'static,
+    ) -> Self {
+        self.empty_state_renderer = Some(Box::new(renderer));
+        self
     }
 
     pub fn result(&self) -> &PipelineResult {
@@ -607,6 +722,210 @@ impl EguiGrid {
     /// without subscribing to every `SelectionChanged` event.
     pub fn selected_row_ids(&self) -> &[String] {
         &self.selected_row_ids
+    }
+
+    /// Read the row-edit lifecycle state. Hosts that want to display
+    /// a count of pending changes / errors can read this directly.
+    pub fn row_edit_state(&self) -> &ui_grid_core::row_edit::GridRowEditState {
+        &self.row_edit_state
+    }
+
+    /// Move a row to the dirty state. Mirrors TS
+    /// `gridApi.rowEdit.setRowsDirty([rowEntity])` for a single row.
+    pub fn mark_row_dirty(&mut self, row_id: impl Into<String>) {
+        let id = row_id.into();
+        self.row_edit_state.dirty_row_ids.insert(id.clone());
+        self.row_edit_state.error_row_ids.remove(&id);
+        self.row_edit_state.saving_row_ids.remove(&id);
+        self.pipeline_dirty = true;
+    }
+
+    /// Move a row to the saving state. Mirrors TS
+    /// `gridApi.rowEdit.flushDirtyRows()` per-row transition.
+    pub fn mark_row_saving(&mut self, row_id: impl Into<String>) {
+        let id = row_id.into();
+        self.row_edit_state.saving_row_ids.insert(id.clone());
+        self.row_edit_state.error_row_ids.remove(&id);
+        self.pipeline_dirty = true;
+    }
+
+    /// Move a row to the clean state — drops it from every lifecycle
+    /// set so the dirty / saving / error tints clear on the next
+    /// pipeline pass. Mirrors TS `setSavePromise(promise.then(clean))`.
+    pub fn mark_row_clean(&mut self, row_id: &str) {
+        self.row_edit_state.dirty_row_ids.remove(row_id);
+        self.row_edit_state.saving_row_ids.remove(row_id);
+        self.row_edit_state.error_row_ids.remove(row_id);
+        self.row_edit_state.save_promise_row_ids.remove(row_id);
+        self.pipeline_dirty = true;
+    }
+
+    /// Move a row to the error state. Mirrors TS save-failure path:
+    /// the row stays dirty so the user can retry.
+    pub fn mark_row_error(&mut self, row_id: impl Into<String>) {
+        let id = row_id.into();
+        self.row_edit_state.error_row_ids.insert(id.clone());
+        self.row_edit_state.dirty_row_ids.insert(id.clone());
+        self.row_edit_state.saving_row_ids.remove(&id);
+        self.pipeline_dirty = true;
+    }
+
+    /// Read the current per-column width overrides. The map keys are
+    /// column names; values are CSS-style width strings (e.g.
+    /// `"180px"`). Hosts can persist this independently of the
+    /// `save_state` round-trip.
+    pub fn column_width_overrides(&self) -> &BTreeMap<String, String> {
+        &self.column_widths
+    }
+
+    /// Set a per-column width override programmatically. Cleared by
+    /// passing `None`.
+    pub fn set_column_width_override(&mut self, column_name: &str, width: Option<String>) {
+        match width {
+            Some(value) => {
+                self.column_widths.insert(column_name.to_string(), value);
+            }
+            None => {
+                self.column_widths.remove(column_name);
+            }
+        }
+    }
+
+    /// Check whether the cached body scroll position is close enough
+    /// to the bottom that the host should load more data, and emit a
+    /// [`EguiGridEventKind::NeedLoadMoreData`] event when so. Mirrors
+    /// the TS `needLoadMoreData` heuristic. Idempotent within a frame
+    /// — successive calls without a row count change won't re-emit.
+    /// `offset_y` is the body's current scroll offset; `viewport_h`
+    /// is the visible body height; `row_height` is the per-row pixel
+    /// size; `total_rows` is the number of pipeline-visible rows.
+    fn maybe_emit_load_more(
+        &mut self,
+        options: &GridOptions,
+        offset_y: f32,
+        viewport_h: f32,
+        row_height: f32,
+        total_rows: usize,
+    ) {
+        // Only emit when infinite scroll is wired up. `infinite_scroll_down`
+        // is the TS-equivalent gate (defaults to off when unset).
+        if !options.infinite_scroll_down.unwrap_or(false) {
+            return;
+        }
+        if total_rows == 0 || row_height <= 0.0 {
+            return;
+        }
+        let from_end = options.infinite_scroll_rows_from_end.unwrap_or(20);
+        let trigger_band = (from_end as f32) * row_height;
+        let body_h = total_rows as f32 * row_height;
+        let bottom_distance = body_h - (offset_y + viewport_h);
+        if bottom_distance <= trigger_band && self.last_load_more_total_rows != Some(total_rows) {
+            self.last_load_more_total_rows = Some(total_rows);
+            self.events.push(EguiGridEvent {
+                kind: EguiGridEventKind::NeedLoadMoreData,
+            });
+        }
+    }
+
+    /// Run a host-agnostic pipeline benchmark against the current
+    /// options + column state. Mirrors TS `gridApi.core.benchmark`:
+    /// runs the pipeline `iterations` times and reports total /
+    /// average / visible-row / rendered-item counts. The default
+    /// iteration count when callers pass `None` is 25, matching the
+    /// TS fallback.
+    pub fn run_benchmark(
+        &self,
+        options: &GridOptions,
+        columns: &[GridColumnDef],
+        iterations: Option<usize>,
+    ) -> Option<ui_grid_core::benchmark::GridBenchmarkResult> {
+        let n = iterations.unwrap_or(25);
+        let context = self.pipeline_context_for_benchmark(options, columns);
+        ui_grid_core::benchmark::run_grid_benchmark(&context, n)
+    }
+
+    /// Build the same pipeline context `refresh_pipeline` would
+    /// build, but without mutating cached state. Used by the
+    /// benchmark probe so it doesn't disturb the rendered grid.
+    fn pipeline_context_for_benchmark(
+        &self,
+        options: &GridOptions,
+        columns: &[GridColumnDef],
+    ) -> BuildGridPipelineContext {
+        let grid_options = GridOptions {
+            grouping: if options.enable_grouping && !self.group_by_columns.is_empty() {
+                Some(GridGroupingOptions {
+                    group_by: self.group_by_columns.clone(),
+                    start_collapsed: false,
+                })
+            } else {
+                None
+            },
+            ..options.clone()
+        };
+        BuildGridPipelineContext {
+            options: grid_options,
+            columns: columns.to_vec(),
+            active_filters: self.active_filters.clone(),
+            sort_state: self.sort_state.clone(),
+            group_by_columns: self.group_by_columns.clone(),
+            collapsed_groups: self.collapsed_groups.clone(),
+            expanded_rows: self.expanded_rows.clone(),
+            expanded_tree_rows: self.expanded_tree_rows.clone(),
+            hidden_row_reasons: BTreeMap::new(),
+            current_page: self.current_page,
+            page_size: self.page_size,
+            row_size: 44,
+        }
+    }
+
+    /// Auto-fit a single column to the widest visible cell + header.
+    /// Mirrors the TS `measureAutoColumnWidth` UX from
+    /// `vanilla/src/focus.ts` — that path clones the cell DOM and
+    /// reads `scrollWidth`; egui has no DOM, so we measure each
+    /// rendered cell's display string + the header label via
+    /// `egui::Fonts::layout_no_wrap` and pick the widest, then store
+    /// the result as a `"<px>px"` width override.
+    ///
+    /// The override is applied via [`column_widths`](Self::column_width_overrides)
+    /// so save/restore round-trips preserve it. `padding_px` is added
+    /// on top of the measured width as breathing room (cell padding).
+    /// Reasonable defaults: ~24px (matching the grid's cell padding).
+    pub fn auto_fit_column(
+        &mut self,
+        ctx: &egui::Context,
+        columns: &[GridColumnDef],
+        column_name: &str,
+        padding_px: f32,
+    ) {
+        let Some(column) = columns.iter().find(|c| c.name == column_name) else {
+            return;
+        };
+        let header_text = header_label(column);
+        let mut max_width = ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(header_text, egui::FontId::default(), egui::Color32::WHITE)
+                .size()
+                .x
+        });
+        for row in &self.cached_result.visible_rows {
+            let text = format_grid_cell_display_value(row, column);
+            if text.is_empty() {
+                continue;
+            }
+            let width = ctx.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(text, egui::FontId::default(), egui::Color32::WHITE)
+                    .size()
+                    .x
+            });
+            if width > max_width {
+                max_width = width;
+            }
+        }
+        let total = (max_width + padding_px).ceil() as i32;
+        self.column_widths
+            .insert(column_name.to_string(), format!("{total}px"));
     }
 
     pub fn drain_events(&mut self) -> Vec<EguiGridEvent> {
@@ -668,6 +987,80 @@ impl EguiGrid {
         exporter(self.export_context(options, columns))
     }
 
+    /// Register an exporter against the global exporter registry. The
+    /// registry is process-wide and shared across every `EguiGrid`
+    /// instance — exporters registered here are reachable from
+    /// [`EguiGrid::export`] on any grid in the process. Mirrors the TS
+    /// contract where consumers register exporters once at startup.
+    pub fn register_exporter(format: impl Into<String>, exporter: Arc<dyn GridExporter>) {
+        register_grid_exporter(format, exporter);
+    }
+
+    /// Drop a previously-registered exporter. Returns the prior
+    /// registration when one existed.
+    pub fn unregister_exporter(format: &str) -> Option<Arc<dyn GridExporter>> {
+        unregister_grid_exporter(format)
+    }
+
+    /// Run the exporter registered for `format` against the current
+    /// pipeline result, scoped to `scope`. The default scope is
+    /// `Visible` (post-filter / post-sort / post-paginate); see
+    /// [`GridExportScope`] for the others.
+    pub fn export(
+        &self,
+        options: &GridOptions,
+        columns: &[GridColumnDef],
+        format: &str,
+        scope: GridExportScope,
+    ) -> Result<GridExportResult, UnknownExportFormat> {
+        let rows: Vec<GridRow> = match scope {
+            GridExportScope::Visible => self.cached_result.visible_rows.clone(),
+            GridExportScope::All => options
+                .data
+                .iter()
+                .enumerate()
+                .map(|(index, entity)| {
+                    GridRow::new(
+                        format!("{}-{}", options.id, index),
+                        entity.clone(),
+                        index,
+                        44,
+                    )
+                })
+                .collect(),
+            GridExportScope::Selected => self
+                .cached_result
+                .visible_rows
+                .iter()
+                .filter(|row| self.selected_row_ids.iter().any(|id| id == &row.id))
+                .cloned()
+                .collect(),
+        };
+
+        // Pre-format every cell in row-major order so consumer
+        // exporters don't have to walk `format_grid_cell_display_value`
+        // themselves.
+        let formatted_cells = rows
+            .iter()
+            .map(|row| {
+                columns
+                    .iter()
+                    .map(|column| format_grid_cell_display_value(row, column))
+                    .collect()
+            })
+            .collect();
+
+        let ctx = GridRegisteredExportContext {
+            columns,
+            rows: &rows,
+            formatted_cells,
+            options,
+            scope,
+            format,
+        };
+        ui_grid_core::exporter_registry::export_grid(format, &ctx)
+    }
+
     pub fn set_group_by(&mut self, columns: Vec<String>) {
         self.group_by_columns = columns;
         self.pipeline_dirty = true;
@@ -685,6 +1078,7 @@ impl EguiGrid {
             expanded_rows: self.expanded_rows.clone(),
             expanded_tree_rows: self.expanded_tree_rows.clone(),
             pinned_columns: self.pinned_columns.clone(),
+            column_width_overrides: self.column_widths.clone(),
         })
     }
 
@@ -726,6 +1120,9 @@ impl EguiGrid {
         }
         if let Some(pinning) = plan.pinning {
             self.pinned_columns = pinning;
+        }
+        if let Some(widths) = plan.column_width_overrides {
+            self.column_widths = widths;
         }
 
         self.pipeline_dirty = true;
@@ -1120,7 +1517,38 @@ impl EguiGrid {
                 }
             });
 
+        // Fire `NeedLoadMoreData` if the body is near the bottom and
+        // infinite-scroll is wired up. Uses the cached scroll offset
+        // (the pinned variant tracks it; the unpinned variant always
+        // resets to 0, so no false-fire there).
+        let row_height = theme.row_height;
+        let viewport_h = ui.available_height();
+        self.maybe_emit_load_more(
+            options,
+            self.pinned_scroll_offset_y,
+            viewport_h,
+            row_height,
+            self.cached_result.visible_rows.len(),
+        );
+
         self.cached_result.display_items = display_items;
+    }
+
+    /// True when any `KeyOverrideSpec` declared on `options` matches
+    /// the supplied key + modifier state. Hosts use this to opt out
+    /// of built-in keydown handling (Ctrl+A, F2, Home/End, etc.).
+    fn key_overridden(
+        options: &GridOptions,
+        key: &str,
+        shift: bool,
+        ctrl: bool,
+        alt: bool,
+        meta: bool,
+    ) -> bool {
+        options
+            .key_down_overrides
+            .iter()
+            .any(|spec| spec.matches(key, shift, ctrl, alt, meta))
     }
 
     fn handle_keyboard_navigation(
@@ -1144,13 +1572,41 @@ impl EguiGrid {
             )
         });
         let (tab, enter, escape, up, down, left, right, shift, space, select_all) = input;
+        let (ctrl_held, alt_held, meta_held) =
+            ui.input(|i| (i.modifiers.ctrl, i.modifiers.alt, i.modifiers.mac_cmd));
+
+        // Additional keys / modifier combos read via a second `ui.input`
+        // call to keep the upstream tuple within readable bounds.
+        let (f2, home, end, command_held, first_char) = ui.input(|i| {
+            // First printable character pressed this frame, if any —
+            // used to begin an edit pre-seeded with the typed character.
+            // We deliberately ignore characters reported while a
+            // modifier (Cmd/Ctrl/Alt) is held so accelerators don't
+            // accidentally trigger edit mode.
+            let printable = i.events.iter().find_map(|event| match event {
+                egui::Event::Text(text) if !text.is_empty() && !i.modifiers.command => {
+                    text.chars().next()
+                }
+                _ => None,
+            });
+            (
+                i.key_pressed(Key::F2),
+                i.key_pressed(Key::Home),
+                i.key_pressed(Key::End),
+                i.modifiers.command,
+                printable,
+            )
+        });
 
         // Ctrl+A / Cmd+A — select every selectable row, gated by
         // `enable_row_selection` and `enable_select_all` (both default
         // off / on respectively to mirror the TS contract). Skips
         // entirely while editing so the shortcut doesn't steal text
         // selection behaviour from the editor.
-        if select_all && self.edit_session.is_none() {
+        if select_all
+            && self.edit_session.is_none()
+            && !Self::key_overridden(options, "a", shift, ctrl_held, alt_held, meta_held)
+        {
             if options.enable_row_selection.unwrap_or(false)
                 && options.enable_select_all.unwrap_or(true)
             {
@@ -1173,6 +1629,7 @@ impl EguiGrid {
         if space
             && self.edit_session.is_none()
             && options.enable_row_selection.unwrap_or(false)
+            && !Self::key_overridden(options, " ", shift, ctrl_held, alt_held, meta_held)
             && let Some(ref focused) = self.focused_cell
         {
             let row_id = focused.row_id.clone();
@@ -1220,6 +1677,17 @@ impl EguiGrid {
             return;
         }
 
+        // F2 — alternate begin-edit binding to match the spreadsheet
+        // convention. Behaves identically to Enter on a focused cell.
+        if f2
+            && self.edit_session.is_none()
+            && !Self::key_overridden(options, "F2", shift, ctrl_held, alt_held, meta_held)
+            && let Some(ref focused) = self.focused_cell.clone()
+        {
+            self.begin_edit_at(focused, options, columns);
+            return;
+        }
+
         if tab {
             if self.edit_session.is_some() {
                 self.commit_edit(options, columns);
@@ -1250,6 +1718,71 @@ impl EguiGrid {
 
         if self.edit_session.is_some() {
             return;
+        }
+
+        // Ctrl+Home / Ctrl+End — jump to the first or last visible row
+        // while keeping the focused column. Mirrors the
+        // spreadsheet-style binding used by the vanilla web component.
+        let home_end_key = if home { "Home" } else { "End" };
+        if command_held
+            && (home || end)
+            && !Self::key_overridden(options, home_end_key, shift, ctrl_held, alt_held, meta_held)
+            && let Some(ref focused) = self.focused_cell.clone()
+        {
+            let rows = &self.cached_result.visible_rows;
+            let target_row = if home { rows.first() } else { rows.last() };
+            if let Some(target) = target_row {
+                let position = GridCellPosition {
+                    row_id: target.id.clone(),
+                    column_name: focused.column_name.clone(),
+                };
+                self.focused_cell = Some(position.clone());
+                self.selected_row_ids = vec![position.row_id.clone()];
+                self.last_clicked_row_id = Some(position.row_id);
+            }
+            return;
+        }
+
+        // Home / End — move focus to the first or last column on the
+        // current row. Honors `enable_cell_navigation` semantics
+        // implicitly through `find_next_grid_cell`.
+        if (home || end)
+            && !command_held
+            && !Self::key_overridden(options, home_end_key, shift, ctrl_held, alt_held, meta_held)
+            && let Some(ref focused) = self.focused_cell.clone()
+            && let Some(target_column) = (if home {
+                columns.first()
+            } else {
+                columns.last()
+            })
+        {
+            let position = GridCellPosition {
+                row_id: focused.row_id.clone(),
+                column_name: target_column.name.clone(),
+            };
+            self.focused_cell = Some(position.clone());
+            self.selected_row_ids = vec![position.row_id.clone()];
+            self.last_clicked_row_id = Some(position.row_id);
+            return;
+        }
+
+        // First-character keypress — begin editing the focused cell
+        // pre-seeded with the typed character. Skipped when no cell
+        // is focused, when no column is editable, or when a modifier
+        // (Cmd/Ctrl/Alt) was held (those are handled by the input
+        // gather above as accelerators).
+        if let Some(ch) = first_char
+            && let Some(ref focused) = self.focused_cell.clone()
+        {
+            let column = columns.iter().find(|c| c.name == focused.column_name);
+            let is_editable =
+                column.is_some_and(|c| c.enable_cell_edit || options.enable_cell_edit);
+            if is_editable {
+                let session =
+                    begin_grid_edit_session(&focused.row_id, &focused.column_name, ch.to_string());
+                self.edit_session = Some(session);
+                return;
+            }
         }
 
         let direction = if up {
@@ -1354,7 +1887,36 @@ impl EguiGrid {
             }) && let Some(obj) = row.as_object_mut()
             {
                 obj.insert(field.to_string(), new_value.clone());
+                // Run any validators declared on the column. The
+                // helper stamps `$$invalid<col>` and per-validator
+                // error keys directly on the entity, which the cell
+                // paint path picks up via `is_grid_cell_invalid` and
+                // the validation chrome (border + tooltip).
+                if column.validators.is_some() {
+                    let mut entity = serde_json::Value::Object(obj.clone());
+                    let _ = run_grid_cell_validators(
+                        &mut entity,
+                        column,
+                        &new_value,
+                        &old_value,
+                        &self.validator_registry,
+                    );
+                    if let Some(updated) = entity.as_object() {
+                        obj.clone_from(updated);
+                    }
+                }
             }
+
+            // Mark the row dirty so the row-edit chrome lights up. The
+            // pipeline rebuild resets per-row flags every pass; the
+            // `row_edit_state` set persists the dirty marker across
+            // rebuilds via `refresh_pipeline`.
+            self.row_edit_state
+                .dirty_row_ids
+                .insert(session.editing_cell.row_id.clone());
+            self.row_edit_state
+                .error_row_ids
+                .remove(&session.editing_cell.row_id);
 
             self.pipeline_dirty = true;
             self.events.push(EguiGridEvent {
@@ -1474,13 +2036,40 @@ impl EguiGrid {
                             );
                             if show_filters {
                                 ui.add_space(2.0);
-                                self.draw_filter_input(ui, options, col, theme, header_label_id);
+                                self.draw_filter_input(
+                                    ui,
+                                    options,
+                                    col,
+                                    find_column_ext_mut(column_ext, &col.name),
+                                    theme,
+                                    header_label_id,
+                                );
                             }
                         });
                     });
                 }
             })
-            .body(|body| {
+            .body(|mut body| {
+                // Empty-state — emit a single full-height row hosting
+                // the consumer's renderer (or a default heading + body).
+                // Painted only when the pipeline produced no display
+                // items at all; non-empty bodies fall through to the
+                // regular per-row dispatch below.
+                if display_items.is_empty() && !columns.is_empty() {
+                    body.row(theme.row_height * 4.0, |mut row| {
+                        // Span by drawing the empty-state into the
+                        // first column cell only; the remaining cells
+                        // are left blank so the table layout stays
+                        // intact.
+                        row.col(|ui| {
+                            self.draw_empty_state_row(ui, options, theme);
+                        });
+                        for _ in 1..columns.len() {
+                            row.col(|_| {});
+                        }
+                    });
+                    return;
+                }
                 if has_mixed_heights {
                     let heights = display_items.iter().map(|item| match item {
                         DisplayItem::Group(_) => theme.group_padding_y * 2.0 + 20.0,
@@ -1561,6 +2150,24 @@ impl EguiGrid {
         };
 
         self.cached_result = build_grid_pipeline(&context);
+        // Re-apply row-edit lifecycle flags to the freshly-built rows.
+        // The pipeline resets `is_dirty` / `is_saving` / `is_error` to
+        // false on every rebuild because they live on `GridRow`, not
+        // on the source entity. Persisting them in `row_edit_state` and
+        // re-stamping here is what gives the row-edit chrome its
+        // session-stable lifetime.
+        for row in self.cached_result.visible_rows.iter_mut() {
+            if self.row_edit_state.dirty_row_ids.contains(&row.id) {
+                row.is_dirty = true;
+            }
+            if self.row_edit_state.saving_row_ids.contains(&row.id) {
+                row.is_saving = true;
+            }
+            if self.row_edit_state.error_row_ids.contains(&row.id) {
+                row.is_error = true;
+                row.is_dirty = true;
+            }
+        }
         self.pipeline_dirty = false;
 
         self.events.push(EguiGridEvent {
@@ -1970,6 +2577,7 @@ impl EguiGrid {
         ui: &mut Ui,
         options: &GridOptions,
         column: &GridColumnDef,
+        column_ext: Option<&mut EguiColumnExt>,
         theme: &GridTheme,
         labelled_by: egui::Id,
     ) {
@@ -1977,48 +2585,96 @@ impl EguiGrid {
             return;
         }
 
-        ui.horizontal(|ui| {
-            ui.add_space(theme.header_padding_x);
+        let mut filter_text = self
+            .active_filters
+            .get(&column.name)
+            .cloned()
+            .unwrap_or_default();
+        let initial = filter_text.clone();
 
-            let mut filter_text = self
-                .active_filters
-                .get(&column.name)
-                .cloned()
-                .unwrap_or_default();
-
-            let available = ui.available_width() - theme.header_padding_x * 2.0;
-            let text_edit = egui::TextEdit::singleline(&mut filter_text)
-                .hint_text(grid_filter_placeholder(true, &options.labels))
-                .desired_width(available.max(40.0))
-                .text_color(theme.cell_color)
-                .show(ui);
-            let response = <Response as Clone>::clone(&text_edit.response).labelled_by(labelled_by);
-            response.widget_info(|| {
-                WidgetInfo::labeled(
-                    WidgetType::TextEdit,
-                    ui.is_enabled(),
-                    &options.labels.filter_column,
-                )
-            });
-
-            if response.changed() {
-                if filter_text.is_empty() {
-                    self.active_filters.remove(&column.name);
-                } else {
-                    self.active_filters
-                        .insert(column.name.clone(), filter_text.clone());
+        let custom_changed = if let Some(ext) = column_ext
+            && let Some(renderer) = ext.filter_renderer.as_mut()
+        {
+            let context = GridFilterContext {
+                column,
+                labels: &options.labels,
+                theme,
+            };
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                ui.add_space(theme.header_padding_x);
+                if renderer(ui, &context, &mut filter_text) {
+                    changed = true;
                 }
-                self.current_page = 1;
-                self.pipeline_dirty = true;
+            });
+            Some(changed)
+        } else {
+            None
+        };
 
-                self.events.push(EguiGridEvent {
-                    kind: EguiGridEventKind::FilterChanged {
-                        column: column.name.clone(),
-                        term: filter_text,
-                    },
+        if custom_changed.is_none() {
+            ui.horizontal(|ui| {
+                ui.add_space(theme.header_padding_x);
+
+                let trailing = theme.header_padding_x;
+                let clear_size = if filter_text.is_empty() {
+                    0.0
+                } else {
+                    // Reserve space for the inline ✕ clear button.
+                    18.0
+                };
+                let available = ui.available_width() - trailing - clear_size;
+                let text_edit = egui::TextEdit::singleline(&mut filter_text)
+                    .hint_text(grid_filter_placeholder(true, &options.labels))
+                    .desired_width(available.max(40.0))
+                    .text_color(theme.cell_color)
+                    .show(ui);
+                let response =
+                    <Response as Clone>::clone(&text_edit.response).labelled_by(labelled_by);
+                response.widget_info(|| {
+                    WidgetInfo::labeled(
+                        WidgetType::TextEdit,
+                        ui.is_enabled(),
+                        &options.labels.filter_column,
+                    )
                 });
+
+                // Inline ✕ clear button — visible only when the
+                // filter has a non-empty term. Mirrors the TS chrome.
+                if !filter_text.is_empty() {
+                    let clear = ui.add(
+                        egui::Button::new(egui::RichText::new("✕").color(theme.muted_color))
+                            .frame(false),
+                    );
+                    if clear.clicked() {
+                        filter_text.clear();
+                    }
+                }
+            });
+        }
+
+        let changed = match custom_changed {
+            Some(c) => c,
+            None => filter_text != initial,
+        };
+
+        if changed {
+            if filter_text.is_empty() {
+                self.active_filters.remove(&column.name);
+            } else {
+                self.active_filters
+                    .insert(column.name.clone(), filter_text.clone());
             }
-        });
+            self.current_page = 1;
+            self.pipeline_dirty = true;
+
+            self.events.push(EguiGridEvent {
+                kind: EguiGridEventKind::FilterChanged {
+                    column: column.name.clone(),
+                    term: filter_text,
+                },
+            });
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2035,7 +2691,51 @@ impl EguiGrid {
     ) {
         match item {
             DisplayItem::Group(group) => {
-                self.draw_group_row(ui, options, columns, theme, group, col_index);
+                // When a custom group renderer is registered, paint
+                // the entire row through it (col_index == 0 only —
+                // remaining cells are intentionally blank so the
+                // layout stays intact). Otherwise fall through to the
+                // default renderer which paints across columns.
+                let custom_action = if col_index == 0 {
+                    if let Some(renderer) = self.group_row_renderer.as_mut() {
+                        let collapsed = self
+                            .collapsed_groups
+                            .get(&group.id)
+                            .copied()
+                            .unwrap_or(false);
+                        let context = GridGroupRowContext {
+                            group,
+                            options,
+                            columns,
+                            theme,
+                            collapsed,
+                        };
+                        Some((renderer(ui, &context), collapsed))
+                    } else {
+                        None
+                    }
+                } else if self.group_row_renderer.is_some() {
+                    // Custom renderer occupies col 0 only — leave
+                    // remaining columns blank.
+                    Some((GridGroupRowAction::None, false))
+                } else {
+                    None
+                };
+                match custom_action {
+                    Some((GridGroupRowAction::Toggle, collapsed)) => {
+                        let next = !collapsed;
+                        self.collapsed_groups.insert(group.id.clone(), next);
+                        self.pipeline_dirty = true;
+                        self.events.push(EguiGridEvent {
+                            kind: EguiGridEventKind::GroupToggled {
+                                group_id: group.id.clone(),
+                                collapsed: next,
+                            },
+                        });
+                    }
+                    Some(_) => {}
+                    None => self.draw_group_row(ui, options, columns, theme, group, col_index),
+                }
             }
             DisplayItem::Row(row_item) => {
                 self.draw_data_row(
@@ -2054,25 +2754,57 @@ impl EguiGrid {
 
                 if col_index == 0 {
                     ui.add_space(theme.cell_padding_x);
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new("Detail View")
-                                .strong()
-                                .size(13.0)
-                                .color(theme.accent),
-                        );
-                        for col in columns {
-                            let value = format_grid_cell_display_value(&expandable.row, col);
-                            let label = col.display_name.as_deref().unwrap_or(&col.name);
+                    if let Some(renderer) = self.expandable_row_renderer.as_mut() {
+                        let context = GridExpandableRowContext {
+                            row: &expandable.row,
+                            options,
+                            columns,
+                            theme,
+                        };
+                        renderer(ui, &context);
+                    } else {
+                        ui.vertical(|ui| {
                             ui.label(
-                                egui::RichText::new(format!("{}: {}", label, value))
-                                    .color(theme.cell_color),
+                                egui::RichText::new("Detail View")
+                                    .strong()
+                                    .size(13.0)
+                                    .color(theme.accent),
                             );
-                        }
-                    });
+                            for col in columns {
+                                let value = format_grid_cell_display_value(&expandable.row, col);
+                                let label = col.display_name.as_deref().unwrap_or(&col.name);
+                                ui.label(
+                                    egui::RichText::new(format!("{}: {}", label, value))
+                                        .color(theme.cell_color),
+                                );
+                            }
+                        });
+                    }
                 }
             }
         }
+    }
+
+    /// Paint the empty-state body — either the consumer's renderer or
+    /// a default heading + description from `options.labels`. Called
+    /// when the pipeline produces no display items.
+    fn draw_empty_state_row(&mut self, ui: &mut Ui, options: &GridOptions, theme: &GridTheme) {
+        if let Some(renderer) = self.empty_state_renderer.as_mut() {
+            let context = GridEmptyStateContext { options, theme };
+            renderer(ui, &context);
+            return;
+        }
+        ui.add_space(theme.cell_padding_y);
+        ui.vertical_centered(|ui| {
+            ui.label(
+                egui::RichText::new(&options.labels.empty_heading)
+                    .strong()
+                    .color(theme.cell_color),
+            );
+            ui.label(
+                egui::RichText::new(&options.labels.empty_description).color(theme.muted_color),
+            );
+        });
     }
 
     fn draw_group_row(
@@ -2498,6 +3230,7 @@ impl EguiGrid {
         theme: &GridTheme,
     ) {
         if let Some(ref mut session) = self.edit_session {
+            // Consumer-provided editor wins over the built-in choice.
             if let Some(ext) = find_column_ext_mut(column_ext, &column.name)
                 && let Some(ref mut editor) = ext.cell_editor
             {
@@ -2505,12 +3238,62 @@ impl EguiGrid {
                 return;
             }
 
-            let response = egui::TextEdit::singleline(&mut session.editing_value)
-                .desired_width(ui.available_width() - theme.cell_padding_x * 2.0)
-                .text_color(theme.cell_color)
-                .show(ui)
-                .response;
-            response.request_focus();
+            // Pick an editor based on the column's declared type. The
+            // serialized `editing_value` is always `String`, so each
+            // editor parses / formats around that representation.
+            match column.r#type {
+                ui_grid_core::models::GridColumnType::Boolean => {
+                    let mut value = matches!(
+                        session.editing_value.as_str(),
+                        "true" | "True" | "TRUE" | "1"
+                    );
+                    if ui.checkbox(&mut value, "").changed() {
+                        session.editing_value = value.to_string();
+                    }
+                }
+                ui_grid_core::models::GridColumnType::Date => {
+                    // Parse the current `YYYY-MM-DD` string into a jiff
+                    // civil date (egui_extras 0.34's DatePickerButton
+                    // works with `jiff::civil::Date`); fall back to
+                    // today's date when parsing fails so the picker
+                    // still opens with a sane initial value.
+                    let mut date =
+                        jiff::civil::Date::strptime("%Y-%m-%d", session.editing_value.trim())
+                            .unwrap_or_else(|_| jiff::Zoned::now().date());
+                    let picker = egui_extras::DatePickerButton::new(&mut date)
+                        .id_salt("ui_grid_egui_cell_editor_date")
+                        .show_icon(true);
+                    let response = ui.add(picker);
+                    if response.changed() {
+                        session.editing_value = date.to_string();
+                    }
+                }
+                ui_grid_core::models::GridColumnType::Number => {
+                    // Numeric filter — strip characters that wouldn't
+                    // parse as a JSON number while typing. Mirrors the
+                    // TS contract where `editor_input_type` returns
+                    // `'number'` for these columns.
+                    let response = egui::TextEdit::singleline(&mut session.editing_value)
+                        .desired_width(ui.available_width() - theme.cell_padding_x * 2.0)
+                        .text_color(theme.cell_color)
+                        .show(ui)
+                        .response;
+                    response.request_focus();
+                    if response.changed() {
+                        session.editing_value.retain(|c| {
+                            c.is_ascii_digit() || matches!(c, '-' | '.' | 'e' | 'E' | '+')
+                        });
+                    }
+                }
+                _ => {
+                    let response = egui::TextEdit::singleline(&mut session.editing_value)
+                        .desired_width(ui.available_width() - theme.cell_padding_x * 2.0)
+                        .text_color(theme.cell_color)
+                        .show(ui)
+                        .response;
+                    response.request_focus();
+                }
+            }
         }
     }
 
@@ -2668,6 +3451,23 @@ impl EguiGrid {
         ui.painter().rect_filled(top, 0.0, theme.border_color);
 
         let total_pages = get_total_pages_value(options, total_items, self.page_size);
+        // Range label "M – N of total" mirrors the vanilla web component's
+        // pagination footer; uses inclusive 1-based indices.
+        let first_row =
+            get_first_row_index_value(options, self.current_page, total_items, self.page_size);
+        let last_row =
+            get_last_row_index_value(options, self.current_page, total_items, self.page_size);
+        let range_label = if total_items == 0 {
+            format!("0 {} 0", options.labels.pagination_of)
+        } else {
+            format!(
+                "{} \u{2013} {} {} {}",
+                first_row + 1,
+                last_row + 1,
+                options.labels.pagination_of,
+                total_items,
+            )
+        };
         let page_label = format!(
             "{} {} {} {}",
             options.labels.pagination_page,
@@ -2675,24 +3475,39 @@ impl EguiGrid {
             options.labels.pagination_of,
             total_pages,
         );
-        let total_label = format!("Total: {} {}", total_items, options.labels.toolbar_rows);
 
         ui.horizontal(|ui| {
             ui.add_space(theme.cell_padding_x);
 
-            let btn = |ui: &mut Ui, text: &str, label: &str| -> egui::Response {
-                let response = ui.add(
-                    egui::Label::new(egui::RichText::new(text).color(theme.accent))
+            // Render a button whose text colour goes muted when the
+            // action is disabled, so prev/next visibly grey out at the
+            // edges. The disabled flag still no-ops the click.
+            let btn = |ui: &mut Ui, text: &str, label: &str, enabled: bool| -> egui::Response {
+                let color = if enabled {
+                    theme.accent
+                } else {
+                    theme.muted_color
+                };
+                let response = ui.add_enabled(
+                    enabled,
+                    egui::Label::new(egui::RichText::new(text).color(color))
                         .sense(egui::Sense::click()),
                 );
-                response.widget_info(|| {
-                    WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label)
-                });
+                response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
                 response.on_hover_text(label)
             };
 
-            if btn(ui, "\u{00AB} First", &options.labels.pagination_previous).clicked()
-                && self.current_page > 1
+            let can_prev = self.current_page > 1;
+            let can_next = self.current_page < total_pages;
+
+            if btn(
+                ui,
+                "\u{00AB} First",
+                &options.labels.pagination_previous,
+                can_prev,
+            )
+            .clicked()
+                && can_prev
             {
                 self.current_page = 1;
                 self.pipeline_dirty = true;
@@ -2700,8 +3515,14 @@ impl EguiGrid {
                     kind: EguiGridEventKind::PageChanged { page: 1 },
                 });
             }
-            if btn(ui, "\u{2039} Prev", &options.labels.pagination_previous).clicked()
-                && self.current_page > 1
+            if btn(
+                ui,
+                "\u{2039} Prev",
+                &options.labels.pagination_previous,
+                can_prev,
+            )
+            .clicked()
+                && can_prev
             {
                 self.current_page -= 1;
                 self.pipeline_dirty = true;
@@ -2717,8 +3538,14 @@ impl EguiGrid {
                 WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &page_label)
             });
 
-            if btn(ui, "Next \u{203A}", &options.labels.pagination_next).clicked()
-                && self.current_page < total_pages
+            if btn(
+                ui,
+                "Next \u{203A}",
+                &options.labels.pagination_next,
+                can_next,
+            )
+            .clicked()
+                && can_next
             {
                 self.current_page += 1;
                 self.pipeline_dirty = true;
@@ -2728,8 +3555,14 @@ impl EguiGrid {
                     },
                 });
             }
-            if btn(ui, "Last \u{00BB}", &options.labels.pagination_next).clicked()
-                && self.current_page < total_pages
+            if btn(
+                ui,
+                "Last \u{00BB}",
+                &options.labels.pagination_next,
+                can_next,
+            )
+            .clicked()
+                && can_next
             {
                 self.current_page = total_pages;
                 self.pipeline_dirty = true;
@@ -2746,13 +3579,21 @@ impl EguiGrid {
                     .color(theme.muted_color),
             );
             let prev_size = self.page_size;
+            // Read page-size choices from `options.pagination_page_sizes`
+            // (TS contract); fall back to the legacy default tier when
+            // the host hasn't supplied any.
+            let page_sizes: Vec<usize> = if options.pagination_page_sizes.is_empty() {
+                vec![5, 10, 25, 50, 100]
+            } else {
+                options.pagination_page_sizes.clone()
+            };
             let page_size_response = egui::ComboBox::from_id_salt(ui.id().with("page_size"))
                 .selected_text(
                     egui::RichText::new(self.page_size.to_string()).color(theme.cell_color),
                 )
                 .show_ui(ui, |ui| {
-                    for &size in &[5, 10, 25, 50, 100] {
-                        ui.selectable_value(&mut self.page_size, size, size.to_string());
+                    for size in &page_sizes {
+                        ui.selectable_value(&mut self.page_size, *size, size.to_string());
                     }
                 });
             page_size_response
@@ -2764,10 +3605,10 @@ impl EguiGrid {
             }
 
             ui.separator();
-            let total_response =
-                ui.label(egui::RichText::new(&total_label).color(theme.muted_color));
-            total_response.widget_info(|| {
-                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &total_label)
+            let range_response =
+                ui.label(egui::RichText::new(&range_label).color(theme.muted_color));
+            range_response.widget_info(|| {
+                WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &range_label)
             });
         });
     }

@@ -16,6 +16,16 @@ pub struct GridCellContext<'a> {
     pub row_index: usize,
 }
 
+/// Context passed to a custom filter renderer registered via
+/// [`EguiColumnExt::with_filter_renderer`]. The renderer gets the
+/// column's current filter term as `&mut String`; mutating it (and
+/// returning `true`) signals the grid to re-run the pipeline.
+pub struct GridFilterContext<'a> {
+    pub column: &'a GridColumnDef,
+    pub labels: &'a GridLabels,
+    pub theme: &'a GridTheme,
+}
+
 pub struct GridHeaderControlsContext<'a> {
     pub column: &'a GridColumnDef,
     pub labels: &'a GridLabels,
@@ -46,6 +56,9 @@ type CellRenderer = Box<dyn Fn(&mut Ui, &GridCellContext<'_>)>;
 type CellEditor = Box<dyn FnMut(&mut Ui, &mut String, &GridTheme) -> bool>;
 type HeaderControlsRenderer =
     Box<dyn FnMut(&mut Ui, &GridHeaderControlsContext<'_>, &mut Vec<EguiHeaderAction>)>;
+/// Returns `true` when the term mutated and the grid should re-run
+/// the pipeline. Mirrors the egui idiom of "widget changed".
+type FilterRenderer = Box<dyn FnMut(&mut Ui, &GridFilterContext<'_>, &mut String) -> bool>;
 
 pub struct EguiColumnExt {
     pub column_name: String,
@@ -53,6 +66,7 @@ pub struct EguiColumnExt {
     pub cell_renderer: Option<CellRenderer>,
     pub cell_editor: Option<CellEditor>,
     pub header_controls_renderer: Option<HeaderControlsRenderer>,
+    pub filter_renderer: Option<FilterRenderer>,
 }
 
 impl EguiColumnExt {
@@ -63,6 +77,7 @@ impl EguiColumnExt {
             cell_renderer: None,
             cell_editor: None,
             header_controls_renderer: None,
+            filter_renderer: None,
         }
     }
 
@@ -92,6 +107,19 @@ impl EguiColumnExt {
         f: impl FnMut(&mut Ui, &GridHeaderControlsContext<'_>, &mut Vec<EguiHeaderAction>) + 'static,
     ) -> Self {
         self.header_controls_renderer = Some(Box::new(f));
+        self
+    }
+
+    /// Replace the default filter input with a custom renderer. The
+    /// closure receives `&mut String` for the column's active filter
+    /// term — mutating it and returning `true` causes the grid to
+    /// re-run the pipeline. Mirrors the TS `filterRenderer` slot used
+    /// by Angular / React adapters.
+    pub fn with_filter_renderer(
+        mut self,
+        f: impl FnMut(&mut Ui, &GridFilterContext<'_>, &mut String) -> bool + 'static,
+    ) -> Self {
+        self.filter_renderer = Some(Box::new(f));
         self
     }
 }

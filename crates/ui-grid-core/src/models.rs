@@ -347,6 +347,63 @@ pub struct GridInfiniteScrollState {
     pub previous_visible_rows: usize,
 }
 
+/// Key event override descriptor — Rust analog of TS
+/// `GridKeyEventOverride`. When a keydown matches every field that's
+/// specified, the host should emit a `viewPortKeyDown`-equivalent
+/// event and skip its built-in handler. Unspecified fields are
+/// wildcards (match any value). Mirrors the old `keyDownOverrides[i]`
+/// shape from the legacy grid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyOverrideSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_code: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctrl_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta_key: Option<bool>,
+}
+
+impl KeyOverrideSpec {
+    /// Returns `true` when every specified field on this override
+    /// matches the supplied event. Unspecified fields are treated as
+    /// wildcards.
+    pub fn matches(&self, key: &str, shift: bool, ctrl: bool, alt: bool, meta: bool) -> bool {
+        if let Some(expected) = &self.key
+            && expected != key
+        {
+            return false;
+        }
+        if let Some(expected) = self.shift_key
+            && expected != shift
+        {
+            return false;
+        }
+        if let Some(expected) = self.ctrl_key
+            && expected != ctrl
+        {
+            return false;
+        }
+        if let Some(expected) = self.alt_key
+            && expected != alt
+        {
+            return false;
+        }
+        if let Some(expected) = self.meta_key
+            && expected != meta
+        {
+            return false;
+        }
+        true
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GridOptions {
@@ -527,6 +584,12 @@ pub struct GridOptions {
     pub row_edit_menu_cancel_dirty_rows: Option<bool>,
     #[serde(default)]
     pub row_id_field: Option<String>,
+    /// Per-keydown opt-out specs. When a keydown matches every field
+    /// specified on any entry, the host should defer to its consumer
+    /// rather than running the built-in handler. Mirrors TS
+    /// `keyDownOverrides`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub key_down_overrides: Vec<KeyOverrideSpec>,
     /// Internal — populated by the wasm bridge when a JS `rowIdentity`
     /// callback is configured on the canonical TS options. Maps the
     /// build-order row index to its callback-resolved id. Hidden from
@@ -627,6 +690,7 @@ impl Default for GridOptions {
             row_edit_menu_flush_dirty_rows: None,
             row_edit_menu_cancel_dirty_rows: None,
             row_id_field: Some("id".to_string()),
+            key_down_overrides: Vec::new(),
             row_identity_overrides: None,
         }
     }
@@ -678,6 +742,13 @@ pub struct GridSavedState {
     pub tree_view: BTreeMap<String, bool>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pinning: BTreeMap<String, String>,
+    /// Per-column width overrides (e.g. from a user resize). Mirrors
+    /// the TS contract where `columnWidthOverrides: Record<string,
+    /// string>` is included gated by `saveWidths` on the host. Keyed
+    /// by column name; values are the same width strings the column
+    /// model accepts (e.g. `"180px"`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub column_width_overrides: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -865,4 +936,37 @@ pub struct PipelineResult {
     pub pipeline_ms: f64,
     #[serde(default)]
     pub total_items: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_override_spec_matches_only_specified_fields() {
+        // Bare spec — every field is None — matches anything.
+        let any = KeyOverrideSpec::default();
+        assert!(any.matches("a", false, true, false, false));
+        assert!(any.matches("F2", true, false, false, false));
+
+        // Cmd/Ctrl + A specifically.
+        let cmd_a = KeyOverrideSpec {
+            key: Some("a".to_string()),
+            ctrl_key: Some(true),
+            ..Default::default()
+        };
+        assert!(cmd_a.matches("a", false, true, false, false));
+        assert!(!cmd_a.matches("a", false, false, false, false));
+        assert!(!cmd_a.matches("b", false, true, false, false));
+
+        // Specifying shift_key: Some(false) opts out only when shift
+        // is not held (matches the TS contract — explicit false != wildcard).
+        let plain_enter = KeyOverrideSpec {
+            key: Some("Enter".to_string()),
+            shift_key: Some(false),
+            ..Default::default()
+        };
+        assert!(plain_enter.matches("Enter", false, false, false, false));
+        assert!(!plain_enter.matches("Enter", true, false, false, false));
+    }
 }

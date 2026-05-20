@@ -277,6 +277,11 @@ impl UiGridAbiEngine {
             expandable: self.expanded_rows.clone(),
             tree_view: self.expanded_tree_rows.clone(),
             pinning: self.pinned_columns.clone(),
+            // c-abi doesn't track per-column widths today; emit an
+            // empty map so the new field is always present in the
+            // serialized state. Hosts that want width-persistence can
+            // add a field on the c-abi engine and populate it here.
+            column_width_overrides: Default::default(),
         };
         match codec {
             UiGridAbiCodec::Json => serialize_grid_saved_state(&state)

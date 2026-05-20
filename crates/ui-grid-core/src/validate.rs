@@ -261,6 +261,164 @@ pub fn run_grid_cell_validators(
     Ok(failures)
 }
 
+/// One step's worth of progress through [`RunGridCellValidatorsRunner`].
+/// Mirrors the shape a `Future<Output = Vec<String>>` would yield —
+/// hosts that want async semantics can drive `step()` across frames or
+/// inside an event loop without pulling in a runtime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunGridCellValidatorsStep {
+    /// At least one validator remains. The caller should call `step()`
+    /// again on the next tick (or immediately, for the synchronous
+    /// case).
+    Pending,
+    /// All validators have run. `failures` is the (sorted) list of
+    /// validator names whose check returned `false`. The runner has
+    /// already mutated the entity's `$$invalid<col>` and per-validator
+    /// error keys to reflect the outcome.
+    Ready { failures: Vec<String> },
+}
+
+/// Step-driven async-shaped validator runner. Mirrors the TS
+/// `runGridCellValidators` Promise shape without requiring a runtime —
+/// the caller drives the runner via [`step`](Self::step) until it
+/// returns [`RunGridCellValidatorsStep::Ready`].
+///
+/// Validators are processed one at a time so a host that wants to
+/// interleave UI work between checks (e.g. egui re-painting between
+/// long-running rules) can do so by checking back into its event loop
+/// between calls. The TS contract returned a single
+/// `Promise<string[]>`; this runner produces the same final value via
+/// the `failures` field on the final step.
+///
+/// All built-in validators in the Rust core are synchronous, so calling
+/// `step()` in a loop until `Ready` is equivalent to
+/// `block_on(runGridCellValidators(...))`. For hosts that compose with
+/// JS-side async validators, drive the runner from the wasm bridge,
+/// pause on `Pending`, await the JS callback, then resume.
+pub struct RunGridCellValidatorsRunner {
+    registry: GridValidatorRegistry,
+    col_def: GridColumnDef,
+    new_value: Value,
+    old_value: Value,
+    /// Validators left to process (consumed front-to-back).
+    pending: std::collections::VecDeque<(String, Value)>,
+    failures: Vec<String>,
+    /// `true` once we've called `set_grid_cell_valid` on the entity
+    /// at the start of the run. Lets `step()` cheaply tell whether
+    /// the no-op short-circuit applied.
+    started: bool,
+}
+
+impl RunGridCellValidatorsRunner {
+    /// Build a runner for the given (row, column, new, old) tuple. The
+    /// entity is mutated lazily during [`step`](Self::step) — the
+    /// caller is expected to pass the same `&mut GridRecord` to
+    /// `step()` until completion. Returning a runner that owns the
+    /// entity would force a clone for hosts (egui, c-abi) that need
+    /// reference semantics across frames.
+    pub fn new(
+        col_def: &GridColumnDef,
+        new_value: &Value,
+        old_value: &Value,
+        registry: &GridValidatorRegistry,
+    ) -> Result<Self, String> {
+        if col_def.name.is_empty() {
+            return Err("colDef.name is required to perform validation".to_string());
+        }
+        let pending = col_def
+            .validators
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<std::collections::VecDeque<_>>();
+        Ok(Self {
+            registry: registry.clone(),
+            col_def: col_def.clone(),
+            new_value: new_value.clone(),
+            old_value: old_value.clone(),
+            pending,
+            failures: Vec::new(),
+            started: false,
+        })
+    }
+
+    /// Process the next pending validator (if any). Returns
+    /// `Ready` once every validator has been processed (or
+    /// immediately if the value didn't change / there are no
+    /// validators).
+    pub fn step(
+        &mut self,
+        row_entity: &mut GridRecord,
+    ) -> Result<RunGridCellValidatorsStep, String> {
+        // Short-circuit when the value didn't change — mirrors TS.
+        if self.new_value == self.old_value {
+            self.pending.clear();
+            return Ok(RunGridCellValidatorsStep::Ready {
+                failures: Vec::new(),
+            });
+        }
+        if !self.started {
+            // Mirror the synchronous variant: clear the cell's invalid
+            // flag at the start so stale flags don't linger.
+            set_grid_cell_valid(row_entity, &self.col_def);
+            self.started = true;
+        }
+        let Some((name, argument)) = self.pending.pop_front() else {
+            // No more validators — finalise.
+            self.failures.sort();
+            return Ok(RunGridCellValidatorsStep::Ready {
+                failures: std::mem::take(&mut self.failures),
+            });
+        };
+
+        clear_grid_cell_error(row_entity, &self.col_def, &name);
+        let result =
+            self.registry
+                .run_validator(&name, &argument, &self.old_value, &self.new_value)?;
+        if !result {
+            set_grid_cell_invalid(row_entity, &self.col_def);
+            set_grid_cell_error(row_entity, &self.col_def, &name);
+            self.failures.push(name);
+        }
+
+        if self.pending.is_empty() {
+            self.failures.sort();
+            Ok(RunGridCellValidatorsStep::Ready {
+                failures: std::mem::take(&mut self.failures),
+            })
+        } else {
+            Ok(RunGridCellValidatorsStep::Pending)
+        }
+    }
+
+    /// Convenience — drive the runner to completion synchronously,
+    /// matching the existing `run_grid_cell_validators` shape. Hosts
+    /// that want to interleave with UI work should call `step` in a
+    /// loop themselves.
+    pub fn run_to_completion(mut self, row_entity: &mut GridRecord) -> Result<Vec<String>, String> {
+        loop {
+            match self.step(row_entity)? {
+                RunGridCellValidatorsStep::Pending => continue,
+                RunGridCellValidatorsStep::Ready { failures } => return Ok(failures),
+            }
+        }
+    }
+}
+
+/// Async-shaped variant of [`run_grid_cell_validators`]. Returns a
+/// runner the caller drives via [`RunGridCellValidatorsRunner::step`].
+/// For hosts that just want the final list of failures, call
+/// [`RunGridCellValidatorsRunner::run_to_completion`] which produces
+/// output identical to the synchronous `run_grid_cell_validators`.
+pub fn run_grid_cell_validators_async(
+    col_def: &GridColumnDef,
+    new_value: &Value,
+    old_value: &Value,
+    registry: &GridValidatorRegistry,
+) -> Result<RunGridCellValidatorsRunner, String> {
+    RunGridCellValidatorsRunner::new(col_def, new_value, old_value, registry)
+}
+
 pub fn validate_all_grid_rows(
     row_entities: &mut [GridRecord],
     column_defs: &[GridColumnDef],
@@ -433,5 +591,57 @@ mod tests {
         assert!(invalid.contains(
             &json!({ "name": null, "$$invalidname": true, "$$errorsname": { "required": true } })
         ));
+    }
+
+    #[test]
+    fn run_grid_cell_validators_async_step_matches_sync_path() {
+        let labels = GridLabels::default();
+        let registry = create_grid_validator_registry(&labels);
+
+        // minLength + required → both fail on an empty string.
+        let mut validators = Map::new();
+        validators.insert("required".to_string(), Value::Bool(true));
+        validators.insert("minLength".to_string(), json!(3));
+        let col = column("name", Some(validators));
+
+        // Sync path
+        let mut row_sync = json!({ "name": "" });
+        let sync_failures =
+            run_grid_cell_validators(&mut row_sync, &col, &json!(""), &Value::Null, &registry)
+                .unwrap();
+
+        // Async runner — drive it step-by-step until Ready.
+        let mut row_async = json!({ "name": "" });
+        let mut runner =
+            run_grid_cell_validators_async(&col, &json!(""), &Value::Null, &registry).unwrap();
+        let mut steps = 0usize;
+        let async_failures = loop {
+            steps += 1;
+            match runner.step(&mut row_async).unwrap() {
+                RunGridCellValidatorsStep::Pending => {
+                    assert!(steps < 8, "pending step count exceeded — runner stuck?");
+                }
+                RunGridCellValidatorsStep::Ready { failures } => break failures,
+            }
+        };
+
+        assert_eq!(async_failures, sync_failures);
+        assert_eq!(row_async, row_sync);
+    }
+
+    #[test]
+    fn run_grid_cell_validators_async_short_circuits_on_unchanged_value() {
+        let labels = GridLabels::default();
+        let registry = create_grid_validator_registry(&labels);
+        let mut validators = Map::new();
+        validators.insert("required".to_string(), Value::Bool(true));
+        let col = column("name", Some(validators));
+
+        let mut row = json!({ "name": "Alpha" });
+        let mut runner =
+            run_grid_cell_validators_async(&col, &json!("Alpha"), &json!("Alpha"), &registry)
+                .unwrap();
+        let step = runner.step(&mut row).unwrap();
+        assert_eq!(step, RunGridCellValidatorsStep::Ready { failures: vec![] });
     }
 }

@@ -159,6 +159,7 @@ fn build_representative_saved_state() -> ui_grid_core::models::GridSavedState {
         expandable: BTreeMap::from([("row-42".to_string(), true)]),
         tree_view: BTreeMap::from([("row-7".to_string(), true)]),
         pinning: BTreeMap::from([("symbol".to_string(), "left".to_string())]),
+        column_width_overrides: BTreeMap::new(),
     }
 }
 

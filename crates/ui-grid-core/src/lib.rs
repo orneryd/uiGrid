@@ -1,7 +1,9 @@
+pub mod benchmark;
 pub mod constants;
 pub mod display;
 pub mod edit;
 pub mod export;
+pub mod exporter_registry;
 pub mod filtering;
 pub mod grouping;
 pub mod i18n;

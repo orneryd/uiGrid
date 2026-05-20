@@ -302,6 +302,7 @@ fn save_state_and_normalization_deeply_assert_results() {
         expanded_rows: BTreeMap::from([("row-1".to_string(), true)]),
         expanded_tree_rows: BTreeMap::from([("acct-1".to_string(), true)]),
         pinned_columns: BTreeMap::new(),
+        column_width_overrides: BTreeMap::new(),
     });
 
     assert_eq!(saved.column_order, vec!["owner", "status"]);
