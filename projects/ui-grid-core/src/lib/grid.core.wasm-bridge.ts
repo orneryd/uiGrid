@@ -509,6 +509,20 @@ type UiGridWasmCoreModule = {
   build_grid_display_items_js(input: BuildGridDisplayItemsInput): BuildGridDisplayItemsResult;
   header_label_js(input: HeaderLabelInput): ReturnType<typeof tsExport.headerLabel>;
   export_csv_rows_js(columns: ExportCsvRowsColumns, rows: ExportCsvRowsRows): ExportCsvRowsResult;
+  build_grid_header_context_js(input: {
+    column: Parameters<typeof tsExport.buildGridHeaderContext>[0];
+  }): ReturnType<typeof tsExport.buildGridHeaderContext>;
+  format_grid_header_display_value_js(input: {
+    $implicit: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['$implicit'];
+    value: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['value'];
+    column: Parameters<typeof tsExport.formatGridHeaderDisplayValue>[0]['column'];
+  }): ReturnType<typeof tsExport.formatGridHeaderDisplayValue>;
+  resolve_exporter_filename_js(input: {
+    filename: string | undefined;
+    fallback: Parameters<typeof tsExport.resolveExporterFilename>[1];
+    rowType: Parameters<typeof tsExport.resolveExporterFilename>[2];
+    colType: Parameters<typeof tsExport.resolveExporterFilename>[3];
+  }): ReturnType<typeof tsExport.resolveExporterFilename>;
 };
 
 export interface WasmSerializationAuditOptions {
