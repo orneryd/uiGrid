@@ -10,9 +10,9 @@
 
 **The modern multi-platform data grid. Every feature free and open source. Built for Angular, Web-Components, React, native Rust/egui, and native C/LVGL.**
 
-A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` api surface, modern Angular signals internals, and zero legacy baggage. 
+A from-scratch rewrite of the original [AngularJS ui-grid](https://github.com/angular-ui/ui-grid) — by the original author. Same `gridOptions` / `columnDefs` / `onRegisterApi` api surface, modern Angular signals internals, and zero legacy baggage.
 
-Just like the original grid, it will **NEVER** be monetized. This is purely my contribution to the greater community. 
+Just like the original grid, it will **NEVER** be monetized. This is purely my contribution to the greater community.
 
 It proves that the datagrid cabal wants you to think it's hard to write a data grid. Well, it's not, and nobody should be paying to group data.
 
@@ -33,40 +33,40 @@ It proves that the datagrid cabal wants you to think it's hard to write a data g
 
 Everything below ships free and MIT-licensed. No enterprise tier, no license keys, no per-developer fees.
 
-| Feature                    | UI Grid  | ag-Grid Community | ag-Grid Enterprise |    Vaadin Grid     |  Kendo UI   |   Syncfusion    |
-| -------------------------- | :------: | :---------------: | :----------------: | :----------------: | :---------: | :-------------: |
-| Sorting                    | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| Filtering                  | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| **Row Grouping**           | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
-| **Tree Data**              | **Free** |         —         |    ~$999/dev/yr    |        Free        |    Paid     |   Community\*   |
-| **Master/Detail Rows**     | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
-| **Inline Cell Editing**    | **Free** |       Free        |         —          | Pro ~$159/dev/mo   |    Paid     |   Community\*   |
-| Row Selection              | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| Column Resizing            | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| CSV Export                 | **Free** |       Free        |         —          |         —          |    Paid     |   Community\*   |
-| **Excel Export**           | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
-| **PDF Export**             | **Free** |         —         |    ~$999/dev/yr    |         —          |    Paid     |   Community\*   |
-| Virtual Scrolling          | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| Pagination                 | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| Column Pinning             | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| Column Reordering          | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| **Save/Restore State**     | **Free** |       Free        |         —          |         —          |    Paid     |        —        |
-| Infinite Scroll            | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| **Keyboard Cell Nav**      | **Free** |       Free        |         —          |         —          |    Paid     |   Community\*   |
-| **Row Edit (dirty/save)**  | **Free** |         —         |         —          |         —          |     —       |        —        |
-| **Cell Validation**        | **Free** |         —         |         —          |         —          |     —       |        —        |
-| **CSV/JSON Import**        | **Free** |         —         |         —          |         —          |     —       |        —        |
-| **Shadow DOM**             | **Free** |         —         |         —          |         —          |     —       |        —        |
-| **Web Component Build**    | **Free** |         —         |         —          |       Native       |     —       |        —        |
-| **Feature Tree-Shaking**   | **Free** |         —         |         —          |         —          |     —       |        —        |
-| **SSR Support**            | **Free** |         —         |    ~$999/dev/yr    |         —          |     —       |        —        |
-| i18n (6 locales built-in)  | **Free** |       Free        |         —          |        Free        |    Paid     |   Community\*   |
-| React                      | **Yes**  |      Wrapper      |      Wrapper       |         No         |   Wrapper   |     Wrapper     |
-| Rust/egui Native           | **Yes**  |        No         |         No         |         No         |     No      |       No        |
-| C/LVGL Native              | **Yes**  |        No         |         No         |         No         |     No      |       No        |
-| Angular                    | **Yes**  |      Wrapper      |      Wrapper       |         No         |   Wrapper   |     Wrapper     |
-| **License**                | **MIT**  |        MIT        |     Commercial     |   Apache/Comm.     | Commercial  | Comm./Community |
-| **Price**                  | **$0**   |       $0          |   ~$999/dev/yr     | $159/dev/mo (Pro)  | ~$799/dev/yr |    See below   |
+| Feature                   | UI Grid  | ag-Grid Community | ag-Grid Enterprise |    Vaadin Grid    |   Kendo UI   |   Syncfusion    |
+| ------------------------- | :------: | :---------------: | :----------------: | :---------------: | :----------: | :-------------: |
+| Sorting                   | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| Filtering                 | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| **Row Grouping**          | **Free** |         —         |    ~$999/dev/yr    |         —         |     Paid     |   Community\*   |
+| **Tree Data**             | **Free** |         —         |    ~$999/dev/yr    |       Free        |     Paid     |   Community\*   |
+| **Master/Detail Rows**    | **Free** |         —         |    ~$999/dev/yr    |         —         |     Paid     |   Community\*   |
+| **Inline Cell Editing**   | **Free** |       Free        |         —          | Pro ~$159/dev/mo  |     Paid     |   Community\*   |
+| Row Selection             | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| Column Resizing           | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| CSV Export                | **Free** |       Free        |         —          |         —         |     Paid     |   Community\*   |
+| **Excel Export**          | **Free** |         —         |    ~$999/dev/yr    |         —         |     Paid     |   Community\*   |
+| **PDF Export**            | **Free** |         —         |    ~$999/dev/yr    |         —         |     Paid     |   Community\*   |
+| Virtual Scrolling         | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| Pagination                | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| Column Pinning            | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| Column Reordering         | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| **Save/Restore State**    | **Free** |       Free        |         —          |         —         |     Paid     |        —        |
+| Infinite Scroll           | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| **Keyboard Cell Nav**     | **Free** |       Free        |         —          |         —         |     Paid     |   Community\*   |
+| **Row Edit (dirty/save)** | **Free** |         —         |         —          |         —         |      —       |        —        |
+| **Cell Validation**       | **Free** |         —         |         —          |         —         |      —       |        —        |
+| **CSV/JSON Import**       | **Free** |         —         |         —          |         —         |      —       |        —        |
+| **Shadow DOM**            | **Free** |         —         |         —          |         —         |      —       |        —        |
+| **Web Component Build**   | **Free** |         —         |         —          |      Native       |      —       |        —        |
+| **Feature Tree-Shaking**  | **Free** |         —         |         —          |         —         |      —       |        —        |
+| **SSR Support**           | **Free** |         —         |    ~$999/dev/yr    |         —         |      —       |        —        |
+| i18n (6 locales built-in) | **Free** |       Free        |         —          |       Free        |     Paid     |   Community\*   |
+| React                     | **Yes**  |      Wrapper      |      Wrapper       |        No         |   Wrapper    |     Wrapper     |
+| Rust/egui Native          | **Yes**  |        No         |         No         |        No         |      No      |       No        |
+| C/LVGL Native             | **Yes**  |        No         |         No         |        No         |      No      |       No        |
+| Angular                   | **Yes**  |      Wrapper      |      Wrapper       |        No         |   Wrapper    |     Wrapper     |
+| **License**               | **MIT**  |        MIT        |     Commercial     |   Apache/Comm.    |  Commercial  | Comm./Community |
+| **Price**                 |  **$0**  |        $0         |    ~$999/dev/yr    | $159/dev/mo (Pro) | ~$799/dev/yr |    See below    |
 
 > **Bold** = features where UI Grid gives you for free what competitors charge for or don't offer at all.
 >
@@ -146,6 +146,23 @@ The grid's rendering engine is a framework-free custom element (`<ui-grid-elemen
 npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ```
 
+No-bundler browser usage is supported by the browser bundle. It includes the core runtime and registers `<ui-grid-element>` when loaded:
+
+```html
+<script type="module" src="./ui-grid-element.js"></script>
+
+<ui-grid-element
+  grid-id="static-grid"
+  enable-sorting
+  enable-filtering
+  column-defs='[{"name":"name"},{"name":"role"}]'
+  data='[{"name":"Alice","role":"Engineer"}]'
+>
+</ui-grid-element>
+```
+
+When building from this repo, `npm run build:vanilla` writes that file to `projects/ui-grid-vanilla/dist/browser/ui-grid-element.js`. Use that browser bundle for static script-tag consumption; `projects/ui-grid-vanilla/dist/index.js` is CommonJS and `projects/ui-grid-vanilla/dist/index.mjs` is the package ESM entry for bundlers or import-map setups.
+
 Declarative HTML usage:
 
 ```html
@@ -162,7 +179,8 @@ Declarative HTML usage:
   data='[
     { "name": "Alice", "role": "Engineer", "salary": 120000 },
     { "name": "Bob", "role": "Designer", "salary": 95000 }
-  ]'>
+  ]'
+>
 </ui-grid-element>
 
 <script type="module">
@@ -382,15 +400,15 @@ cmake --build target/ui-grid-lvgl -j4
 
 ## Compatibility
 
-| Dependency  | Version |
-| ----------- | ------- |
-| Angular     | 21.2    |
-| TypeScript  | 5.9     |
-| RxJS        | 7.8     |
-| Node        | 22.20   |
-| npm         | 11.11   |
-| Rust        | 1.95+   |
-| egui        | 0.34    |
+| Dependency | Version |
+| ---------- | ------- |
+| Angular    | 21.2    |
+| TypeScript | 5.9     |
+| RxJS       | 7.8     |
+| Node       | 22.20   |
+| npm        | 11.11   |
+| Rust       | 1.95+   |
+| egui       | 0.34    |
 
 ---
 

@@ -99,6 +99,23 @@ Declarative setup now works directly in HTML:
 
 Or bind the same fields as individual JS properties:
 
+For static HTML hosts with no package-aware build step, use the browser bundle emitted by `npm run build:vanilla`:
+
+```html
+<script type="module" src="./ui-grid-element.js"></script>
+
+<ui-grid-element
+  grid-id="static-grid"
+  enable-sorting
+  enable-filtering
+  column-defs='[{"name":"name"},{"name":"role"}]'
+  data='[{"name":"Alice","role":"Engineer"}]'
+>
+</ui-grid-element>
+```
+
+The repo build writes this file to `projects/ui-grid-vanilla/dist/browser/ui-grid-element.js`. It includes `@ornery/ui-grid-core` and auto-registers the element.
+
 ```html
 <ui-grid-element id="my-grid"></ui-grid-element>
 

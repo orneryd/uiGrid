@@ -1,6 +1,6 @@
 ## Web Component Output (`@ornery/ui-grid-vanilla`)
 
-A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. No external dependencies at all.
+A framework-free custom element built on `@ornery/ui-grid-core` with pure DOM rendering and Shadow DOM encapsulation. The package entry points are designed for package-aware tools, and the browser bundle is designed for direct static HTML usage.
 
 ### Install
 
@@ -11,6 +11,31 @@ npm install @ornery/ui-grid-vanilla @ornery/ui-grid-core
 ### Declarative HTML Usage
 
 This is the non-Angular custom element build. Use it in static sites, plain JavaScript apps, or any host that should not carry Angular runtime code.
+
+For a no-bundler static host, use the browser bundle. It includes the core runtime and auto-registers `<ui-grid-element>` when loaded:
+
+```html
+<script type="module" src="./ui-grid-element.js"></script>
+
+<ui-grid-element
+  grid-id="vanilla-demo"
+  title="Team Roster"
+  enable-sorting
+  enable-filtering
+  column-defs='[
+    { "name": "name" },
+    { "name": "role" },
+    { "name": "salary", "type": "number", "align": "end" }
+  ]'
+  data='[
+    { "name": "Alice", "role": "Engineer", "salary": 120000 },
+    { "name": "Bob", "role": "Designer", "salary": 95000 }
+  ]'
+>
+</ui-grid-element>
+```
+
+After `npm run build:vanilla`, the file is available at `projects/ui-grid-vanilla/dist/browser/ui-grid-element.js`. Copy or serve that file with your static app. The package `dist/index.js` file is CommonJS, and `dist/index.mjs` is package ESM that still expects package resolution; neither is the direct browser drop-in file.
 
 The vanilla element supports the same declarative attribute surface. Small and medium datasets can be configured directly in markup with zero grid setup JavaScript beyond registration:
 

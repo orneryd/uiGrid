@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **No-bundler vanilla browser bundle** — `@ornery/ui-grid-vanilla` now emits `dist/browser/ui-grid-element.js`, a browser ESM file that bundles the core runtime and auto-registers `<ui-grid-element>` for static HTML hosts. The Web Component docs now distinguish this direct browser artifact from the package `dist/index.js` CommonJS entry and package `dist/index.mjs` ESM entry.
+
 ## rust-v1.0.6 — 2026-05-20
 
 Rust core + `ui-grid-egui` adapter reach functional parity with the canonical TypeScript engine and the vanilla web component. The web suite (Angular / React / Web Components) is unchanged; this release scopes to `ui-grid-core`, `ui-grid-egui`, and `ui-grid-c-abi`. Wasm-parity specs lock the contract in so any future Rust-side drift is caught against TS.

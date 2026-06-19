@@ -21,7 +21,7 @@ Every feature is included free and open source. No enterprise tier, no license k
 | Auto Resize        | `enableAutoResize`          | `false` | ResizeObserver-driven viewport height recalculation                 |
 | Custom Templates   | `cellTemplate`              | —       | Angular ng-template for fully custom cell rendering                 |
 | Shadow DOM         | always                      | —       | Encapsulated styles with CSS custom property and `::part()` hooks   |
-| Web Component      | `npm run build:vanilla`     | —       | Ship as `<ui-grid-element>` for universal support                   |
+| Web Component      | `npm run build:vanilla`     | —       | Ship as `<ui-grid-element>` for package or no-bundler browser usage |
 | SSR Support        | automatic                   | —       | Server-side rendering with platform-safe guards                     |
 | i18n               | `labels`                    | en-US   | Override any UI string at runtime or bake in a locale at build time |
 

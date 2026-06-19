@@ -13,7 +13,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    }
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/browser/ui-grid-element.js",
+      "default": "./dist/browser/ui-grid-element.js"
+    },
+    "./browser/ui-grid-element.js": "./dist/browser/ui-grid-element.js"
   },
   "dependencies": {
     "@ornery/ui-grid-core": "1.0.6"
