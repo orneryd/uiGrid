@@ -53,7 +53,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build the Core package
         run: npm run build --prefix projects/ui-grid-core
@@ -123,7 +123,7 @@ jobs:
           tool: wasm-pack
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Verify core version is published
         run: |
@@ -213,7 +213,7 @@ jobs:
           tool: wasm-pack
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Verify core version is published
         run: |
@@ -296,7 +296,7 @@ jobs:
           tool: wasm-pack
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Verify core version is published
         run: |

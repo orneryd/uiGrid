@@ -38,7 +38,7 @@ jobs:
           tool: wasm-pack
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run the React test suite
         run: npm run test:react
