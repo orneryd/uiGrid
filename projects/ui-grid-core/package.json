@@ -16,6 +16,7 @@
   },
   "sideEffects": false,
   "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
   "devDependencies": {

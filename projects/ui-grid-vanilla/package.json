@@ -3,6 +3,7 @@
   "version": "1.0.6",
   "description": "Vanilla DOM wrapper for the Rust/WASM-backed @ornery/ui-grid-core custom element",
   "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
   "main": "dist/index.js",

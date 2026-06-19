@@ -3,7 +3,7 @@ name: Publish Web Suite
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       ref:
@@ -50,6 +50,8 @@ jobs:
         with:
           node-version: 22.20.0
           registry-url: https://registry.npmjs.org
+          scope: '@ornery'
+          always-auth: true
           cache: npm
 
       - name: Install dependencies
@@ -91,7 +93,7 @@ jobs:
           if npm view "@ornery/ui-grid-core@$VERSION" version >/dev/null 2>&1; then
             echo "@ornery/ui-grid-core@$VERSION already published, skipping"
           else
-            npm publish ./projects/ui-grid-core --access public
+            npm publish ./projects/ui-grid-core --access public --registry=https://registry.npmjs.org
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -110,6 +112,8 @@ jobs:
         with:
           node-version: 22.20.0
           registry-url: https://registry.npmjs.org
+          scope: '@ornery'
+          always-auth: true
           cache: npm
 
       - name: Install Rust toolchain
@@ -181,7 +185,7 @@ jobs:
           if npm view "@ornery/ui-grid-react@$VERSION" version >/dev/null 2>&1; then
             echo "@ornery/ui-grid-react@$VERSION already published, skipping"
           else
-            npm publish ./projects/ui-grid-react --access public
+            npm publish ./projects/ui-grid-react --access public --registry=https://registry.npmjs.org
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -200,6 +204,8 @@ jobs:
         with:
           node-version: 22.20.0
           registry-url: https://registry.npmjs.org
+          scope: '@ornery'
+          always-auth: true
           cache: npm
 
       - name: Install Rust toolchain
@@ -264,7 +270,7 @@ jobs:
           if npm view "@ornery/ui-grid-vanilla@$VERSION" version >/dev/null 2>&1; then
             echo "@ornery/ui-grid-vanilla@$VERSION already published, skipping"
           else
-            npm publish ./projects/ui-grid-vanilla --access public
+            npm publish ./projects/ui-grid-vanilla --access public --registry=https://registry.npmjs.org
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -283,6 +289,8 @@ jobs:
         with:
           node-version: 22.20.0
           registry-url: https://registry.npmjs.org
+          scope: '@ornery'
+          always-auth: true
           cache: npm
 
       - name: Install Rust toolchain
@@ -351,7 +359,7 @@ jobs:
           if npm view "@ornery/ui-grid@$VERSION" version >/dev/null 2>&1; then
             echo "@ornery/ui-grid@$VERSION already published, skipping"
           else
-            npm publish ./dist/ui-grid --access public
+            npm publish ./dist/ui-grid --access public --registry=https://registry.npmjs.org
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

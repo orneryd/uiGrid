@@ -2,6 +2,10 @@
   "name": "@ornery/ui-grid-react",
   "version": "1.0.6",
   "description": "React wrapper for @ornery/ui-grid-core",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

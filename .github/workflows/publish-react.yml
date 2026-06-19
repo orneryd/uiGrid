@@ -27,6 +27,8 @@ jobs:
         with:
           node-version: 22.20.0
           registry-url: https://registry.npmjs.org
+          scope: '@ornery'
+          always-auth: true
           cache: npm
 
       - name: Install Rust toolchain
@@ -77,6 +79,6 @@ jobs:
           fi
 
       - name: Publish to npm
-        run: npm publish ./projects/ui-grid-react --access public
+        run: npm publish ./projects/ui-grid-react --access public --registry=https://registry.npmjs.org
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
