@@ -1,10 +1,22 @@
 # Changelog
 
-## Unreleased
+## v1.0.7 — 2026-06-19
 
 ### Added
 
 - **No-bundler vanilla browser bundle** — `@ornery/ui-grid-vanilla` now emits `dist/browser/ui-grid-element.js`, a browser ESM file that bundles the core runtime and auto-registers `<ui-grid-element>` for static HTML hosts. The Web Component docs now distinguish this direct browser artifact from the package `dist/index.js` CommonJS entry and package `dist/index.mjs` ESM entry.
+
+### Changed
+
+- **Wasm parity merge** — the `wasm-parity` feature branch is merged into main. The Rust/WASM core now reaches functional parity with the TypeScript engine across sorting (including `SortKind::DeferToHost` for JS `sortingAlgorithm` callbacks), tree building (with `rowIdentity` callback bridging), filtering (with prepared-filter fast path and wildcard-fallback correctness), validation (with `HostValidatorMarker` for consumer-registered validators), and row-searcher condition reporting. Wasm parity specs lock the contract so any future Rust-side drift is caught against TS.
+- **Angular 21.2.17** — all `@angular/*` framework and dev-tool packages bumped to latest 21.2.x patches, resolving 8 security advisories (DoS, XSS, information leak).
+- **Build dependency hardening** — npm `overrides` force fixed versions of `@babel/core` (7.29.7), `esbuild` (0.28.1), `piscina` (5.2.0), `undici` (7.28.0), and `vite` (7.3.5) to resolve transitive build-time advisories. All are build-only deps; none ship to production.
+
+### Fixed
+
+- SSR `renderApplication` now passes `allowedHosts: ['localhost']` — required by Angular 21.2.17's host validation.
+- Missing `@testing-library/dom` peer dependency added to `@ornery/ui-grid-react` devDependencies.
+- Rust row-searcher `parsed_condition_tag` correctly reports `"contains"` (instead of `"regex"`) for auto-detected literal contains and wildcard-fallback filter conditions, matching TypeScript semantics.
 
 ## rust-v1.0.6 — 2026-05-20
 
