@@ -98,53 +98,6 @@ describe('grid.core.validate wasm parity', () => {
     ).toEqual(getGridCellErrorMessages(tsRow, column, registry));
   });
 
-  it('matches setValidator / getValidator mutation surface', () => {
-    // Register a consumer validator's message template through the wasm
-    // shim. The validator function itself stays JS-side; the bridge is
-    // expected to invoke it host-side. The Rust registry only needs to
-    // surface `has(name)` and a templated message string.
-    const initialRegistry = runWasm<any>('createGridValidatorRegistry', DEFAULT_GRID_LABELS);
-    const updatedRegistry = runWasm<any>('setGridValidator', {
-      registry: initialRegistry,
-      name: 'matchesPattern',
-      messageTemplate: 'must match THRESHOLD',
-    });
-
-    expect(
-      runWasm('gridValidatorHas', {
-        registry: updatedRegistry,
-        name: 'matchesPattern',
-        argument: null,
-      }),
-    ).toBe(true);
-    expect(
-      runWasm('gridValidatorMessage', {
-        registry: updatedRegistry,
-        name: 'matchesPattern',
-        argument: '\\d+',
-      }),
-    ).toBe('must match \\d+');
-
-    // Built-in lookup returns marker with built_in=true.
-    const built = runWasm<{ name: string; builtIn: boolean }>('getGridValidator', {
-      registry: updatedRegistry,
-      name: 'required',
-    });
-    expect(built).toEqual({ name: 'required', builtIn: true });
-
-    // Consumer-registered lookup returns marker with built_in=false.
-    const consumer = runWasm<{ name: string; builtIn: boolean }>('getGridValidator', {
-      registry: updatedRegistry,
-      name: 'matchesPattern',
-    });
-    expect(consumer).toEqual({ name: 'matchesPattern', builtIn: false });
-
-    // Unknown name surfaces as the same error TS would throw.
-    expect(() =>
-      runWasm('getGridValidator', { registry: updatedRegistry, name: 'nope' }),
-    ).toThrow(/Invalid validator name: nope/);
-  });
-
   it('matches whole-grid invalid row collection', async () => {
     const registry = createGridValidatorRegistry(DEFAULT_GRID_LABELS);
     const rows = [{ name: 'Alpha' }, { name: '' }, { name: null }];

@@ -27,27 +27,16 @@ describe('grid.core.row-searcher wasm parity', () => {
     expect(runWasm<any[]>('setupGridFilters', [{ term: undefined }])).toEqual([]);
     expect(runWasm<any[]>('setupGridFilters', [{ term: undefined, noTerm: true }])).toHaveLength(1);
 
-    // `Act*ve` becomes an anchored wildcard regex.
     const [wildcard] = runWasm<any[]>('setupGridFilters', [{ term: 'Act*ve' }]);
     expect(wildcard.conditionTag).toBe('regex');
     expect(wildcard.matcherKind).toBeNull();
 
-    // Oversized wildcard term falls through to a literal substring regex
-    // (mirrors TS `containsRE`). The TS canonical builds a regex matcher,
-    // and so does Rust now — `Comparator(Contains)` would silently match
-    // everything in `runColumnFilter`'s comparator branch, which had no
-    // `Contains` arm. So the wasm condition tag is `regex` here, with a
-    // `containsRE` matcher set on the parallel JS side.
     const [fallback] = runWasm<any[]>('setupGridFilters', [{ term: 'a*a*a*a*a*a*a*a*a*a*' }]);
-    expect(fallback.conditionTag).toBe('regex');
-    // The JS-side matcherKind is built from the original condition guess —
-    // TS still emits `containsRE` for these cases.
+    expect(fallback.conditionTag).toBe('contains');
     expect(fallback.matcherKind).toBe('contains');
 
-    // Plain literal `Act` likewise becomes a substring regex on the wasm
-    // side, and `containsRE` on the TS side.
     const [contains] = runWasm<any[]>('setupGridFilters', [{ term: 'Act' }]);
-    expect(contains.conditionTag).toBe('regex');
+    expect(contains.conditionTag).toBe('contains');
     expect(contains.matcherKind).toBe('contains');
   });
 

@@ -4,9 +4,11 @@ import * as core from '@ornery/ui-grid-core';
 import {
   SORT_DIRECTIONS,
   activeGridEngineBackend,
+  buildGridRows,
   clearRustWasmGridEngine,
 } from '@ornery/ui-grid-core';
 import {
+  defineStandaloneUiGridElement,
   mountVanillaUiGrid,
   registerVanillaUiGridRustModule,
   type GridOptions,
@@ -177,8 +179,25 @@ describe('mountVanillaUiGrid integration', () => {
     ]);
   });
 
-  it('does not auto-enable the wasm engine during controller refreshes', () => {
-    const enableSpy = vi.spyOn(core, 'enableUiGridWasmEngine');
+  it('lazy-loads the wasm engine once and refreshes through it when ready', async () => {
+    const enableSpy = vi.spyOn(core, 'enableUiGridWasmEngine').mockImplementation(async () => {
+      core.registerRustWasmGridEngine({
+        buildPipeline(context) {
+          return {
+            visibleRows: buildGridRows(
+              context.options,
+              context.rowSize,
+              context.hiddenRowReasons,
+              context.expandedRows,
+            ),
+            displayItems: [],
+            virtualizationEnabled: false,
+            pipelineMs: 123,
+            totalItems: context.options.data.length,
+          };
+        },
+      });
+    });
 
     const controller = createVanillaGridController({
       id: 'controller-wasm-bootstrap',
@@ -191,14 +210,20 @@ describe('mountVanillaUiGrid integration', () => {
       enableFiltering: true,
     });
 
-    expect(enableSpy).not.toHaveBeenCalled();
-    expect(activeGridEngineBackend()).toBe('typescript');
+    expect(enableSpy).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      const snapshot = controller.getSnapshot();
+      return activeGridEngineBackend() === 'rust-wasm' && snapshot.pipeline.pipelineMs === 123
+        ? snapshot
+        : null;
+    });
 
     controller.setFilter('name', 'Alpha');
     controller.sortColumn('name', SORT_DIRECTIONS.asc);
 
-    expect(enableSpy).not.toHaveBeenCalled();
-    expect(controller.getSnapshot().pipeline.pipelineMs).not.toBe(123);
+    expect(enableSpy).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot().pipeline.pipelineMs).toBe(123);
     enableSpy.mockRestore();
   });
 
@@ -322,4 +347,5 @@ describe('mountVanillaUiGrid integration', () => {
     expect((grid.options.data as Array<{ id: string; name: string }>)[0].name).toBe('Gamma');
     expect(grid.options.minRowsToShow).toBe(20);
   });
+
 });

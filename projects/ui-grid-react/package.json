@@ -22,6 +22,7 @@
   "devDependencies": {
     "@ornery/ui-grid-core": "file:../ui-grid-core",
     "@ornery/ui-grid-vanilla": "file:../ui-grid-vanilla",
+    "@testing-library/dom": "^10.0.0",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

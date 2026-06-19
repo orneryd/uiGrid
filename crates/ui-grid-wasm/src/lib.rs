@@ -946,9 +946,28 @@ fn sort_kind_tag(kind: SortKind) -> &'static str {
     }
 }
 
-fn parsed_condition_tag(condition: &ParsedCondition) -> &'static str {
+fn parsed_condition_tag(
+    descriptor: &ui_grid_core::models::GridFilterDescriptor,
+    condition: &ParsedCondition,
+) -> &'static str {
     match condition {
-        ParsedCondition::Regex(_) => "regex",
+        ParsedCondition::Regex(_) => {
+            // Auto-detected (descriptor.condition is None): a Regex maps to
+            // TS `FILTER_CONDITIONS.contains` with `containsRE` unless the
+            // term had wildcards that built a successful pattern.
+            // `parsed_matcher_kind` applies the same logic.
+            if descriptor.condition.is_none()
+                && let Some(Value::String(term)) = get_term(descriptor)
+                && term.contains('*')
+                && build_wildcard_pattern(&term).is_some()
+            {
+                return "regex";
+            }
+            if descriptor.condition.is_none() {
+                return "contains";
+            }
+            "regex"
+        }
         ParsedCondition::Comparator(ui_grid_core::constants::FilterCondition::Contains) => {
             "contains"
         }
@@ -1228,7 +1247,7 @@ pub fn setup_grid_filters_js(filters: JsValue) -> Result<JsValue, JsValue> {
         .zip(parsed.iter())
         .map(|(descriptor, parsed)| ParsedFilterSummary {
             term: parsed.term.clone(),
-            condition_tag: parsed_condition_tag(&parsed.condition).to_string(),
+            condition_tag: parsed_condition_tag(descriptor, &parsed.condition).to_string(),
             matcher_kind: parsed_matcher_kind(descriptor, &parsed.condition),
         })
         .collect::<Vec<_>>();

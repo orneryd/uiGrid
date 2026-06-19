@@ -24,12 +24,6 @@ async function main() {
       return wasm.format_grid_excel_field_js(payload.input);
     case 'buildGridExcelSheetData':
       return wasm.build_grid_excel_sheet_data_js(payload.input);
-    case 'resolveExporterFilename':
-      return wasm.resolve_exporter_filename_js(payload.input);
-    case 'buildGridHeaderContext':
-      return wasm.build_grid_header_context_js(payload.input);
-    case 'formatGridHeaderDisplayValue':
-      return wasm.format_grid_header_display_value_js(payload.input);
     default:
       throw new Error(`Unknown wasm export command: ${payload.command}`);
   }

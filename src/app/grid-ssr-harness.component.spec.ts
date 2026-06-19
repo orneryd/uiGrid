@@ -10,7 +10,8 @@ describe('GridSsrHarnessComponent', () => {
       }, context),
       {
         document: '<!doctype html><html><body><app-grid-ssr-harness></app-grid-ssr-harness></body></html>',
-        url: 'http://localhost/ssr-harness'
+        url: 'http://localhost/ssr-harness',
+        allowedHosts: ['localhost']
       }
     );
 
