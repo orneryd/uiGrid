@@ -29,7 +29,7 @@
   "scripts": {
     "generate-css": "node generate-core-css.mjs",
     "prebuild": "node generate-core-css.mjs",
-    "build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
+    "build": "tsup && tsc -p tsconfig.dts.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   }
