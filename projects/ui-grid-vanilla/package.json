@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid-vanilla",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Vanilla DOM wrapper for the Rust/WASM-backed @ornery/ui-grid-core custom element",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
@@ -23,20 +23,20 @@
     "./browser/ui-grid-element.js": "./dist/browser/ui-grid-element.js"
   },
   "dependencies": {
-    "@ornery/ui-grid-core": "1.0.6"
+    "@ornery/ui-grid-core": "1.0.8"
   },
   "devDependencies": {
-    "happy-dom": "^20.9.0",
-    "jsdom": "^26.0.0",
-    "sass": "^1.77.0",
-    "tsup": "^8.0.0",
-    "typescript": "~5.8.0",
-    "vite": "^6.0.0",
-    "vitest": "^4.1.0"
+    "happy-dom": "^20.10.6",
+    "jsdom": "^29.1.1",
+    "sass": "^1.101.0",
+    "tsup": "^8.5.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.1.2",
+    "vitest": "^4.1.9"
   },
   "scripts": {
     "start": "SASS_PATH=node_modules vite serve",
-    "build": "SASS_PATH=node_modules tsup",
+    "build": "SASS_PATH=node_modules tsup && tsc -p tsconfig.dts.json",
     "watch": "SASS_PATH=node_modules tsup --watch",
     "test": "SASS_PATH=node_modules vitest run --config vitest.config.ts",
     "test:coverage": "SASS_PATH=node_modules vitest run --config vitest.config.ts --coverage"

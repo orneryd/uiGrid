@@ -5,7 +5,6 @@
     "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     "paths": {
       "@ornery/ui-grid-core": ["../ui-grid-core/src/index.ts"],
       "@ornery/ui-grid-vanilla": ["../ui-grid-vanilla/src/index.ts"]

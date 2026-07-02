@@ -1,6 +1,6 @@
 {
   "name": "@ornery/ui-grid-core",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Framework-neutral UI Grid core runtime, models, styling, and WASM bridge",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -21,15 +21,15 @@
   },
   "devDependencies": {
     "esbuild-sass-plugin": "^3.7.0",
-    "sass": "^1.99.0",
+    "sass": "^1.101.0",
     "tsup": "^8.5.1",
-    "typescript": "~5.9.2",
-    "vitest": "^4.1.5"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.9"
   },
   "scripts": {
     "generate-css": "node generate-core-css.mjs",
     "prebuild": "node generate-core-css.mjs",
-    "build": "tsup",
+    "build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   }

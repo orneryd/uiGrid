@@ -5,7 +5,7 @@ export default defineConfig([
   {
     entry: ['src/index.ts'],
     format: ['esm', 'cjs'],
-    dts: true,
+    dts: false,
     tsconfig: './tsconfig.json',
     esbuildPlugins: [scssInlineEsbuild()],
   },

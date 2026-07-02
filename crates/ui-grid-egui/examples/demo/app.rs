@@ -475,7 +475,7 @@ impl eframe::App for DemoApp {
             ui.ctx().request_repaint();
         }
 
-        egui::Panel::top("toolbar").show_inside(ui, |ui| {
+        egui::Panel::top("toolbar").show(ui, |ui| {
             let mut options_changed = false;
 
             ui.horizontal_wrapped(|ui| {
@@ -885,7 +885,7 @@ impl eframe::App for DemoApp {
             }
         });
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             self.grid.show(
                 ui,
                 &mut self.options,

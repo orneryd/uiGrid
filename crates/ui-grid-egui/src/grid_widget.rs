@@ -1547,7 +1547,7 @@ impl EguiGrid {
                 if options.enable_pagination {
                     egui::Panel::bottom(ui.id().with("grid_pagination"))
                         .exact_size(36.0)
-                        .show_inside(ui, |ui| {
+                        .show(ui, |ui| {
                             self.draw_pagination(ui, options, total_items, theme);
                         });
                 }

@@ -17,8 +17,8 @@ js-sys.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
-ui-grid-core = { path = "../ui-grid-core", version = "1.0.6" }
-ui-grid-virtualization = { path = "../ui-grid-virtualization", version = "1.0.6" }
+ui-grid-core = { path = "../ui-grid-core", version = "1.0.8" }
+ui-grid-virtualization = { path = "../ui-grid-virtualization", version = "1.0.8" }
 wasm-bindgen.workspace = true
 
 [dev-dependencies]
