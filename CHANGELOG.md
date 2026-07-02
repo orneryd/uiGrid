@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.0.8 — 2026-07-01
+
+### Changed
+
+- **Dependency refresh for the web suite** — upgraded the npm workspace to the latest framework and build stack, including Angular 22, React 19.2, TypeScript 6, Vite 8, Vitest 4.1, jsdom 29, tsup 8.5, ng-packagr 22, and current supporting type/test packages. Root and package-local lockfiles were regenerated for the 1.0.8 release.
+- **Node 26 toolchain** — local package metadata and GitHub Actions workflows now target Node 26.4.0 with npm 11.17.0, satisfying Angular 22's runtime floor and keeping CI aligned with the publish toolchain.
+- **Looser published framework peers** — `@ornery/ui-grid` now peers on `@angular/common` / `@angular/core >=17.3.0` and `rxjs ^6.5.3 || ^7.4.0`, matching the wrapper's actual `input()` / `output()` API floor instead of the repo's current Angular dev version. `@ornery/ui-grid-react` now peers on `react >=18.0.0` and `react-dom >=18.0.0` so React consumers can install newer framework majors without package-manager conflicts.
+- **TypeScript 6 config migration** — removed deprecated `baseUrl` usage from project tsconfigs and made root path mappings explicitly relative. Core and vanilla declaration builds now use `tsc --emitDeclarationOnly` instead of tsup's DTS worker, avoiding tsup's internal deprecated `baseUrl` injection while preserving the existing JS bundles.
+
+### Fixed
+
+- **Package builds under TypeScript 6** — `@ornery/ui-grid-core` and `@ornery/ui-grid-vanilla` now emit declarations cleanly with explicit `rootDir` / declaration configs. The Angular package build also continues to emit FESM and DTS bundles successfully under the upgraded toolchain.
+
+## rust-v1.0.8 — 2026-07-01
+
+### Changed
+
+- **Rust dependency refresh** — updated the Cargo workspace to current crate versions, including `anyhow` 1.0.103, `js-sys` 0.3.103, `wasm-bindgen` 0.2.126, `wasm-bindgen-test` 0.3.76, `regex` 1.12.4, `rmp-serde` 1.3.1, `serde_json` 1.0.150, `jiff` 0.2.31, and the egui stack (`egui`, `egui_extras`, `eframe`) 0.35.
+- **Rust release metadata aligned to 1.0.8** — workspace crate manifests and internal crate dependency versions were synced so `ui-grid-core`, `ui-grid-egui`, `ui-grid-wasm`, and `ui-grid-c-abi` publish against the 1.0.8 crate set.
+
+### Fixed
+
+- **egui 0.35 deprecation cleanup** — replaced deprecated `Panel::show_inside` / `CentralPanel::show_inside` calls with `show` in the egui adapter and demo so `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes with the upgraded egui stack.
+
 ## v1.0.7 — 2026-06-19
 
 ### Added
